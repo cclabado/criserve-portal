@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ApplicationController;
+use App\Http\Controllers\ClientDashboardController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -20,5 +22,13 @@ Route::middleware('auth')->group(function () {
 Route::get('/client/dashboard', function () {
     return view('client.dashboard');
 })->middleware(['auth']);
+
+Route::get('/client/application', [ApplicationController::class, 'create'])->middleware('auth');
+
+Route::post('/client/application', [ApplicationController::class, 'store'])->middleware('auth');
+
+Route::get('/client/dashboard', [ClientDashboardController::class, 'index'])
+    ->middleware(['auth'])
+    ->name('client.dashboard');
 
 require __DIR__.'/auth.php';
