@@ -1,8 +1,24 @@
 <aside class="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-slate-50 flex flex-col border-r border-slate-200 z-50">
 
+    @php
+        $role = auth()->user()->role ?? 'client';
+
+        function navClass($path) {
+            return request()->is($path)
+                ? 'bg-sky-50 text-sky-900 font-semibold border-r-4 border-sky-700 shadow-sm'
+                : 'text-slate-600 hover:text-sky-700 hover:bg-slate-100';
+        }
+
+        function iconClass($path) {
+            return request()->is($path)
+                ? 'text-sky-700'
+                : 'text-slate-500 group-hover:text-sky-700';
+        }
+    @endphp
+
     <!-- LOGO -->
     <div class="px-6 py-8 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center">
+        <div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shadow-sm">
             <span class="material-symbols-outlined text-on-primary-container">security</span>
         </div>
         <div>
@@ -16,35 +32,92 @@
     <!-- NAV -->
     <nav class="flex-1 px-4 space-y-1">
 
-        <!-- ACTIVE -->
+        <!-- ================= CLIENT ================= -->
+        @if($role === 'client')
+
         <a href="/client/dashboard"
-           class="flex items-center gap-3 px-4 py-3 text-sky-900 font-bold border-r-4 border-sky-700 bg-sky-50 transition-all">
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('client/dashboard') }}">
 
-            <span class="material-symbols-outlined">dashboard</span>
-            <span class="text-sm">Dashboard</span>
+            <span class="material-symbols-outlined {{ iconClass('client/dashboard') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
         </a>
 
-        <!-- LINKS -->
-        <a href="#"
-           class="flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-sky-700 hover:bg-slate-100 transition-all">
+        <a href="/client/application"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('client/application*') }}">
 
-            <span class="material-symbols-outlined">description</span>
-            <span class="text-sm">Applications</span>
+            <span class="material-symbols-outlined {{ iconClass('client/application*') }}">
+                description
+            </span>
+
+            <span class="text-sm tracking-wide">Apply for Assistance</span>
         </a>
 
-        <a href="#"
-           class="flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-sky-700 hover:bg-slate-100 transition-all">
+        @endif
 
-            <span class="material-symbols-outlined">fact_check</span>
-            <span class="text-sm">Approvals</span>
+
+        <!-- ================= SOCIAL WORKER ================= -->
+        @if($role === 'social_worker')
+
+        <a href="/social-worker/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('social-worker/dashboard') }}">
+
+            <span class="material-symbols-outlined {{ iconClass('social-worker/dashboard') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
         </a>
 
-        <a href="#"
-           class="flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-sky-700 hover:bg-slate-100 transition-all">
+        <a href="/social-worker/applications"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('social-worker/applications*') }}">
 
-            <span class="material-symbols-outlined">inventory_2</span>
-            <span class="text-sm">Release</span>
+            <span class="material-symbols-outlined {{ iconClass('social-worker/applications*') }}">
+                description
+            </span>
+
+            <span class="text-sm tracking-wide">Applications</span>
         </a>
+
+        @endif
+
+
+        <!-- ================= ADMIN ================= -->
+        @if($role === 'admin')
+
+        <a href="/admin/applications"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('admin/applications*') }}">
+
+            <span class="material-symbols-outlined {{ iconClass('admin/applications*') }}">
+                description
+            </span>
+
+            <span class="text-sm tracking-wide">Applications</span>
+        </a>
+
+        <a href="/admin/approvals"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('admin/approvals*') }}">
+
+            <span class="material-symbols-outlined {{ iconClass('admin/approvals*') }}">
+                fact_check
+            </span>
+
+            <span class="text-sm tracking-wide">Approvals</span>
+        </a>
+
+        <a href="/admin/release"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('admin/release*') }}">
+
+            <span class="material-symbols-outlined {{ iconClass('admin/release*') }}">
+                inventory_2
+            </span>
+
+            <span class="text-sm tracking-wide">Release</span>
+        </a>
+
+        @endif
 
     </nav>
 
@@ -52,18 +125,27 @@
     <div class="px-4 py-6 border-t border-slate-200 space-y-1">
 
         <a href="#"
-           class="flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-sky-700 hover:bg-slate-100 transition-all">
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-sky-700 hover:bg-slate-100">
 
-            <span class="material-symbols-outlined">settings</span>
-            <span class="text-sm">Settings</span>
+            <span class="material-symbols-outlined group-hover:text-sky-700">
+                settings
+            </span>
+
+            <span class="text-sm tracking-wide">Settings</span>
         </a>
 
-        <a href="#"
-           class="flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-red-500 hover:bg-red-50 transition-all">
+        <form method="POST" action="{{ route('logout') }}">
+            @csrf
+            <button type="submit"
+                class="group w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-red-500 hover:bg-red-50">
 
-            <span class="material-symbols-outlined">logout</span>
-            <span class="text-sm">Logout</span>
-        </a>
+                <span class="material-symbols-outlined group-hover:text-red-500">
+                    logout
+                </span>
+
+                <span class="text-sm tracking-wide">Logout</span>
+            </button>
+        </form>
 
     </div>
 

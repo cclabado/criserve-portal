@@ -4,11 +4,11 @@
 
 @php
 $statusSteps = [
-    'submitted' => 1,
-    'under_review' => 2,
-    'for_interview' => 3,
-    'approved' => 4,
-    'released' => 5,
+    'submitted' => 2,        
+    'under_review' => 3,
+    'for_interview' => 4,
+    'approved' => 5,
+    'released' => 6,
 ];
 
 $currentStep = $latestApplication ? ($statusSteps[$latestApplication->status] ?? 1) : 0;
@@ -80,10 +80,15 @@ $steps = [
     <div class="w-12 h-12 rounded-full flex items-center justify-center
         {{ $currentStep >= $step ? 'bg-primary text-white' : 'bg-surface-container-high' }}">
 
+        {{-- COMPLETED --}}
         @if($currentStep > $step)
             ✔
+
+        {{-- CURRENT --}}
         @elseif($currentStep == $step)
             ●
+
+        {{-- UPCOMING --}}
         @else
             ○
         @endif
@@ -111,12 +116,32 @@ $steps = [
     <h3 class="text-2xl font-bold text-sky-950">History & Submissions</h3>
 
     <div class="flex gap-2">
-        <button class="px-4 py-2 text-sm border border-outline-variant rounded-lg hover:bg-surface-container">
-            Export PDF
-        </button>
-        <button class="px-4 py-2 text-sm bg-surface-container-high rounded-lg">
-            Filter
-        </button>
+        <form method="GET" class="flex gap-2">
+
+            <select name="status" class="px-3 py-2 text-sm border rounded-lg">
+                <option value="">All Status</option>
+                <option value="submitted" {{ request('status')=='submitted'?'selected':'' }}>Submitted</option>
+                <option value="under_review" {{ request('status')=='under_review'?'selected':'' }}>Under Review</option>
+                <option value="for_interview" {{ request('status')=='for_interview'?'selected':'' }}>For Interview</option>
+                <option value="approved" {{ request('status')=='approved'?'selected':'' }}>Approved</option>
+                <option value="released" {{ request('status')=='released'?'selected':'' }}>Released</option>
+            </select>
+
+            <select name="type" class="px-3 py-2 text-sm border rounded-lg">
+                <option value="">All Types</option>
+                @foreach($types as $type)
+                    <option value="{{ $type->id }}">
+                        {{ $type->name }}
+                    </option>
+                @endforeach
+            </select>
+
+            <button type="submit"
+                class="px-4 py-2 text-sm bg-surface-container-high rounded-lg">
+                Apply
+            </button>
+
+        </form>
     </div>
 </div>
 
@@ -186,9 +211,10 @@ Action
 </td>
 
 <td class="px-6 py-5">
-<button class="text-primary font-bold hover:underline text-sm">
+<a href="{{ route('client.application.show', $app->id) }}"
+   class="text-primary font-bold hover:underline text-sm">
     View Details
-</button>
+</a>
 </td>
 
 </tr>

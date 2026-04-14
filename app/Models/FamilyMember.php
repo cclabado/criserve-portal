@@ -19,4 +19,8 @@ class FamilyMember extends Model
     {
         return $this->belongsTo(Application::class);
     }
+    public function relationshipData()
+    {
+        return $this->belongsTo(\App\Models\Relationship::class, 'relationship', 'id');
+    }
 }
