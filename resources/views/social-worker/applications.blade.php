@@ -29,6 +29,19 @@
 <!-- CONTENT -->
 <div class="p-8 space-y-6">
 
+@if(session('success'))
+<div id="successAlert"
+    class="mb-4 px-4 py-3 rounded-lg bg-green-100 text-green-800 border border-green-200">
+    {{ session('success') }}
+</div>
+
+<script>
+setTimeout(() => {
+    document.getElementById('successAlert')?.remove();
+}, 3000);
+</script>
+@endif
+
 <!-- HERO -->
 <div class="rounded-2xl bg-gradient-to-br from-[#0B3C5D] to-[#174A6B] p-8 text-white shadow">
 <h2 class="text-3xl font-bold mb-2">Application Management</h2>
@@ -164,6 +177,9 @@ bg-green-100 text-green-700
 @elseif($status == 'denied')
 bg-red-100 text-red-700
 
+@elseif($status == 'released')
+        bg-emerald-100 text-emerald-700
+        
 @else
 bg-gray-100 text-gray-600
 @endif
@@ -196,26 +212,54 @@ bg-gray-100 text-gray-600
 
         @elseif($status === 'under_review')
 
-            <a href="/social-worker/application/{{ $app->id }}"
+            <a href="{{ route('socialworker.intake', $app->id) }}"
             class="px-4 py-2 w-28 text-center rounded-lg text-sm font-semibold 
                    bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md transition">
                 Intake
             </a>
 
-        @elseif($status === 'approved' || $status === 'denied')
+        @elseif($status === 'for_approval')
 
             <a href="/social-worker/application/{{ $app->id }}"
             class="px-4 py-2 w-28 text-center rounded-lg text-sm font-semibold 
                    border border-slate-300 text-slate-700 hover:bg-slate-100 shadow-sm transition">
-                View Details
+                View
             </a>
+
+        @elseif($status === 'approved')
+
+            <div class="flex justify-end gap-2">
+
+                <a href="{{ route('socialworker.show', $app->id) }}"
+                class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-slate-100">
+                    View Details
+                </a>
+
+                <a href="{{ route('socialworker.certificate', $app->id) }}"
+                target="_blank"
+                class="px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700">
+                    Print Certificate
+                </a>
+
+                <form method="POST"
+                    action="{{ route('socialworker.release', $app->id) }}">
+                    @csrf
+
+                    <button type="submit"
+                        onclick="return confirm('Mark this application as released?')"
+                        class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700">
+                        Mark Released
+                    </button>
+                </form>
+
+            </div>
 
         @else
 
             <a href="/social-worker/application/{{ $app->id }}"
             class="px-4 py-2 w-28 text-center rounded-lg text-sm font-semibold 
                    bg-gray-200 text-gray-700">
-                Open
+                View
             </a>
 
         @endif

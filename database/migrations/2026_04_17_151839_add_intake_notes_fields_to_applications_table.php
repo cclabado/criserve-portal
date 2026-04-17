@@ -9,10 +9,11 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-    public function up()
+    public function up(): void
     {
         Schema::table('applications', function (Blueprint $table) {
-            // $table->string('reference_no')->unique()->nullable();
+            $table->text('problem_statement')->nullable();
+            $table->text('social_worker_assessment')->nullable();
         });
     }
 

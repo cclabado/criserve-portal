@@ -3,15 +3,25 @@
 @section('content')
 
 @php
-$statusSteps = [
-    'submitted' => 2,        
-    'under_review' => 3,
-    'for_interview' => 4,
-    'approved' => 5,
-    'released' => 6,
+$statusOrder = [
+    'submitted',
+    'under_review',
+    'for_approval',
+    'approved',
+    'released'
 ];
 
-$currentStep = $latestApplication ? ($statusSteps[$latestApplication->status] ?? 1) : 0;
+$currentStatus = $latestApplication->status ?? null;
+$currentIndex = $currentStatus ? array_search($currentStatus, $statusOrder) : -1;
+
+$progressWidth = match($currentStatus) {
+    'submitted' => '0%',
+    'under_review' => '25%',
+    'for_approval' => '50%',
+    'approved' => '75%',
+    'released' => '100%',
+    default => '0%',
+};
 @endphp
 
 @if(session('success'))
@@ -27,8 +37,9 @@ $currentStep = $latestApplication ? ($statusSteps[$latestApplication->status] ??
     <div>
         <h2 class="text-3xl font-bold">Welcome back.</h2>
         <p class="text-sm mt-2">Ready to proceed with your service requests?</p>
+
         <a href="/client/application">
-            <button class="mt-4 bg-white text-blue-600 px-6 py-2 rounded-lg font-semibold">
+            <button class="mt-4 bg-white text-blue-600 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition">
                 Apply for Assistance
             </button>
         </a>
@@ -51,60 +62,65 @@ $currentStep = $latestApplication ? ($statusSteps[$latestApplication->status] ??
     </span>
 </div>
 
-<div class="bg-surface-container-lowest p-10 rounded-xl shadow-sm border border-outline-variant/10">
+<div class="bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-outline-variant/10">
 
-<div class="flex items-center justify-between relative">
+    @php
+        $steps = [
+            'submitted' => 'Submitted',
+            'under_review' => 'Under Review',
+            'for_approval' => 'For Approval',
+            'approved' => 'Approved',
+            'released' => 'Released'
+        ];
+    @endphp
 
-<!-- LINE -->
-<div class="absolute top-6 left-0 w-full h-1 bg-surface-container-high">
-    <div class="bg-primary h-full"
-        style="width: {{ ($currentStep / 5) * 100 }}%">
+    <div class="relative">
+
+        <!-- Background Line -->
+        <div class="absolute top-5 left-0 right-0 h-1 bg-slate-200 rounded-full z-0"></div>
+
+        <!-- Progress Line -->
+        <div class="absolute top-5 left-0 h-1 bg-[#0B3C5D] rounded-full z-0 transition-all duration-500"
+             style="width: {{ $progressWidth }}">
+        </div>
+
+        <!-- Steps -->
+        <div class="grid grid-cols-5 gap-2 relative z-10">
+
+            @foreach($steps as $key => $label)
+
+                @php
+                    $stepIndex = array_search($key, $statusOrder);
+                    $done = $stepIndex <= $currentIndex;
+                    $active = $stepIndex == $currentIndex;
+                @endphp
+
+                <div class="flex flex-col items-center text-center">
+
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300
+                        {{ $done ? 'bg-[#0B3C5D] text-white' : 'bg-slate-200 text-slate-500' }}">
+
+                        @if($done)
+                            ✓
+                        @else
+                            {{ $stepIndex + 1 }}
+                        @endif
+
+                    </div>
+
+                    <p class="mt-3 text-sm font-semibold leading-tight px-1
+                        {{ $done ? 'text-[#0B3C5D]' : 'text-slate-500' }}">
+                        {{ $label }}
+                    </p>
+
+                </div>
+
+            @endforeach
+
+        </div>
+
     </div>
-</div>
 
-@php
-$steps = [
-    1 => 'Submitted',
-    2 => 'Under Review',
-    3 => 'For Interview',
-    4 => 'Approved',
-    5 => 'Released'
-];
-@endphp
-
-@foreach($steps as $step => $label)
-
-<div class="flex flex-col items-center gap-2 z-10
-    {{ $currentStep < $step ? 'opacity-40' : '' }}">
-
-    <div class="w-12 h-12 rounded-full flex items-center justify-center
-        {{ $currentStep >= $step ? 'bg-primary text-white' : 'bg-surface-container-high' }}">
-
-        {{-- COMPLETED --}}
-        @if($currentStep > $step)
-            ✔
-
-        {{-- CURRENT --}}
-        @elseif($currentStep == $step)
-            ●
-
-        {{-- UPCOMING --}}
-        @else
-            ○
-        @endif
-
-    </div>
-
-    <p class="text-sm font-bold
-        {{ $currentStep >= $step ? 'text-primary' : '' }}">
-        {{ $label }}
-    </p>
-
-</div>
-
-@endforeach
-
-</div>
 </div>
 
 </section>
@@ -122,7 +138,7 @@ $steps = [
                 <option value="">All Status</option>
                 <option value="submitted" {{ request('status')=='submitted'?'selected':'' }}>Submitted</option>
                 <option value="under_review" {{ request('status')=='under_review'?'selected':'' }}>Under Review</option>
-                <option value="for_interview" {{ request('status')=='for_interview'?'selected':'' }}>For Interview</option>
+                <option value="for_approval" {{ request('status')=='for_approval'?'selected':'' }}>For Approval</option>
                 <option value="approved" {{ request('status')=='approved'?'selected':'' }}>Approved</option>
                 <option value="released" {{ request('status')=='released'?'selected':'' }}>Released</option>
             </select>
@@ -130,7 +146,7 @@ $steps = [
             <select name="type" class="px-3 py-2 text-sm border rounded-lg">
                 <option value="">All Types</option>
                 @foreach($types as $type)
-                    <option value="{{ $type->id }}">
+                    <option value="{{ $type->id }}" {{ request('type') == $type->id ? 'selected' : '' }}>
                         {{ $type->name }}
                     </option>
                 @endforeach
@@ -151,21 +167,11 @@ $steps = [
 
 <thead class="bg-surface-container-low">
 <tr>
-<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-Reference ID
-</th>
-<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-Type of Assistance
-</th>
-<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-Submission Date
-</th>
-<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-Current Status
-</th>
-<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-Action
-</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Reference ID</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Type of Assistance</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Submission Date</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Current Status</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Action</th>
 </tr>
 </thead>
 
@@ -195,11 +201,10 @@ Action
 </td>
 
 <td class="px-6 py-5">
-
 <span class="px-3 py-1 text-[10px] font-bold rounded-full uppercase
     @if($app->status == 'submitted') bg-yellow-100 text-yellow-700
     @elseif($app->status == 'under_review') bg-blue-100 text-blue-700
-    @elseif($app->status == 'for_interview') bg-primary-fixed text-on-primary-fixed
+    @elseif($app->status == 'for_approval') bg-primary-fixed text-on-primary-fixed
     @elseif($app->status == 'approved') bg-green-100 text-green-700
     @elseif($app->status == 'released') bg-green-200 text-green-900
     @else bg-gray-100 text-gray-700
@@ -207,7 +212,6 @@ Action
 ">
     {{ str_replace('_',' ', $app->status) }}
 </span>
-
 </td>
 
 <td class="px-6 py-5">

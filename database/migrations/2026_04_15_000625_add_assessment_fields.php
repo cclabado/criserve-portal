@@ -12,7 +12,13 @@ return new class extends Migration
     public function up()
     {
         Schema::table('applications', function (Blueprint $table) {
-            // $table->string('reference_no')->unique()->nullable();
+            $table->text('notes')->nullable();
+            $table->dateTime('schedule_date')->nullable();
+            $table->string('meeting_link')->nullable();
+        });
+
+        Schema::table('documents', function (Blueprint $table) {
+            $table->text('remarks')->nullable();
         });
     }
 
@@ -21,8 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('applications', function (Blueprint $table) {
-            //
-        });
+        //
     }
 };

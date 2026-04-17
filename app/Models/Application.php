@@ -13,6 +13,9 @@ class Application extends Model
         'assistance_type_id',
         'assistance_subtype_id',
         'mode_of_assistance',
+        'notes',
+        'schedule_date',
+        'meeting_link',
         'status'
     ];
     public function assistanceType()
