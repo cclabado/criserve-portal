@@ -13,7 +13,9 @@ class ApplicationController extends Controller
 {
     public function create()
     {
-        return view('client.application-form');
+        $user = auth()->user();
+
+        return view('client.application-form', compact('user'));
     }
     public function store(Request $request)
     {
