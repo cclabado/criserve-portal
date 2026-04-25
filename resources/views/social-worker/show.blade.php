@@ -7,7 +7,7 @@
 <div>
     <a href="{{ route('socialworker.applications') }}"
        class="text-sm text-gray-500 hover:text-[#234E70]">
-        ← Back to Applications
+        &larr; Back to Applications
     </a>
 
     <h1 class="text-3xl font-bold text-[#234E70] mt-2">
@@ -139,15 +139,13 @@
     <h2 class="title">Intake Details</h2>
 
     <div class="grid grid-cols-3 gap-4 text-sm">
-
-        <div><span class="muted">Monthly Income</span><br>₱{{ number_format($application->monthly_income,2) }}</div>
-        <div><span class="muted">Monthly Expenses</span><br>₱{{ number_format($application->monthly_expenses,2) }}</div>
-        <div><span class="muted">Savings</span><br>₱{{ number_format($application->savings,2) }}</div>
+        <div><span class="muted">Monthly Income</span><br>&#8369;{{ number_format($application->monthly_income, 2) }}</div>
+        <div><span class="muted">Monthly Expenses</span><br>&#8369;{{ number_format($application->monthly_expenses, 2) }}</div>
+        <div><span class="muted">Savings</span><br>&#8369;{{ number_format($application->savings, 2) }}</div>
 
         <div><span class="muted">Crisis</span><br>{{ $application->crisis_type }}</div>
         <div><span class="muted">Urgency</span><br>{{ $application->urgency_level }}</div>
         <div><span class="muted">Members</span><br>{{ $application->household_members }}</div>
-
     </div>
 
     <div class="mt-4">
@@ -160,18 +158,28 @@
         {{ $application->social_worker_assessment }}
     </div>
 
+    <div class="mt-4">
+        <span class="muted">AI Recommendation Summary</span><br>
+        {{ $application->ai_recommendation_summary ?: '-' }}
+    </div>
+
     <div class="grid grid-cols-2 gap-4 mt-4">
         <div>
             <span class="muted">Recommended Amount</span><br>
-            ₱{{ number_format($application->recommended_amount,2) }}
+            &#8369;{{ number_format($application->recommended_amount, 2) }}
         </div>
 
         <div>
             <span class="muted">Final Amount</span><br>
-            ₱{{ number_format($application->final_amount,2) }}
+            &#8369;{{ number_format($application->final_amount, 2) }}
         </div>
     </div>
 
+    <div class="grid grid-cols-3 gap-4 mt-4 text-sm">
+        <div><span class="muted">AI Confidence</span><br>{{ $application->ai_recommendation_confidence ? $application->ai_recommendation_confidence.'%' : '-' }}</div>
+        <div><span class="muted">AI Source</span><br>{{ $application->ai_recommendation_source ?: '-' }}</div>
+        <div><span class="muted">AI Model</span><br>{{ $application->ai_recommendation_model ?: '-' }}</div>
+    </div>
 </div>
 
 <!-- ATTACHMENTS -->

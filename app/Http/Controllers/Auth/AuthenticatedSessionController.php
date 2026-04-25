@@ -31,18 +31,18 @@ class AuthenticatedSessionController extends Controller
         $user = Auth::user();
 
         if ($user->role === 'admin') {
-            return redirect()->intended('/admin/dashboard');
+            return redirect()->route('admin.dashboard');
         }
 
         if ($user->role === 'social_worker') {
-            return redirect()->intended('/social-worker/dashboard');
+            return redirect('/social-worker/dashboard');
         }
         
         if ($user->role === 'approving_officer') {
-            return redirect()->intended('/approving-officer/dashboard');
+            return redirect()->route('approving.dashboard');
         }
 
-        return redirect()->intended('/client/dashboard');
+        return redirect()->route('client.dashboard');
     }
 
     /**

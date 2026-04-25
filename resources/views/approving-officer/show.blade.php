@@ -103,8 +103,19 @@
             </div>
 
             <div>
+                <span class="muted">AI Recommendation Summary</span><br>
+                {{ $application->ai_recommendation_summary ?: '-' }}
+            </div>
+
+            <div>
                 <span class="muted">Initial Notes</span><br>
                 {{ $application->notes ?: '-' }}
+            </div>
+
+            <div>
+                <span class="muted">AI Confidence / Source</span><br>
+                {{ $application->ai_recommendation_confidence ? $application->ai_recommendation_confidence.'%' : '-' }}
+                / {{ $application->ai_recommendation_source ?: '-' }}
             </div>
 
         </div>

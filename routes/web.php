@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\ClientDashboardController;
+use App\Http\Controllers\AdminController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -52,21 +53,22 @@ Route::middleware(['auth', 'role:client'])->group(function () {
 */
 Route::middleware(['auth', 'role:admin'])->group(function () {
 
-    Route::get('/admin/dashboard', function () {
-        return view('admin.dashboard');
-    });
-
-    Route::get('/admin/applications', function () {
-        return view('admin.applications');
-    });
-
-    Route::get('/admin/approvals', function () {
-        return view('admin.approvals');
-    });
-
-    Route::get('/admin/release', function () {
-        return view('admin.release');
-    });
+    Route::get('/admin/dashboard', [AdminController::class, 'dashboard'])
+        ->name('admin.dashboard');
+    Route::get('/admin/libraries', [AdminController::class, 'libraries'])
+        ->name('admin.libraries');
+    Route::get('/admin/users', [AdminController::class, 'users'])
+        ->name('admin.users');
+    Route::patch('/admin/users/{user}', [AdminController::class, 'updateUser'])
+        ->name('admin.users.update');
+    Route::patch('/admin/users/{user}/role', [AdminController::class, 'updateUserRole'])
+        ->name('admin.users.role.update');
+    Route::post('/admin/libraries/assistance-types', [AdminController::class, 'storeAssistanceType'])
+        ->name('admin.libraries.assistance-types.store');
+    Route::post('/admin/libraries/assistance-subtypes', [AdminController::class, 'storeAssistanceSubtype'])
+        ->name('admin.libraries.assistance-subtypes.store');
+    Route::post('/admin/libraries/relationships', [AdminController::class, 'storeRelationship'])
+        ->name('admin.libraries.relationships.store');
 
 });
 
@@ -77,17 +79,21 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
 */
 use App\Http\Controllers\SocialWorkerController;
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'role:social_worker'])->group(function () {
 
     Route::get('/social-worker/dashboard', [SocialWorkerController::class, 'dashboard']);
     Route::get('/social-worker/applications', [SocialWorkerController::class, 'applications'])
     ->name('socialworker.applications');
+    Route::get('/social-worker/my-cases', [SocialWorkerController::class, 'myCases'])
+        ->name('socialworker.my-cases');
     Route::get('/social-worker/application/{id}', [SocialWorkerController::class, 'show']);
     Route::get('/social-worker/application/{id}/assess', [SocialWorkerController::class, 'assess']);
     Route::post('/social-worker/application/{id}/assess', [SocialWorkerController::class, 'updateAssessment'])
     ->name('socialworker.assess.update');
     Route::get('/social-worker/application/{id}/intake', [SocialWorkerController::class, 'intake'])
     ->name('socialworker.intake');
+    Route::post('/social-worker/application/{id}/recommendation', [SocialWorkerController::class, 'generateRecommendation'])
+        ->name('socialworker.recommendation.generate');
     Route::post('/social-worker/application/{id}/intake', [SocialWorkerController::class, 'saveIntake'])
         ->name('socialworker.intake.save');
     Route::get('/social-worker/application/{id}/show',
@@ -107,7 +113,7 @@ Route::middleware(['auth'])->group(function () {
 */
 use App\Http\Controllers\ApprovingOfficerController;
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'role:approving_officer'])->group(function () {
     Route::prefix('approving-officer')->group(function () {
 
     Route::get('/dashboard', [App\Http\Controllers\ApprovingOfficerController::class, 'dashboard'])

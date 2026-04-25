@@ -22,7 +22,7 @@ Review, track, and process citizen applications through our centralized crisis r
 </div>
 
 <!-- KPI CARDS -->
-<div class="grid grid-cols-4 gap-6">
+<div class="grid grid-cols-5 gap-6">
 
 <!-- TOTAL PENDING -->
 <div class="bg-white rounded-xl p-6 shadow flex justify-between items-center">
@@ -73,6 +73,19 @@ Review, track, and process citizen applications through our centralized crisis r
 
 <div class="w-12 h-12 bg-blue-100 text-[#0B3C5D] flex items-center justify-center rounded-lg">
 👤
+</div>
+</div>
+
+<!-- MY CASES -->
+<div class="bg-white rounded-xl p-6 shadow flex justify-between items-center">
+<div>
+<p class="text-sm text-gray-500">My Assessed Cases</p>
+<p class="text-2xl font-bold mt-2">{{ $myHandled }}</p>
+<p class="text-xs text-gray-400">Personally handled</p>
+</div>
+
+<div class="w-12 h-12 bg-indigo-100 text-indigo-700 flex items-center justify-center rounded-lg">
+ðŸ§¾
 </div>
 </div>
 

@@ -26,7 +26,18 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $validated = $request->validated();
+
+        if (! empty($validated['first_name']) || ! empty($validated['last_name'])) {
+            $validated['name'] = trim(implode(' ', array_filter([
+                $validated['first_name'] ?? null,
+                $validated['middle_name'] ?? null,
+                $validated['last_name'] ?? null,
+                $validated['extension_name'] ?? null,
+            ])));
+        }
+
+        $request->user()->fill($validated);
 
         if ($request->user()->isDirty('email')) {
             $request->user()->email_verified_at = null;
@@ -50,7 +61,10 @@ class ProfileController extends Controller
 
         Auth::logout();
 
-        $user->delete();
+        $user->forceFill([
+            'is_active' => false,
+            'deactivated_at' => now(),
+        ])->save();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

@@ -3,17 +3,17 @@
     @php
         $role = auth()->user()->role ?? 'client';
 
-        function navClass($path) {
+        $navClass = function ($path) {
             return request()->is($path)
                 ? 'bg-sky-50 text-sky-900 font-semibold border-r-4 border-sky-700 shadow-sm'
                 : 'text-slate-600 hover:text-sky-700 hover:bg-slate-100';
-        }
+        };
 
-        function iconClass($path) {
+        $iconClass = function ($path) {
             return request()->is($path)
                 ? 'text-sky-700'
                 : 'text-slate-500 group-hover:text-sky-700';
-        }
+        };
     @endphp
 
     <!-- LOGO -->
@@ -36,9 +36,9 @@
         @if($role === 'client')
 
         <a href="/client/dashboard"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('client/dashboard') }}">
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('client/dashboard') }}">
 
-            <span class="material-symbols-outlined {{ iconClass('client/dashboard') }}">
+            <span class="material-symbols-outlined {{ $iconClass('client/dashboard') }}">
                 dashboard
             </span>
 
@@ -46,9 +46,9 @@
         </a>
 
         <a href="/client/application"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('client/application*') }}">
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('client/application*') }}">
 
-            <span class="material-symbols-outlined {{ iconClass('client/application*') }}">
+            <span class="material-symbols-outlined {{ $iconClass('client/application*') }}">
                 description
             </span>
 
@@ -62,9 +62,9 @@
         @if($role === 'social_worker')
 
         <a href="/social-worker/dashboard"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('social-worker/dashboard') }}">
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/dashboard') }}">
 
-            <span class="material-symbols-outlined {{ iconClass('social-worker/dashboard') }}">
+            <span class="material-symbols-outlined {{ $iconClass('social-worker/dashboard') }}">
                 dashboard
             </span>
 
@@ -72,13 +72,23 @@
         </a>
 
         <a href="/social-worker/applications"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('social-worker/applications*') }}">
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/applications*') }}">
 
-            <span class="material-symbols-outlined {{ iconClass('social-worker/applications*') }}">
+            <span class="material-symbols-outlined {{ $iconClass('social-worker/applications*') }}">
                 description
             </span>
 
             <span class="text-sm tracking-wide">Applications</span>
+        </a>
+
+        <a href="/social-worker/my-cases"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/my-cases*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('social-worker/my-cases*') }}">
+                assignment_ind
+            </span>
+
+            <span class="text-sm tracking-wide">My Cases</span>
         </a>
 
         @endif
@@ -87,34 +97,54 @@
         <!-- ================= ADMIN ================= -->
         @if($role === 'admin')
 
-        <a href="/admin/applications"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('admin/applications*') }}">
+        <a href="/admin/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/dashboard') }}">
 
-            <span class="material-symbols-outlined {{ iconClass('admin/applications*') }}">
+            <span class="material-symbols-outlined {{ $iconClass('admin/dashboard') }}">
+                admin_panel_settings
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/admin/libraries"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/libraries*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('admin/libraries*') }}">
+                library_books
+            </span>
+
+            <span class="text-sm tracking-wide">Libraries</span>
+        </a>
+
+        <a href="/admin/users"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/users*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('admin/users*') }}">
+                manage_accounts
+            </span>
+
+            <span class="text-sm tracking-wide">User Management</span>
+        </a>
+
+        <a href="/social-worker/applications"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-sky-700 hover:bg-slate-100">
+
+            <span class="material-symbols-outlined text-slate-500 group-hover:text-sky-700">
                 description
             </span>
 
-            <span class="text-sm tracking-wide">Applications</span>
+            <span class="text-sm tracking-wide">All Applications</span>
         </a>
 
-        <a href="/admin/approvals"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('admin/approvals*') }}">
+        <a href="/approving-officer/applications"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-sky-700 hover:bg-slate-100">
 
-            <span class="material-symbols-outlined {{ iconClass('admin/approvals*') }}">
+            <span class="material-symbols-outlined text-slate-500 group-hover:text-sky-700">
                 fact_check
             </span>
 
-            <span class="text-sm tracking-wide">Approvals</span>
-        </a>
-
-        <a href="/admin/release"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('admin/release*') }}">
-
-            <span class="material-symbols-outlined {{ iconClass('admin/release*') }}">
-                inventory_2
-            </span>
-
-            <span class="text-sm tracking-wide">Release</span>
+            <span class="text-sm tracking-wide">Approvals Queue</span>
         </a>
 
         @endif
@@ -124,9 +154,9 @@
 
             <!-- DASHBOARD -->
             <a href="/approving-officer/dashboard"
-            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('approving-officer/dashboard') }}">
+            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('approving-officer/dashboard') }}">
 
-                <span class="material-symbols-outlined {{ iconClass('approving-officer/dashboard') }}">
+                <span class="material-symbols-outlined {{ $iconClass('approving-officer/dashboard') }}">
                     dashboard
                 </span>
 
@@ -137,9 +167,9 @@
 
             <!-- APPLICATIONS -->
             <a href="/approving-officer/applications"
-            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ navClass('approving-officer/applications*') }}">
+            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('approving-officer/applications*') }}">
 
-                <span class="material-symbols-outlined {{ iconClass('approving-officer/applications*') }}">
+                <span class="material-symbols-outlined {{ $iconClass('approving-officer/applications*') }}">
                     fact_check
                 </span>
 
@@ -150,33 +180,5 @@
 
         @endif
     </nav>
-
-    <!-- FOOTER -->
-    <div class="px-4 py-6 border-t border-slate-200 space-y-1">
-
-        <!-- <a href="#"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-sky-700 hover:bg-slate-100">
-
-            <span class="material-symbols-outlined group-hover:text-sky-700">
-                settings
-            </span>
-
-            <span class="text-sm tracking-wide">Settings</span>
-        </a> -->
-
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-            <button type="submit"
-                class="group w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-red-500 hover:bg-red-50">
-
-                <span class="material-symbols-outlined group-hover:text-red-500">
-                    logout
-                </span>
-
-                <span class="text-sm tracking-wide">Logout</span>
-            </button>
-        </form>
-
-    </div>
 
 </aside>

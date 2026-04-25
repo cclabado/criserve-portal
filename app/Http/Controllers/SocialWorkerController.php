@@ -10,6 +10,7 @@ use App\Models\AssistanceSubtype;
 use Illuminate\Support\Facades\DB;
 use App\Models\FamilyMember;
 use App\Models\Document;
+use App\Services\AiRecommendationService;
 
 class SocialWorkerController extends Controller
 {
@@ -24,12 +25,14 @@ class SocialWorkerController extends Controller
         $urgent = \App\Models\Application::where('status', 'under_review')->count();
 
         $totalHandled = \App\Models\Application::count();
+        $myHandled = \App\Models\Application::where('social_worker_id', auth()->id())->count();
 
         return view('social-worker.dashboard', compact(
             'totalPending',
             'approvedToday',
             'urgent',
-            'totalHandled'
+            'totalHandled',
+            'myHandled'
         ));
     }
 
@@ -79,6 +82,34 @@ class SocialWorkerController extends Controller
         $applications = $query->paginate(5)->withQueryString();
 
         return view('social-worker.applications', compact('applications'));
+    }
+
+    public function myCases(Request $request)
+    {
+        $query = Application::with(['client', 'assistanceType'])
+            ->where('social_worker_id', auth()->id())
+            ->latest();
+
+        if ($request->status && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->search) {
+            $search = $request->search;
+
+            $query->where(function ($q) use ($search) {
+                $q->where('reference_no', 'like', "%$search%")
+                    ->orWhereHas('client', function ($c) use ($search) {
+                        $c->where('first_name', 'like', "%$search%")
+                            ->orWhere('last_name', 'like', "%$search%")
+                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
+                    });
+            });
+        }
+
+        $applications = $query->paginate(8)->withQueryString();
+
+        return view('social-worker.my-cases', compact('applications'));
     }
 
     public function show($id)
@@ -213,6 +244,7 @@ class SocialWorkerController extends Controller
                 'assistance_type_id' => $request->assistance_type_id,
                 'assistance_subtype_id' => $request->assistance_subtype_id,
                 'mode_of_assistance' => $request->mode_of_assistance,
+                'social_worker_id' => auth()->id(),
             ]);
 
             /*
@@ -259,7 +291,9 @@ class SocialWorkerController extends Controller
             'client',
             'beneficiary',
             'familyMembers',
-            'assistanceType'
+            'assistanceType',
+            'assistanceSubtype',
+            'documents',
         ])->findOrFail($id);
 
         return view('social-worker.intake', compact('application'));
@@ -267,75 +301,52 @@ class SocialWorkerController extends Controller
 
     public function saveIntake(Request $request, $id)
     {
-        $application = \App\Models\Application::findOrFail($id);
+        $validated = $this->validateIntake($request);
+        $application = \App\Models\Application::with([
+            'client',
+            'beneficiary',
+            'familyMembers',
+            'assistanceType',
+            'assistanceSubtype',
+        ])->findOrFail($id);
 
-        // Save Inputs
-        $application->monthly_income = $request->monthly_income;
-        $application->household_members = $request->household_members;
-        $application->working_members = $request->working_members;
-        $application->monthly_expenses = $request->monthly_expenses;
-        $application->savings = $request->savings;
+        $recommendation = app(AiRecommendationService::class)
+            ->generate($application, $validated);
 
-        $application->crisis_type = $request->crisis_type;
-        $application->urgency_level = $request->urgency_level;
-
-        $application->has_elderly = $request->has_elderly ? 1 : 0;
-        $application->has_child = $request->has_child ? 1 : 0;
-        $application->has_pwd = $request->has_pwd ? 1 : 0;
-        $application->has_pregnant = $request->has_pregnant ? 1 : 0;
-        $application->earner_unable_to_work = $request->earner_unable_to_work ? 1 : 0;
-
-        $application->has_philhealth = $request->has_philhealth ? 1 : 0;
-        $application->has_family_support = $request->has_family_support ? 1 : 0;
-
-        // =============================
-        // RECOMMENDATION LOGIC
-        // =============================
-        $score = 0;
-
-        if ($request->monthly_income < 10000) $score += 3;
-        elseif ($request->monthly_income < 20000) $score += 2;
-
-        if ($request->monthly_expenses > $request->monthly_income) $score += 2;
-
-        if ($request->savings <= 0) $score += 1;
-
-        if ($request->urgency_level == 'Critical') $score += 4;
-        elseif ($request->urgency_level == 'High') $score += 3;
-        elseif ($request->urgency_level == 'Medium') $score += 2;
-
-        if (in_array($request->crisis_type, ['Hospitalization', 'Death', 'Disaster'])) {
-            $score += 3;
-        }
-
-        if ($request->has_elderly) $score += 1;
-        if ($request->has_child) $score += 1;
-        if ($request->has_pwd) $score += 1;
-        if ($request->has_pregnant) $score += 1;
-        if ($request->earner_unable_to_work) $score += 2;
-
-        if (!$request->has_family_support) $score += 2;
-
-        // Amount Mapping
-        if ($score <= 3) $recommended = 3000;
-        elseif ($score <= 6) $recommended = 5000;
-        elseif ($score <= 9) $recommended = 8000;
-        elseif ($score <= 12) $recommended = 10000;
-        else $recommended = 15000;
-
-        $application->problem_statement = $request->problem_statement;
-        $application->social_worker_assessment = $request->social_worker_assessment;
-
-        $application->recommended_amount = $recommended;
-        $application->final_amount = $request->final_amount;
-
+        $application->fill($this->extractIntakeFields($validated));
+        $application->problem_statement = $validated['problem_statement'] ?? null;
+        $application->social_worker_assessment = $validated['social_worker_assessment'] ?? null;
+        $application->recommended_amount = $recommendation['recommended_amount'];
+        $application->final_amount = $validated['final_amount'] ?? $recommendation['recommended_amount'];
+        $application->ai_recommendation_summary = $recommendation['summary'];
+        $application->ai_recommendation_confidence = $recommendation['confidence'];
+        $application->ai_recommendation_source = $recommendation['source'];
+        $application->ai_recommendation_model = $recommendation['model'];
+        $application->ai_recommendation_generated_at = $recommendation['generated_at'];
+        $application->social_worker_id = auth()->id();
         $application->status = 'for_approval';
-
         $application->save();
 
         return redirect()
             ->route('socialworker.applications')
             ->with('success', 'Intake completed.');
+    }
+
+    public function generateRecommendation(Request $request, $id)
+    {
+        $validated = $this->validateIntake($request, false);
+
+        $application = \App\Models\Application::with([
+            'client',
+            'beneficiary',
+            'familyMembers',
+            'assistanceType',
+            'assistanceSubtype',
+        ])->findOrFail($id);
+
+        return response()->json(
+            app(AiRecommendationService::class)->generate($application, $validated)
+        );
     }
     public function certificate($id)
     {
@@ -364,5 +375,53 @@ class SocialWorkerController extends Controller
         return redirect()
             ->route('socialworker.applications')
             ->with('success', 'Application marked as released successfully.');
+    }
+
+    protected function validateIntake(Request $request, bool $includeNotes = true): array
+    {
+        $rules = [
+            'monthly_income' => ['required', 'numeric', 'min:0'],
+            'household_members' => ['required', 'integer', 'min:1'],
+            'working_members' => ['required', 'integer', 'min:0'],
+            'monthly_expenses' => ['required', 'numeric', 'min:0'],
+            'savings' => ['required', 'numeric', 'min:0'],
+            'crisis_type' => ['required', 'string', 'max:255'],
+            'urgency_level' => ['required', 'in:Low,Medium,High,Critical'],
+            'has_elderly' => ['nullable', 'boolean'],
+            'has_child' => ['nullable', 'boolean'],
+            'has_pwd' => ['nullable', 'boolean'],
+            'has_pregnant' => ['nullable', 'boolean'],
+            'earner_unable_to_work' => ['nullable', 'boolean'],
+            'has_philhealth' => ['nullable', 'boolean'],
+            'has_family_support' => ['nullable', 'boolean'],
+            'final_amount' => ['nullable', 'numeric', 'min:0'],
+        ];
+
+        if ($includeNotes) {
+            $rules['problem_statement'] = ['nullable', 'string'];
+            $rules['social_worker_assessment'] = ['nullable', 'string'];
+        }
+
+        return $request->validate($rules);
+    }
+
+    protected function extractIntakeFields(array $validated): array
+    {
+        return [
+            'monthly_income' => $validated['monthly_income'],
+            'household_members' => $validated['household_members'],
+            'working_members' => $validated['working_members'],
+            'monthly_expenses' => $validated['monthly_expenses'],
+            'savings' => $validated['savings'],
+            'crisis_type' => $validated['crisis_type'],
+            'urgency_level' => $validated['urgency_level'],
+            'has_elderly' => ! empty($validated['has_elderly']),
+            'has_child' => ! empty($validated['has_child']),
+            'has_pwd' => ! empty($validated['has_pwd']),
+            'has_pregnant' => ! empty($validated['has_pregnant']),
+            'earner_unable_to_work' => ! empty($validated['earner_unable_to_work']),
+            'has_philhealth' => ! empty($validated['has_philhealth']),
+            'has_family_support' => ! empty($validated['has_family_support']),
+        ];
     }
 }

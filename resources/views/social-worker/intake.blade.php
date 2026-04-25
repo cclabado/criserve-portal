@@ -19,65 +19,161 @@
             Reference: {{ $application->reference_no }}
         </p>
     </div>
-    <!-- CLIENT SUMMARY -->
-    <div class="bg-white p-6 rounded-xl shadow space-y-6">
+    <div class="bg-white p-6 rounded-2xl shadow space-y-6">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#234E70]/70">Case Snapshot</p>
+                <h2 class="text-2xl font-bold text-[#234E70] mt-1">Client, Beneficiary, and Assessment</h2>
+            </div>
 
-        <div>
-            <h2 class="text-lg font-bold text-[#234E70]">Client Information</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full lg:w-auto lg:min-w-[460px]">
+                <button type="button"
+                        class="summary-tab is-active"
+                        data-tab-target="client-summary">
+                    <span class="summary-tab__eyebrow">Profile</span>
+                    <span class="summary-tab__title">Client Information</span>
+                </button>
 
-            <div class="grid grid-cols-4 gap-4 mt-4 text-sm">
-                <div><span class="text-gray-500">Name</span><br>
-                    {{ $application->client->last_name }},
-                    {{ $application->client->first_name }}
+                @if($application->beneficiary)
+                <button type="button"
+                        class="summary-tab"
+                        data-tab-target="beneficiary-summary">
+                    <span class="summary-tab__eyebrow">Linked Person</span>
+                    <span class="summary-tab__title">Beneficiary</span>
+                </button>
+                @endif
+
+                <button type="button"
+                        class="summary-tab {{ $application->beneficiary ? '' : 'sm:col-span-2' }}"
+                        data-tab-target="assessment-summary">
+                    <span class="summary-tab__eyebrow">Review</span>
+                    <span class="summary-tab__title">Assessment Details</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="client-summary" class="summary-panel is-active">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
+                <div class="summary-stat">
+                    <span class="summary-label">Name</span>
+                    <p class="summary-value">{{ $application->client->last_name }}, {{ $application->client->first_name }}</p>
                 </div>
 
-                <div><span class="text-gray-500">Sex</span><br>
-                    {{ $application->client->sex }}
+                <div class="summary-stat">
+                    <span class="summary-label">Sex</span>
+                    <p class="summary-value">{{ $application->client->sex ?: '-' }}</p>
                 </div>
 
-                <div><span class="text-gray-500">Birthdate</span><br>
-                    {{ $application->client->birthdate }}
+                <div class="summary-stat">
+                    <span class="summary-label">Birthdate</span>
+                    <p class="summary-value">{{ $application->client->birthdate ?: '-' }}</p>
                 </div>
 
-                <div><span class="text-gray-500">Civil Status</span><br>
-                    {{ $application->client->civil_status }}
+                <div class="summary-stat">
+                    <span class="summary-label">Civil Status</span>
+                    <p class="summary-value">{{ $application->client->civil_status ?: '-' }}</p>
                 </div>
             </div>
 
-            <div class="mt-3 text-sm">
-                <span class="text-gray-500">Address</span><br>
-                {{ $application->client->full_address }}
+            <div class="summary-highlight mt-4">
+                <span class="summary-label">Address</span>
+                <p class="summary-value mt-2">{{ $application->client->full_address ?: '-' }}</p>
             </div>
         </div>
 
         @if($application->beneficiary)
-        <hr>
-
-        <div>
-            <h2 class="text-lg font-bold text-[#234E70]">Beneficiary Information</h2>
-
-            <div class="grid grid-cols-4 gap-4 mt-4 text-sm">
-                <div><span class="text-gray-500">Name</span><br>
-                    {{ $application->beneficiary->last_name }},
-                    {{ $application->beneficiary->first_name }}
+        <div id="beneficiary-summary" class="summary-panel hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
+                <div class="summary-stat">
+                    <span class="summary-label">Name</span>
+                    <p class="summary-value">{{ $application->beneficiary->last_name }}, {{ $application->beneficiary->first_name }}</p>
                 </div>
 
-                <div><span class="text-gray-500">Sex</span><br>
-                    {{ $application->beneficiary->sex }}
+                <div class="summary-stat">
+                    <span class="summary-label">Sex</span>
+                    <p class="summary-value">{{ $application->beneficiary->sex ?: '-' }}</p>
                 </div>
 
-                <div><span class="text-gray-500">Birthdate</span><br>
-                    {{ $application->beneficiary->birthdate }}
+                <div class="summary-stat">
+                    <span class="summary-label">Birthdate</span>
+                    <p class="summary-value">{{ $application->beneficiary->birthdate ?: '-' }}</p>
                 </div>
 
-                <div><span class="text-gray-500">Contact</span><br>
-                    {{ $application->beneficiary->contact_number }}
+                <div class="summary-stat">
+                    <span class="summary-label">Contact</span>
+                    <p class="summary-value">{{ $application->beneficiary->contact_number ?: '-' }}</p>
                 </div>
+            </div>
+
+            <div class="summary-highlight mt-4">
+                <span class="summary-label">Address</span>
+                <p class="summary-value mt-2">{{ $application->beneficiary->full_address ?: '-' }}</p>
             </div>
         </div>
         @endif
 
+        <div id="assessment-summary" class="summary-panel hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
+                <div class="summary-stat">
+                    <span class="summary-label">Assistance Type</span>
+                    <p class="summary-value">{{ $application->assistanceType->name ?? '-' }}</p>
+                </div>
+
+                <div class="summary-stat">
+                    <span class="summary-label">Specific Assistance</span>
+                    <p class="summary-value">{{ $application->assistanceSubtype->name ?? '-' }}</p>
+                </div>
+
+                <div class="summary-stat">
+                    <span class="summary-label">Mode of Assistance</span>
+                    <p class="summary-value">{{ $application->mode_of_assistance ?: '-' }}</p>
+                </div>
+
+                <div class="summary-stat">
+                    <span class="summary-label">Schedule</span>
+                    <p class="summary-value">{{ $application->schedule_date ? \Carbon\Carbon::parse($application->schedule_date)->format('M d, Y h:i A') : '-' }}</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4 text-sm">
+                <div class="summary-highlight">
+                    <span class="summary-label">Assessment Notes</span>
+                    <p class="summary-value mt-2 whitespace-pre-line">{{ $application->notes ?: '-' }}</p>
+                </div>
+
+                <div class="summary-highlight">
+                    <span class="summary-label">Meeting Link</span>
+                    @if($application->meeting_link)
+                        <a href="{{ $application->meeting_link }}"
+                           target="_blank"
+                           class="summary-link mt-2 inline-block break-all">
+                            {{ $application->meeting_link }}
+                        </a>
+                    @else
+                        <p class="summary-value mt-2">-</p>
+                    @endif
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <span class="summary-label">Document Remarks</span>
+
+                <div class="mt-3 grid gap-3">
+                    @forelse($application->documents as $document)
+                        <div class="summary-highlight">
+                            <p class="summary-value">{{ $document->file_name ?? $document->filename }}</p>
+                            <p class="mt-2 text-sm text-gray-600">{{ $document->remarks ?: 'No remarks added.' }}</p>
+                        </div>
+                    @empty
+                        <div class="summary-highlight">
+                            <p class="text-sm text-gray-600">No documents uploaded.</p>
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        </div>
     </div>
+
     <form id="intakeForm"
           method="POST"
           action="{{ route('socialworker.intake.save', $application->id) }}">
@@ -179,12 +275,12 @@
                     <label class="label">Type of Crisis</label>
                     <select name="crisis_type" class="input w-full">
                         <option value="">Select</option>
-                        <option value="Hospitalization">Hospitalization</option>
-                        <option value="Death">Death in Family</option>
-                        <option value="Disaster">Fire/Flood/Disaster</option>
-                        <option value="Loss of Livelihood">Loss of Livelihood</option>
-                        <option value="Food Need">Food Need</option>
-                        <option value="Education Need">Education Need</option>
+                        <option value="Hospitalization" @selected($application->crisis_type === 'Hospitalization')>Hospitalization</option>
+                        <option value="Death" @selected($application->crisis_type === 'Death')>Death in Family</option>
+                        <option value="Disaster" @selected($application->crisis_type === 'Disaster')>Fire/Flood/Disaster</option>
+                        <option value="Loss of Livelihood" @selected($application->crisis_type === 'Loss of Livelihood')>Loss of Livelihood</option>
+                        <option value="Food Need" @selected($application->crisis_type === 'Food Need')>Food Need</option>
+                        <option value="Education Need" @selected($application->crisis_type === 'Education Need')>Education Need</option>
                     </select>
                 </div>
 
@@ -192,10 +288,10 @@
                     <label class="label">Urgency Level</label>
                     <select name="urgency_level" class="input w-full">
                         <option value="">Select</option>
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
-                        <option value="Critical">Critical</option>
+                        <option value="Low" @selected($application->urgency_level === 'Low')>Low</option>
+                        <option value="Medium" @selected($application->urgency_level === 'Medium')>Medium</option>
+                        <option value="High" @selected($application->urgency_level === 'High')>High</option>
+                        <option value="Critical" @selected($application->urgency_level === 'Critical')>Critical</option>
                     </select>
                 </div>
 
@@ -204,37 +300,37 @@
             <div class="grid grid-cols-2 gap-4">
 
                 <label class="check-box">
-                    <input type="checkbox" name="has_elderly">
+                    <input type="checkbox" name="has_elderly" value="1" @checked($application->has_elderly)>
                     Elderly in Household
                 </label>
 
                 <label class="check-box">
-                    <input type="checkbox" name="has_child">
+                    <input type="checkbox" name="has_child" value="1" @checked($application->has_child)>
                     Child in Need
                 </label>
 
                 <label class="check-box">
-                    <input type="checkbox" name="has_pwd">
+                    <input type="checkbox" name="has_pwd" value="1" @checked($application->has_pwd)>
                     Person with Disability
                 </label>
 
                 <label class="check-box">
-                    <input type="checkbox" name="has_pregnant">
+                    <input type="checkbox" name="has_pregnant" value="1" @checked($application->has_pregnant)>
                     Pregnant Household Member
                 </label>
 
                 <label class="check-box">
-                    <input type="checkbox" name="earner_unable_to_work">
+                    <input type="checkbox" name="earner_unable_to_work" value="1" @checked($application->earner_unable_to_work)>
                     Main Earner Unable to Work
                 </label>
 
                 <label class="check-box">
-                    <input type="checkbox" name="has_philhealth">
+                    <input type="checkbox" name="has_philhealth" value="1" @checked($application->has_philhealth)>
                     Has PhilHealth / Health Card
                 </label>
 
                 <label class="check-box">
-                    <input type="checkbox" name="has_family_support">
+                    <input type="checkbox" name="has_family_support" value="1" @checked($application->has_family_support)>
                     Has Family Support
                 </label>
 
@@ -249,6 +345,27 @@
                 Recommendation
             </h2>
 
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <p class="text-sm text-gray-500">
+                    Generate an AI recommendation from the intake data, then adjust the final amount if needed.
+                </p>
+
+                <button type="button"
+                        id="generateRecommendationBtn"
+                        class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+                    Generate AI Recommendation
+                </button>
+            </div>
+
+            <div id="recommendationStatus"
+                 class="text-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
+                @if($application->ai_recommendation_summary)
+                    Last saved recommendation loaded.
+                @else
+                    No AI recommendation generated yet.
+                @endif
+            </div>
+
             <div class="grid grid-cols-2 gap-4">
 
                 <div>
@@ -257,6 +374,7 @@
                         id="recommended_amount"
                         name="recommended_amount"
                         class="input w-full bg-gray-100"
+                        value="{{ $application->recommended_amount }}"
                         readonly>
                 </div>
 
@@ -269,6 +387,42 @@
                         value="{{ $application->final_amount }}">
                 </div>
 
+            </div>
+
+            <div>
+                <label class="label">AI Recommendation Summary</label>
+                <textarea id="ai_recommendation_summary"
+                        class="input w-full h-28 bg-gray-50"
+                        readonly>{{ $application->ai_recommendation_summary }}</textarea>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4">
+                <div>
+                    <label class="label">Confidence</label>
+                    <input type="text"
+                        id="ai_recommendation_confidence"
+                        class="input w-full bg-gray-50"
+                        value="{{ $application->ai_recommendation_confidence ? $application->ai_recommendation_confidence.'%' : '' }}"
+                        readonly>
+                </div>
+
+                <div>
+                    <label class="label">Source</label>
+                    <input type="text"
+                        id="ai_recommendation_source"
+                        class="input w-full bg-gray-50"
+                        value="{{ $application->ai_recommendation_source }}"
+                        readonly>
+                </div>
+
+                <div>
+                    <label class="label">Model</label>
+                    <input type="text"
+                        id="ai_recommendation_model"
+                        class="input w-full bg-gray-50"
+                        value="{{ $application->ai_recommendation_model }}"
+                        readonly>
+                </div>
             </div>
 
             <div>
@@ -309,6 +463,10 @@
 <script>
 let currentStep = 1;
 const totalSteps = 3;
+const intakeForm = document.getElementById('intakeForm');
+const recommendationStatus = document.getElementById('recommendationStatus');
+const generateRecommendationBtn = document.getElementById('generateRecommendationBtn');
+const recommendationUrl = @json(route('socialworker.recommendation.generate', $application->id));
 
 function updateSteps() {
     for (let i = 1; i <= totalSteps; i++) {
@@ -336,7 +494,7 @@ document.getElementById('nextBtn').addEventListener('click', function () {
         currentStep++;
         updateSteps();
     } else {
-        document.getElementById('intakeForm').submit();
+        intakeForm.submit();
     }
 });
 
@@ -346,58 +504,136 @@ document.getElementById('backBtn').addEventListener('click', function () {
 });
 
 updateSteps();
-</script>
-<script>
-    function computeRecommendation() {
 
-    let income = parseFloat(document.querySelector('[name="monthly_income"]').value) || 0;
-    let expenses = parseFloat(document.querySelector('[name="monthly_expenses"]').value) || 0;
-    let savings = parseFloat(document.querySelector('[name="savings"]').value) || 0;
-
-    let urgency = document.querySelector('[name="urgency_level"]').value;
-    let crisis = document.querySelector('[name="crisis_type"]').value;
-
-    let score = 0;
-
-    if (income < 10000) score += 3;
-    else if (income < 20000) score += 2;
-
-    if (expenses > income) score += 2;
-    if (savings <= 0) score += 1;
-
-    if (urgency === 'Critical') score += 4;
-    else if (urgency === 'High') score += 3;
-    else if (urgency === 'Medium') score += 2;
-
-    if (['Hospitalization','Death','Disaster'].includes(crisis)) score += 3;
-
-    if (document.querySelector('[name="has_elderly"]').checked) score++;
-    if (document.querySelector('[name="has_child"]').checked) score++;
-    if (document.querySelector('[name="has_pwd"]').checked) score++;
-    if (document.querySelector('[name="has_pregnant"]').checked) score++;
-    if (document.querySelector('[name="earner_unable_to_work"]').checked) score += 2;
-
-    if (!document.querySelector('[name="has_family_support"]').checked) score += 2;
-
-    let amount = 3000;
-
-    if (score <= 3) amount = 3000;
-    else if (score <= 6) amount = 5000;
-    else if (score <= 9) amount = 8000;
-    else if (score <= 12) amount = 10000;
-    else amount = 15000;
-
-    document.getElementById('recommended_amount').value = amount;
+function setRecommendationFields(data) {
+    document.getElementById('recommended_amount').value = data.recommended_amount ?? '';
+    document.getElementById('ai_recommendation_summary').value = data.summary ?? '';
+    document.getElementById('ai_recommendation_confidence').value =
+        data.confidence !== undefined && data.confidence !== null ? `${data.confidence}%` : '';
+    document.getElementById('ai_recommendation_source').value = data.source ?? '';
+    document.getElementById('ai_recommendation_model').value = data.model ?? '';
 }
 
-document.querySelectorAll('input, select').forEach(el => {
-    el.addEventListener('input', computeRecommendation);
-    el.addEventListener('change', computeRecommendation);
-});
+async function generateRecommendation() {
+    const formData = new FormData(intakeForm);
 
-computeRecommendation();
+    recommendationStatus.textContent = 'Generating recommendation...';
+    generateRecommendationBtn.disabled = true;
+    generateRecommendationBtn.classList.add('opacity-70', 'cursor-not-allowed');
+
+    try {
+        const response = await fetch(recommendationUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': formData.get('_token'),
+                'Accept': 'application/json',
+            },
+            body: formData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            const message = data.message || 'Unable to generate recommendation.';
+            recommendationStatus.textContent = message;
+            return;
+        }
+
+        setRecommendationFields(data);
+        recommendationStatus.textContent =
+            `Recommendation ready (${data.source || 'ai'}${data.confidence ? `, ${data.confidence}% confidence` : ''}).`;
+    } catch (error) {
+        recommendationStatus.textContent = 'Unable to generate recommendation right now.';
+    } finally {
+        generateRecommendationBtn.disabled = false;
+        generateRecommendationBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+    }
+}
+
+generateRecommendationBtn.addEventListener('click', generateRecommendation);
+
+const summaryTabs = document.querySelectorAll('.summary-tab');
+const summaryPanels = document.querySelectorAll('.summary-panel');
+
+summaryTabs.forEach((tab) => {
+    tab.addEventListener('click', function () {
+        const targetId = this.dataset.tabTarget;
+
+        summaryTabs.forEach((item) => item.classList.remove('is-active'));
+        summaryPanels.forEach((panel) => {
+            panel.classList.add('hidden');
+            panel.classList.remove('is-active');
+        });
+
+        this.classList.add('is-active');
+        document.getElementById(targetId).classList.remove('hidden');
+        document.getElementById(targetId).classList.add('is-active');
+    });
+});
 </script>
 <style>
+.summary-tab{
+    text-align:left;
+    padding:14px 16px;
+    border-radius:16px;
+    border:1px solid #dbe7ef;
+    background:linear-gradient(180deg,#f8fbfd 0%,#eef4f8 100%);
+    transition:.2s;
+}
+.summary-tab:hover{
+    border-color:#9db7ca;
+    transform:translateY(-1px);
+}
+.summary-tab.is-active{
+    background:linear-gradient(135deg,#234E70 0%,#2f6a91 100%);
+    border-color:#234E70;
+    color:#fff;
+    box-shadow:0 14px 30px rgba(35,78,112,.18);
+}
+.summary-tab__eyebrow{
+    display:block;
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    opacity:.75;
+}
+.summary-tab__title{
+    display:block;
+    margin-top:6px;
+    font-size:15px;
+    font-weight:700;
+}
+.summary-panel{
+    border-top:1px solid #e5e7eb;
+    padding-top:24px;
+}
+.summary-stat,
+.summary-highlight{
+    border:1px solid #e5e7eb;
+    border-radius:18px;
+    background:#f8fafc;
+    padding:18px;
+}
+.summary-highlight{
+    background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
+}
+.summary-label{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:#6b7280;
+}
+.summary-value{
+    margin-top:8px;
+    font-size:15px;
+    font-weight:600;
+    color:#1f2937;
+}
+.summary-link{
+    color:#234E70;
+    font-weight:600;
+}
 .step-card{
     background:#f1f5f9;
     padding:16px;
