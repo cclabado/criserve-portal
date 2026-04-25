@@ -91,6 +91,16 @@
             <span class="text-sm tracking-wide">My Cases</span>
         </a>
 
+        <a href="/social-worker/schedule"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/schedule*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('social-worker/schedule*') }}">
+                calendar_month
+            </span>
+
+            <span class="text-sm tracking-wide">My Schedule</span>
+        </a>
+
         @endif
 
 

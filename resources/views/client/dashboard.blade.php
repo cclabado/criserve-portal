@@ -12,16 +12,9 @@ $statusOrder = [
 ];
 
 $currentStatus = $latestApplication->status ?? null;
-$currentIndex = $currentStatus ? array_search($currentStatus, $statusOrder) : -1;
-
-$progressWidth = match($currentStatus) {
-    'submitted' => '0%',
-    'under_review' => '25%',
-    'for_approval' => '50%',
-    'approved' => '75%',
-    'released' => '100%',
-    default => '0%',
-};
+$currentIndex = in_array($currentStatus, $statusOrder, true)
+    ? array_search($currentStatus, $statusOrder, true)
+    : -1;
 @endphp
 
 @if(session('success'))
@@ -32,7 +25,6 @@ $progressWidth = match($currentStatus) {
 
 <div class="p-8 max-w-7xl mx-auto space-y-10 bg-surface">
 
-<!-- Welcome Section -->
 <section class="relative rounded-xl overflow-hidden bg-gradient-to-br from-primary to-primary-container p-12 text-white shadow-xl">
     <div>
         <h2 class="text-3xl font-bold">Welcome back.</h2>
@@ -46,7 +38,6 @@ $progressWidth = match($currentStatus) {
     </div>
 </section>
 
-<!-- Status Tracker -->
 <section class="space-y-6">
 
 <div class="flex items-center justify-between">
@@ -74,58 +65,57 @@ $progressWidth = match($currentStatus) {
         ];
     @endphp
 
-    <div class="relative">
-
-        <!-- Background Line -->
-        <div class="absolute top-5 left-0 right-0 h-1 bg-slate-200 rounded-full z-0"></div>
-
-        <!-- Progress Line -->
-        <div class="absolute top-5 left-0 h-1 bg-[#0B3C5D] rounded-full z-0 transition-all duration-500"
-             style="width: {{ $progressWidth }}">
+    @if($currentStatus === 'cancelled')
+        <div class="rounded-2xl border border-slate-300 bg-slate-50 px-6 py-5 text-center">
+            <p class="text-sm font-bold uppercase tracking-wide text-slate-700">Application Cancelled</p>
+            <p class="mt-2 text-sm text-slate-600">
+                This application was cancelled during review because it did not meet the frequency of assistance rules.
+            </p>
+            @if(!empty($latestApplication?->denial_reason))
+                <p class="mt-3 text-sm text-slate-700">
+                    Reason: {{ $latestApplication->denial_reason }}
+                </p>
+            @endif
         </div>
+    @else
+    <div class="grid grid-cols-5 gap-0 px-6">
+        @foreach($steps as $key => $label)
+            @php
+                $stepIndex = array_search($key, $statusOrder);
+                $done = $stepIndex <= $currentIndex;
+                $leftDone = $stepIndex > 0 && ($stepIndex - 1) < $currentIndex;
+                $rightDone = $stepIndex < count($statusOrder) - 1 && $stepIndex < $currentIndex;
+            @endphp
 
-        <!-- Steps -->
-        <div class="grid grid-cols-5 gap-2 relative z-10">
+            <div class="relative flex flex-col items-center text-center">
+                @if($stepIndex > 0)
+                    <div class="absolute top-5 right-1/2 h-1 w-1/2 -translate-y-1/2 {{ $leftDone ? 'bg-[#0B3C5D]' : 'bg-slate-200' }}"></div>
+                @endif
 
-            @foreach($steps as $key => $label)
+                @if($stepIndex < count($statusOrder) - 1)
+                    <div class="absolute top-5 left-1/2 h-1 w-1/2 -translate-y-1/2 {{ $rightDone ? 'bg-[#0B3C5D]' : 'bg-slate-200' }}"></div>
+                @endif
 
-                @php
-                    $stepIndex = array_search($key, $statusOrder);
-                    $done = $stepIndex <= $currentIndex;
-                    $active = $stepIndex == $currentIndex;
-                @endphp
-
-                <div class="flex flex-col items-center text-center">
-
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300
-                        {{ $done ? 'bg-[#0B3C5D] text-white' : 'bg-slate-200 text-slate-500' }}">
-
-                        @if($done)
-                            ✓
-                        @else
-                            {{ $stepIndex + 1 }}
-                        @endif
-
-                    </div>
-
-                    <p class="mt-3 text-sm font-semibold leading-tight px-1
-                        {{ $done ? 'text-[#0B3C5D]' : 'text-slate-500' }}">
-                        {{ $label }}
-                    </p>
-
+                <div class="relative z-10 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 {{ $done ? 'bg-[#0B3C5D] text-white' : 'bg-slate-200 text-slate-500' }}">
+                    @if($done)
+                        &#10003;
+                    @else
+                        {{ $stepIndex + 1 }}
+                    @endif
                 </div>
 
-            @endforeach
-
-        </div>
-
+                <p class="mt-3 text-sm font-semibold leading-tight px-1 {{ $done ? 'text-[#0B3C5D]' : 'text-slate-500' }}">
+                    {{ $label }}
+                </p>
+            </div>
+        @endforeach
     </div>
+    @endif
 
 </div>
 
 </section>
 
-<!-- Applications Table -->
 <section class="space-y-6">
 
 <div class="flex items-center justify-between">
@@ -141,6 +131,7 @@ $progressWidth = match($currentStatus) {
                 <option value="for_approval" {{ request('status')=='for_approval'?'selected':'' }}>For Approval</option>
                 <option value="approved" {{ request('status')=='approved'?'selected':'' }}>Approved</option>
                 <option value="released" {{ request('status')=='released'?'selected':'' }}>Released</option>
+                <option value="cancelled" {{ request('status')=='cancelled'?'selected':'' }}>Cancelled</option>
             </select>
 
             <select name="type" class="px-3 py-2 text-sm border rounded-lg">
@@ -207,6 +198,7 @@ $progressWidth = match($currentStatus) {
     @elseif($app->status == 'for_approval') bg-primary-fixed text-on-primary-fixed
     @elseif($app->status == 'approved') bg-green-100 text-green-700
     @elseif($app->status == 'released') bg-green-200 text-green-900
+    @elseif($app->status == 'cancelled') bg-slate-200 text-slate-700
     @else bg-gray-100 text-gray-700
     @endif
 ">
@@ -237,6 +229,10 @@ $progressWidth = match($currentStatus) {
 
 </table>
 
+</div>
+
+<div class="mt-6 px-2">
+    {{ $applications->links() }}
 </div>
 
 </section>

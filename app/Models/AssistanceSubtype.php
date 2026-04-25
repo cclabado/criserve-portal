@@ -12,4 +12,14 @@ class AssistanceSubtype extends Model
     {
         return $this->belongsTo(AssistanceType::class);
     }
+
+    public function details()
+    {
+        return $this->hasMany(AssistanceDetail::class)->orderBy('name');
+    }
+
+    public function frequencyRule()
+    {
+        return $this->hasOne(AssistanceFrequencyRule::class)->whereNull('assistance_detail_id');
+    }
 }

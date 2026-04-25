@@ -10,7 +10,7 @@ class ClientDashboardController extends Controller
 
     public function index(Request $request)
     {
-        $query = Application::with(['assistanceType', 'assistanceSubtype'])
+        $query = Application::with(['assistanceType', 'assistanceSubtype', 'assistanceDetail', 'frequencyRule'])
             ->where('user_id', auth()->id());
 
         // FILTER: STATUS
@@ -23,7 +23,7 @@ class ClientDashboardController extends Controller
             $query->where('assistance_type_id', $request->type);
         }
 
-        $applications = $query->latest()->get();
+        $applications = $query->latest()->paginate(5)->withQueryString();
 
         // IMPORTANT: latest APPLICATION regardless of filter
         $latestApplication = Application::where('user_id', auth()->id())
@@ -31,7 +31,6 @@ class ClientDashboardController extends Controller
             ->first();
 
         $types = \App\Models\AssistanceType::all();
-
         return view('client.dashboard', compact(
             'applications',
             'latestApplication',
@@ -46,7 +45,11 @@ class ClientDashboardController extends Controller
             'familyMembers',
             'documents',
             'assistanceType',
-            'assistanceSubtype'
+            'assistanceSubtype',
+            'assistanceDetail',
+            'frequencyRule',
+            'frequencyBasisApplication',
+            'modeOfAssistance',
         ])->where('user_id', auth()->id())
         ->findOrFail($id);
 

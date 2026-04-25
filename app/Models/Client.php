@@ -23,4 +23,19 @@ class Client extends Model
     {
         return $this->hasMany(Application::class);
     }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function familyMembers()
+    {
+        return $this->hasMany(FamilyMember::class)->orderBy('id');
+    }
+
+    public function beneficiaryProfiles()
+    {
+        return $this->hasMany(BeneficiaryProfile::class)->orderBy('id');
+    }
 }

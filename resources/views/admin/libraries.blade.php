@@ -68,6 +68,16 @@
             </div>
 
             <form method="POST"
+                  action="{{ route('admin.libraries.modes-of-assistance.store') }}"
+                  class="library-form mt-4">
+                @csrf
+                <h3 class="library-form-title">Mode of Assistance</h3>
+                <label class="label">Mode Name</label>
+                <input type="text" name="name" class="input" placeholder="Guarantee Letter">
+                <button type="submit" class="btn-primary w-full mt-4">Add Mode of Assistance</button>
+            </form>
+
+            <form method="POST"
                   action="{{ route('admin.libraries.assistance-subtypes.store') }}"
                   class="library-form mt-4">
                 @csrf
@@ -92,6 +102,34 @@
 
                 <button type="submit" class="btn-primary mt-4">Add Assistance Subtype</button>
             </form>
+
+            <form method="POST"
+                  action="{{ route('admin.libraries.assistance-details.store') }}"
+                  class="library-form mt-4">
+                @csrf
+                <h3 class="library-form-title">Assistance Detail</h3>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div>
+                        <label class="label">Parent Assistance Subtype</label>
+                        <select name="assistance_subtype_id" class="input">
+                            <option value="">Select subtype</option>
+                            @foreach($assistanceTypes as $type)
+                                @foreach($type->subtypes as $subtype)
+                                    <option value="{{ $subtype->id }}">{{ $type->name }} - {{ $subtype->name }}</option>
+                                @endforeach
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="label">Detail Name</label>
+                        <input type="text" name="name" class="input" placeholder="Payment for Hospital Bill">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary mt-4">Add Assistance Detail</button>
+            </form>
         </div>
 
         <div class="panel-card">
@@ -108,13 +146,26 @@
                         <p class="soft-card-title">{{ $type->name }}</p>
                         <p class="soft-card-copy">
                             @if($type->subtypes->isNotEmpty())
-                                {{ $type->subtypes->pluck('name')->implode(', ') }}
+                                @foreach($type->subtypes as $subtype)
+                                    <span class="font-semibold">{{ $subtype->name }}</span>{{ $subtype->details->isNotEmpty() ? ': '.$subtype->details->pluck('name')->implode(', ') : '' }}@if(!$loop->last); @endif
+                                @endforeach
                             @else
                                 No subtypes added yet.
                             @endif
                         </p>
                     </div>
                 @endforeach
+            </div>
+
+            <div class="mt-6">
+                <p class="panel-kicker">Modes of Assistance</p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    @forelse($modesOfAssistance as $mode)
+                        <span class="tag-pill">{{ $mode->name }}</span>
+                    @empty
+                        <p class="text-sm text-slate-500">No mode records found.</p>
+                    @endforelse
+                </div>
             </div>
 
             <div class="mt-6">

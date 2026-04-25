@@ -2,21 +2,44 @@
 
 @section('content')
 
+@php
+    $frequencyBadgeClasses = [
+        'eligible' => 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+        'review_required' => 'bg-amber-100 text-amber-800 border border-amber-200',
+        'blocked' => 'bg-rose-100 text-rose-800 border border-rose-200',
+        'overridden' => 'bg-sky-100 text-sky-800 border border-sky-200',
+        'not_applicable' => 'bg-slate-100 text-slate-700 border border-slate-200',
+    ];
+@endphp
+
 <main class="p-8 max-w-6xl mx-auto space-y-6">
 
-<div>
-    <a href="{{ route('socialworker.applications') }}"
-       class="text-sm text-gray-500 hover:text-[#234E70]">
-        &larr; Back to Applications
-    </a>
+<div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <div>
+        <a href="{{ route('socialworker.applications') }}"
+           class="text-sm text-gray-500 hover:text-[#234E70]">
+            &larr; Back to Applications
+        </a>
 
-    <h1 class="text-3xl font-bold text-[#234E70] mt-2">
-        Case Details
-    </h1>
+        <h1 class="text-3xl font-bold text-[#234E70] mt-2">
+            Case Details
+        </h1>
 
-    <p class="text-gray-500">
-        Reference: {{ $application->reference_no }}
-    </p>
+        <p class="text-gray-500">
+            Reference: {{ $application->reference_no }}
+        </p>
+    </div>
+
+    <div class="flex items-center gap-3">
+        @if(in_array($application->status, ['approved', 'released'], true))
+        <a href="{{ route('socialworker.certificate', $application->id) }}"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="inline-flex items-center justify-center rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700">
+            Print Certificate
+        </a>
+        @endif
+    </div>
 </div>
 
 <!-- CLIENT -->
@@ -72,16 +95,26 @@
 <div class="card">
     <h2 class="title">Family Composition</h2>
 
+    <p class="text-sm text-gray-500 mb-3">
+        {{ $application->householdProfileLabel() }}
+    </p>
+
+    @if($application->beneficiary?->relationshipData)
+    <p class="text-xs text-gray-400 mb-4">
+        Client's relationship to beneficiary: {{ $application->beneficiary->relationshipData->name }}
+    </p>
+    @endif
+
     <div class="space-y-2 mt-4">
 
-        @forelse($application->familyMembers as $fam)
+        @forelse($householdMembers as $fam)
         <div class="bg-gray-50 rounded-xl px-5 py-3 grid grid-cols-3 gap-4 text-sm">
             <div>
                 {{ $fam->last_name }}, {{ $fam->first_name }}
             </div>
 
             <div>
-                {{ $fam->relationship }}
+                {{ $fam->relationshipData->name ?? $fam->relationship }}
             </div>
 
             <div>
@@ -99,7 +132,7 @@
 <div class="card">
     <h2 class="title">Assessment Details</h2>
 
-    <div class="grid grid-cols-3 gap-4 text-sm">
+    <div class="grid grid-cols-4 gap-4 text-sm">
 
         <div>
             <span class="muted">Type</span><br>
@@ -112,8 +145,13 @@
         </div>
 
         <div>
+            <span class="muted">Assistance Detail</span><br>
+            {{ $application->assistanceDetail->name ?? '-' }}
+        </div>
+
+        <div>
             <span class="muted">Mode</span><br>
-            {{ $application->mode_of_assistance }}
+            {{ $application->modeOfAssistance->name ?? $application->mode_of_assistance }}
         </div>
 
     </div>
@@ -158,11 +196,6 @@
         {{ $application->social_worker_assessment }}
     </div>
 
-    <div class="mt-4">
-        <span class="muted">AI Recommendation Summary</span><br>
-        {{ $application->ai_recommendation_summary ?: '-' }}
-    </div>
-
     <div class="grid grid-cols-2 gap-4 mt-4">
         <div>
             <span class="muted">Recommended Amount</span><br>
@@ -175,12 +208,58 @@
         </div>
     </div>
 
-    <div class="grid grid-cols-3 gap-4 mt-4 text-sm">
-        <div><span class="muted">AI Confidence</span><br>{{ $application->ai_recommendation_confidence ? $application->ai_recommendation_confidence.'%' : '-' }}</div>
-        <div><span class="muted">AI Source</span><br>{{ $application->ai_recommendation_source ?: '-' }}</div>
-        <div><span class="muted">AI Model</span><br>{{ $application->ai_recommendation_model ?: '-' }}</div>
-    </div>
 </div>
+
+@if($application->frequency_status)
+<div class="card">
+    <h2 class="title">Frequency of Assistance</h2>
+
+    <div class="grid grid-cols-2 gap-4 text-sm">
+        <div>
+            <span class="muted">Status</span><br>
+            <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase {{ $frequencyBadgeClasses[$application->frequency_status] ?? $frequencyBadgeClasses['not_applicable'] }}">
+                {{ str_replace('_', ' ', $application->frequency_status) }}
+            </span>
+        </div>
+
+        <div>
+            <span class="muted">Rule Basis</span><br>
+            {{ $application->frequencyBasisApplication?->reference_no ?? 'No prior basis application' }}
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <span class="muted">Review Notes</span><br>
+        {{ $application->frequency_message ?: ($application->frequencyRule?->notes ?? '-') }}
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mt-4 text-sm">
+        <div>
+            <span class="muted">Reference Date</span><br>
+            {{ $application->frequency_reference_date ? \Carbon\Carbon::parse($application->frequency_reference_date)->format('M d, Y') : '-' }}
+        </div>
+
+        <div>
+            <span class="muted">Incident / Admission Reference</span><br>
+            {{ $application->frequency_case_key ?: '-' }}
+        </div>
+    </div>
+
+    @if($application->frequency_exception_reason)
+    <div class="mt-4">
+        <span class="muted">Exception Request Reason</span><br>
+        {{ $application->frequency_exception_reason }}
+    </div>
+    @endif
+
+    @if($application->frequency_override_reason)
+    <div class="mt-4">
+        <span class="muted">Override Reason</span><br>
+        {{ $application->frequency_override_reason }}
+    </div>
+    @endif
+</div>
+@endif
 
 <!-- ATTACHMENTS -->
 <div class="card">
@@ -202,10 +281,9 @@
                 </p>
             </div>
 
-            <a href="{{ asset('storage/' . ($doc->file_path ?? $doc->path)) }}"
-               target="_blank"
+            <a href="{{ route('documents.show', $doc->id) }}"
                class="px-4 py-2 bg-[#234E70] text-white rounded-lg text-sm">
-                View File
+                View Attachment
             </a>
 
         </div>

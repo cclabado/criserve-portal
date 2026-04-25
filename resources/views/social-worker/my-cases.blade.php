@@ -33,6 +33,7 @@
             <option value="approved" @selected(request('status') === 'approved')>Approved</option>
             <option value="denied" @selected(request('status') === 'denied')>Denied</option>
             <option value="released" @selected(request('status') === 'released')>Released</option>
+            <option value="cancelled" @selected(request('status') === 'cancelled')>Cancelled</option>
         </select>
     </div>
 
@@ -72,6 +73,7 @@
                             @elseif($app->status === 'approved') bg-green-100 text-green-700
                             @elseif($app->status === 'released') bg-emerald-100 text-emerald-700
                             @elseif($app->status === 'denied') bg-red-100 text-red-700
+                            @elseif($app->status === 'cancelled') bg-slate-200 text-slate-700
                             @else bg-slate-100 text-slate-600
                             @endif">
                             {{ strtoupper(str_replace('_', ' ', $app->status)) }}

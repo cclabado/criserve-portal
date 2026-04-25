@@ -20,6 +20,14 @@
         </div>
     </section>
 
+    @if($user->role === 'social_worker')
+        <section class="profile-card">
+            <div class="max-w-3xl">
+                @include('profile.partials.google-calendar-connection')
+            </div>
+        </section>
+    @endif
+
     <section class="profile-card">
         <div class="max-w-3xl">
             @include('profile.partials.update-password-form')

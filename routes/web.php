@@ -5,6 +5,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\ClientDashboardController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\SocialWorkerGoogleController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\DocumentController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -24,6 +27,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])
+        ->name('notifications.read');
+    Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
+    Route::get('/documents/{document}/stream', [DocumentController::class, 'stream'])->name('documents.stream');
+    Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
 });
 
 
@@ -38,6 +46,8 @@ Route::middleware(['auth', 'role:client'])->group(function () {
         ->name('client.dashboard');
 
     Route::get('/client/application', [ApplicationController::class, 'create']);
+    Route::post('/client/beneficiary-profile/lookup', [ApplicationController::class, 'lookupBeneficiaryProfile'])
+        ->name('client.beneficiary-profile.lookup');
 
     Route::post('/client/application', [ApplicationController::class, 'store']);
 
@@ -67,6 +77,10 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.libraries.assistance-types.store');
     Route::post('/admin/libraries/assistance-subtypes', [AdminController::class, 'storeAssistanceSubtype'])
         ->name('admin.libraries.assistance-subtypes.store');
+    Route::post('/admin/libraries/assistance-details', [AdminController::class, 'storeAssistanceDetail'])
+        ->name('admin.libraries.assistance-details.store');
+    Route::post('/admin/libraries/modes-of-assistance', [AdminController::class, 'storeModeOfAssistance'])
+        ->name('admin.libraries.modes-of-assistance.store');
     Route::post('/admin/libraries/relationships', [AdminController::class, 'storeRelationship'])
         ->name('admin.libraries.relationships.store');
 
@@ -82,10 +96,18 @@ use App\Http\Controllers\SocialWorkerController;
 Route::middleware(['auth', 'role:social_worker'])->group(function () {
 
     Route::get('/social-worker/dashboard', [SocialWorkerController::class, 'dashboard']);
+    Route::get('/social-worker/google/connect', [SocialWorkerGoogleController::class, 'redirect'])
+        ->name('socialworker.google.connect');
+    Route::get('/social-worker/google/callback', [SocialWorkerGoogleController::class, 'callback'])
+        ->name('socialworker.google.callback');
+    Route::delete('/social-worker/google/disconnect', [SocialWorkerGoogleController::class, 'disconnect'])
+        ->name('socialworker.google.disconnect');
     Route::get('/social-worker/applications', [SocialWorkerController::class, 'applications'])
     ->name('socialworker.applications');
     Route::get('/social-worker/my-cases', [SocialWorkerController::class, 'myCases'])
         ->name('socialworker.my-cases');
+    Route::get('/social-worker/schedule', [SocialWorkerController::class, 'schedule'])
+        ->name('socialworker.schedule');
     Route::get('/social-worker/application/{id}', [SocialWorkerController::class, 'show']);
     Route::get('/social-worker/application/{id}/assess', [SocialWorkerController::class, 'assess']);
     Route::post('/social-worker/application/{id}/assess', [SocialWorkerController::class, 'updateAssessment'])

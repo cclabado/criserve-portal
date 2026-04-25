@@ -42,4 +42,21 @@ return [
         'timeout' => env('OPENAI_TIMEOUT', 30),
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect_uri' => env('GOOGLE_REDIRECT_URI'),
+        'auth_url' => env('GOOGLE_AUTH_URL', 'https://accounts.google.com/o/oauth2/v2/auth'),
+        'token_url' => env('GOOGLE_TOKEN_URL', 'https://oauth2.googleapis.com/token'),
+        'revoke_url' => env('GOOGLE_REVOKE_URL', 'https://oauth2.googleapis.com/revoke'),
+        'calendar_base_url' => env('GOOGLE_CALENDAR_BASE_URL', 'https://www.googleapis.com/calendar/v3'),
+        'default_event_duration' => (int) env('GOOGLE_CALENDAR_DEFAULT_DURATION', 60),
+        'scopes' => [
+            'openid',
+            'email',
+            'profile',
+            'https://www.googleapis.com/auth/calendar.events',
+        ],
+    ],
+
 ];

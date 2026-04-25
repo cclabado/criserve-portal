@@ -33,7 +33,70 @@
             $email = $user->email ?? 'guest@example.com';
             $name = $user->name ?? explode('@', $email)[0];
             $initial = strtoupper(substr($email, 0, 1));
+            $recentNotifications = $user?->notifications()->latest()->take(5)->get() ?? collect();
+            $unreadNotifications = $user?->unreadNotifications()->count() ?? 0;
         @endphp
+
+        <div class="relative" x-data="{ open: false }">
+            <button type="button"
+                    @click="open = !open"
+                    class="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition">
+                <span class="material-symbols-outlined text-[20px]">notifications</span>
+
+                @if($unreadNotifications > 0)
+                    <span class="absolute -right-1 -top-1 min-w-[20px] rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                        {{ $unreadNotifications > 9 ? '9+' : $unreadNotifications }}
+                    </span>
+                @endif
+            </button>
+
+            <div x-cloak
+                 x-show="open"
+                 x-transition
+                 @click.outside="open = false"
+                 class="absolute right-0 mt-3 w-96 rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+                <div class="border-b border-slate-100 px-4 py-3">
+                    <p class="text-sm font-semibold text-slate-800">Notifications</p>
+                    <p class="text-xs text-slate-500">Latest updates on your applications</p>
+                </div>
+
+                <div class="max-h-96 overflow-y-auto">
+                    @forelse($recentNotifications as $notification)
+                        <form method="POST" action="{{ route('notifications.read', $notification->id) }}" class="border-b border-slate-100 last:border-b-0">
+                            @csrf
+                            <button type="submit" class="w-full px-4 py-3 text-left hover:bg-slate-50 transition">
+                                <div class="flex items-start gap-3">
+                                    <span class="mt-1 h-2.5 w-2.5 rounded-full {{ $notification->read_at ? 'bg-slate-300' : 'bg-sky-500' }}"></span>
+
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-sm font-semibold text-slate-800">
+                                            {{ $notification->data['title'] ?? 'Notification' }}
+                                        </p>
+                                        <p class="mt-1 text-sm text-slate-600">
+                                            {{ $notification->data['message'] ?? '' }}
+                                        </p>
+
+                                        @if(!empty($notification->data['meeting_link']))
+                                            <p class="mt-1 truncate text-xs text-sky-700">
+                                                {{ $notification->data['meeting_link'] }}
+                                            </p>
+                                        @endif
+
+                                        <p class="mt-2 text-xs text-slate-400">
+                                            {{ $notification->created_at->diffForHumans() }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </button>
+                        </form>
+                    @empty
+                        <div class="px-4 py-8 text-center text-sm text-slate-500">
+                            No notifications yet.
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        </div>
 
         <div class="relative" x-data="{ open: false }">
             <button type="button"

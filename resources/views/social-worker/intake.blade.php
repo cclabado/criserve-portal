@@ -125,10 +125,17 @@
                 </div>
 
                 <div class="summary-stat">
-                    <span class="summary-label">Mode of Assistance</span>
-                    <p class="summary-value">{{ $application->mode_of_assistance ?: '-' }}</p>
+                    <span class="summary-label">Assistance Detail</span>
+                    <p class="summary-value">{{ $application->assistanceDetail->name ?? '-' }}</p>
                 </div>
 
+                <div class="summary-stat">
+                    <span class="summary-label">Mode of Assistance</span>
+                    <p class="summary-value">{{ $application->modeOfAssistance->name ?? $application->mode_of_assistance ?: '-' }}</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 text-sm mt-4">
                 <div class="summary-stat">
                     <span class="summary-label">Schedule</span>
                     <p class="summary-value">{{ $application->schedule_date ? \Carbon\Carbon::parse($application->schedule_date)->format('M d, Y h:i A') : '-' }}</p>
@@ -357,7 +364,7 @@
                 </button>
             </div>
 
-            <div id="recommendationStatus"
+            <div hidden id="recommendationStatus"
                  class="text-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
                 @if($application->ai_recommendation_summary)
                     Last saved recommendation loaded.
@@ -389,7 +396,7 @@
 
             </div>
 
-            <div>
+            <div hidden>
                 <label class="label">AI Recommendation Summary</label>
                 <textarea id="ai_recommendation_summary"
                         class="input w-full h-28 bg-gray-50"
@@ -397,7 +404,7 @@
             </div>
 
             <div class="grid grid-cols-3 gap-4">
-                <div>
+                <div hidden>
                     <label class="label">Confidence</label>
                     <input type="text"
                         id="ai_recommendation_confidence"
@@ -406,7 +413,7 @@
                         readonly>
                 </div>
 
-                <div>
+                <div hidden>
                     <label class="label">Source</label>
                     <input type="text"
                         id="ai_recommendation_source"
@@ -415,7 +422,7 @@
                         readonly>
                 </div>
 
-                <div>
+                <div hidden>
                     <label class="label">Model</label>
                     <input type="text"
                         id="ai_recommendation_model"

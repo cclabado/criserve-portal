@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Application;
+use App\Models\AssistanceDetail;
 use App\Models\AssistanceSubtype;
 use App\Models\AssistanceType;
+use App\Models\ModeOfAssistance;
 use App\Models\Relationship;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -43,10 +45,11 @@ class AdminController extends Controller
 
     public function libraries(): View
     {
-        $assistanceTypes = AssistanceType::with('subtypes')->orderBy('name')->get();
+        $assistanceTypes = AssistanceType::with('subtypes.details')->orderBy('name')->get();
+        $modesOfAssistance = ModeOfAssistance::orderBy('name')->get();
         $relationships = Relationship::orderBy('name')->get();
 
-        return view('admin.libraries', compact('assistanceTypes', 'relationships'));
+        return view('admin.libraries', compact('assistanceTypes', 'modesOfAssistance', 'relationships'));
     }
 
     public function users(Request $request): View
@@ -184,6 +187,43 @@ class AdminController extends Controller
         return redirect()
             ->to(route('admin.libraries'))
             ->with('success', 'Assistance subtype added successfully.');
+    }
+
+    public function storeAssistanceDetail(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'assistance_subtype_id' => ['required', 'exists:assistance_subtypes,id'],
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $exists = AssistanceDetail::where('assistance_subtype_id', $validated['assistance_subtype_id'])
+            ->whereRaw('LOWER(name) = ?', [strtolower($validated['name'])])
+            ->exists();
+
+        if ($exists) {
+            return back()
+                ->withInput()
+                ->withErrors(['detail_name' => 'This assistance detail already exists for the selected subtype.']);
+        }
+
+        AssistanceDetail::create($validated);
+
+        return redirect()
+            ->to(route('admin.libraries'))
+            ->with('success', 'Assistance detail added successfully.');
+    }
+
+    public function storeModeOfAssistance(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:mode_of_assistances,name'],
+        ]);
+
+        ModeOfAssistance::create($validated);
+
+        return redirect()
+            ->to(route('admin.libraries'))
+            ->with('success', 'Mode of assistance added successfully.');
     }
 
     public function storeRelationship(Request $request): RedirectResponse

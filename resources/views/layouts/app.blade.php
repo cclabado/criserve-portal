@@ -92,15 +92,24 @@
         }
 
         select {
-            padding-right: 42px;
+            padding-right: 46px;
+            background:
+                linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
             background-image:
                 linear-gradient(45deg, transparent 50%, #64748b 50%),
                 linear-gradient(135deg, #64748b 50%, transparent 50%);
             background-position:
-                calc(100% - 18px) calc(50% - 3px),
-                calc(100% - 12px) calc(50% - 3px);
+                calc(100% - 19px) calc(50% - 4px),
+                calc(100% - 13px) calc(50% - 4px);
             background-size: 6px 6px, 6px 6px;
             background-repeat: no-repeat;
+            cursor: pointer;
+        }
+
+        select:hover {
+            border-color: #b8c7d6;
+            background:
+                linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
         }
 
         .input[readonly],
@@ -116,6 +125,11 @@
             background: #f1f5f9;
             color: #94a3b8;
             cursor: not-allowed;
+        }
+
+        select option {
+            color: var(--field-text);
+            background: #ffffff;
         }
         .btn-primary {
             background: #234E70;

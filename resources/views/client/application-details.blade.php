@@ -2,6 +2,16 @@
 
 @section('content')
 
+@php
+    $frequencyBadgeClasses = [
+        'eligible' => 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+        'review_required' => 'bg-amber-100 text-amber-800 border border-amber-200',
+        'blocked' => 'bg-rose-100 text-rose-800 border border-rose-200',
+        'overridden' => 'bg-sky-100 text-sky-800 border border-sky-200',
+        'not_applicable' => 'bg-slate-100 text-slate-700 border border-slate-200',
+    ];
+@endphp
+
 <div class="max-w-7xl mx-auto py-8 space-y-8">
 
 <!-- HEADER -->
@@ -218,7 +228,7 @@
 <div class="mb-6">
 <p class="text-xs text-gray-500">Mode of Assistance</p>
 <p class="font-semibold text-gray-800">
-    {{ strtoupper($application->mode_of_assistance) }}
+    {{ $application->modeOfAssistance->name ?? $application->mode_of_assistance }}
 </p>
 </div>
 
@@ -226,8 +236,7 @@
 <p class="text-xs text-gray-500 mb-2">Documents</p>
 
 @forelse($application->documents as $doc)
-<a href="{{ asset('storage/'.$doc->file_path) }}"
-   target="_blank"
+<a href="{{ route('documents.show', $doc->id) }}"
    class="block text-blue-600 hover:underline text-sm">
     {{ $doc->file_name }}
 </a>
@@ -235,6 +244,54 @@
 <p class="text-gray-500">No documents uploaded</p>
 @endforelse
 
+</div>
+
+</div>
+
+<!-- ================= ASSESSMENT ================= -->
+<div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+
+<div class="mb-5">
+    <h2 class="text-lg font-bold text-[#234E70]">Initial Assessment Details</h2>
+    <div class="w-14 h-1 bg-[#234E70] rounded mt-1"></div>
+</div>
+
+<div class="grid grid-cols-3 gap-6 mb-6">
+
+<div>
+<p class="text-xs text-gray-500">Schedule</p>
+<p class="font-semibold text-gray-800">
+    {{ $application->schedule_date ? \Carbon\Carbon::parse($application->schedule_date)->format('M d, Y h:i A') : 'Not scheduled yet' }}
+</p>
+</div>
+
+<div>
+<p class="text-xs text-gray-500">Meeting Link</p>
+@if($application->meeting_link)
+    <a href="{{ $application->meeting_link }}"
+       target="_blank"
+       class="font-semibold text-blue-600 hover:underline break-all">
+        {{ $application->meeting_link }}
+    </a>
+@else
+    <p class="font-semibold text-gray-800">No meeting link yet</p>
+@endif
+</div>
+
+<div>
+<p class="text-xs text-gray-500">Assistance Detail</p>
+<p class="font-semibold text-gray-800">
+    {{ $application->assistanceDetail->name ?? '-' }}
+</p>
+</div>
+
+</div>
+
+<div>
+<p class="text-xs text-gray-500">Assessment Note</p>
+<p class="font-semibold text-gray-800 whitespace-pre-line">
+    {{ $application->notes ?: 'No assessment notes yet.' }}
+</p>
 </div>
 
 </div>

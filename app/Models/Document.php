@@ -11,4 +11,9 @@ class Document extends Model
         'file_name',
         'file_path'
     ];
+
+    public function application()
+    {
+        return $this->belongsTo(Application::class);
+    }
 }

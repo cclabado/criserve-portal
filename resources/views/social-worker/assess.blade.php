@@ -2,6 +2,45 @@
 
 @section('content')
 
+@php
+    $socialWorker = auth()->user();
+    $googleConnected = $socialWorker?->hasGoogleCalendarConnection();
+    $basisApplication = $application->frequencyBasisApplication;
+    $basisReleasedDate = $basisApplication?->updated_at?->format('M d, Y') ?? $basisApplication?->created_at?->format('M d, Y');
+    $defaultCancellationReason = $basisApplication
+        ? 'Previously availed assistance on '.$basisReleasedDate.' under application reference no. '.$basisApplication->reference_no.'.'
+        : 'Application cancelled due to previous assistance availment under the frequency of assistance policy.';
+    $frequencyBadgeClasses = [
+        'eligible' => 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+        'review_required' => 'bg-amber-100 text-amber-800 border border-amber-200',
+        'blocked' => 'bg-rose-100 text-rose-800 border border-rose-200',
+        'overridden' => 'bg-sky-100 text-sky-800 border border-sky-200',
+        'not_applicable' => 'bg-slate-100 text-slate-700 border border-slate-200',
+    ];
+    $frequencyRuleMap = $assistanceSubtypes->mapWithKeys(function ($subtype) {
+        return [
+            (string) $subtype->id => [
+                'subtypeRule' => $subtype->frequencyRule ? [
+                    'notes' => $subtype->frequencyRule->notes,
+                    'requires_reference_date' => (bool) $subtype->frequencyRule->requires_reference_date,
+                    'requires_case_key' => (bool) $subtype->frequencyRule->requires_case_key,
+                    'allows_exception_request' => (bool) $subtype->frequencyRule->allows_exception_request,
+                ] : null,
+                'detailRules' => $subtype->details->mapWithKeys(function ($detail) {
+                    return [
+                        (string) $detail->id => $detail->frequencyRule ? [
+                            'notes' => $detail->frequencyRule->notes,
+                            'requires_reference_date' => (bool) $detail->frequencyRule->requires_reference_date,
+                            'requires_case_key' => (bool) $detail->frequencyRule->requires_case_key,
+                            'allows_exception_request' => (bool) $detail->frequencyRule->allows_exception_request,
+                        ] : null,
+                    ];
+                })->toArray(),
+            ],
+        ];
+    })->toArray();
+@endphp
+
 <main class="p-8 max-w-6xl mx-auto space-y-6">
 
     <!-- HEADER -->
@@ -21,6 +60,7 @@
 
     <form id="assessmentForm" method="POST" action="{{ route('socialworker.assess.update', $application->id) }}">
         @csrf
+        <input type="hidden" name="assessment_action" id="assessmentActionInput" value="save">
 
         <!-- STEPS -->
         <div class="grid grid-cols-3 gap-4">
@@ -215,7 +255,18 @@
 
             <!-- FAMILY -->
             <div class="mb-4 flex justify-between items-center">
-                <h2 class="text-lg font-bold text-[#234E70]">Family Composition</h2>
+                <div>
+                    <h2 class="text-lg font-bold text-[#234E70]">Family Composition</h2>
+                    <p class="text-sm text-gray-500">
+                        {{ $application->householdProfileLabel() }}
+                    </p>
+
+                    @if($application->beneficiary?->relationshipData)
+                        <p class="text-xs text-gray-400 mt-1">
+                            Client's relationship to beneficiary: {{ $application->beneficiary->relationshipData->name }}
+                        </p>
+                    @endif
+                </div>
 
                 <button type="button"
                     onclick="addFamily()"
@@ -233,7 +284,7 @@
 
             <div id="familyContainer" class="space-y-2 mt-2">
 
-                @foreach($application->familyMembers ?? [] as $index => $member)
+                @foreach($householdMembers ?? [] as $index => $member)
 
                 <div class="family-row bg-gray-50 rounded-xl px-5 py-3 grid grid-cols-5 gap-3 items-center">
 
@@ -283,6 +334,10 @@
 
             </div>
 
+            <p class="text-sm text-gray-500">
+                Updates here modify the saved household for the {{ $application->usesBeneficiaryHousehold() ? 'beneficiary profile' : 'client account' }}, so the same family composition will appear in future related applications.
+            </p>
+
         </div>
 
         <!-- ================= STEP 2 ================= -->
@@ -291,11 +346,13 @@
             <div>
                 <h2 class="font-bold text-[#234E70] mb-4">Assistance Information</h2>
 
-                <div class="grid grid-cols-3 gap-4">
+                <div class="grid grid-cols-4 gap-4">
 
                     <div>
                         <label class="label">Type of Assistance</label>
-                        <select name="assistance_type_id" class="input w-full">
+                        <div class="select-shell">
+                        <select name="assistance_type_id" id="assistanceTypeSelect" class="input input-select w-full">
+                            <option value="">Select type</option>
                             @foreach($assistanceTypes as $type)
                             <option value="{{ $type->id }}"
                                 {{ $application->assistance_type_id == $type->id ? 'selected' : '' }}>
@@ -303,40 +360,140 @@
                             </option>
                             @endforeach
                         </select>
+                        </div>
                     </div>
 
                     <div>
                         <label class="label">Specific Assistance</label>
-                        <select name="assistance_subtype_id" class="input w-full">
+                        <div class="select-shell">
+                        <select name="assistance_subtype_id" id="assistanceSubtypeSelect" class="input input-select w-full">
+                            <option value="">Select subtype</option>
                             @foreach($assistanceSubtypes as $sub)
                             <option value="{{ $sub->id }}"
+                                data-type-id="{{ $sub->assistance_type_id }}"
                                 {{ $application->assistance_subtype_id == $sub->id ? 'selected' : '' }}>
                                 {{ $sub->name }}
                             </option>
                             @endforeach
                         </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="label">Assistance Detail</label>
+                        <div class="select-shell">
+                        <select name="assistance_detail_id" id="assistanceDetailSelect" class="input input-select w-full">
+                            <option value="">Select detail</option>
+                            @foreach($assistanceSubtypes as $sub)
+                                @foreach($sub->details as $detail)
+                                <option value="{{ $detail->id }}"
+                                    data-subtype-id="{{ $sub->id }}"
+                                    {{ $application->assistance_detail_id == $detail->id ? 'selected' : '' }}>
+                                    {{ $detail->name }}
+                                </option>
+                                @endforeach
+                            @endforeach
+                        </select>
+                        </div>
                     </div>
 
                     <div>
                         <label class="label">Mode of Assistance</label>
-                        <select name="mode_of_assistance" class="input w-full">
-                            <option value="Cash"
-                                {{ $application->mode_of_assistance == 'Cash' ? 'selected' : '' }}>
-                                Cash
+                        <div class="select-shell">
+                        <select name="mode_of_assistance_id" class="input input-select w-full">
+                            <option value="">Select mode</option>
+                            @foreach($modesOfAssistance as $mode)
+                            <option value="{{ $mode->id }}"
+                                {{ $application->mode_of_assistance_id == $mode->id ? 'selected' : '' }}>
+                                {{ $mode->name }}
                             </option>
-
-                            <option value="gl"
-                                {{ $application->mode_of_assistance == 'gl' ? 'selected' : '' }}>
-                                Guarantee Letter
-                            </option>
-
-                            <option value="Referral"
-                                {{ $application->mode_of_assistance == 'Referral' ? 'selected' : '' }}>
-                                Referral
-                            </option>
+                            @endforeach
                         </select>
+                        </div>
                     </div>
 
+                </div>
+
+                <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-4">
+                    <div>
+                        <h3 class="font-semibold text-amber-900">Frequency of Assistance Review</h3>
+                        <p id="frequencyRuleNotes" class="mt-1 text-sm text-amber-800">
+                            {{ $application->frequency_message ?: ($application->frequencyRule->notes ?? 'Select an assistance item to review the applicable frequency rule.') }}
+                        </p>
+                    </div>
+
+                    @if($application->frequency_status)
+                    <div class="rounded-lg bg-white/70 px-4 py-3 text-sm text-amber-900">
+                        <span class="font-semibold">Current Status:</span>
+                        <span class="ml-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase {{ $frequencyBadgeClasses[$application->frequency_status] ?? $frequencyBadgeClasses['not_applicable'] }}">
+                            {{ str_replace('_', ' ', $application->frequency_status) }}
+                        </span>
+                        @if($basisApplication)
+                            <span class="block mt-1 text-amber-800">
+                                Based on: {{ $basisApplication->reference_no }} released on {{ $basisReleasedDate }}
+                            </span>
+                        @endif
+                    </div>
+                    @endif
+
+                    @if($basisApplication)
+                    <div class="rounded-lg border border-amber-200 bg-white px-4 py-4 text-sm text-amber-900 space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="font-semibold text-amber-900">Previous Released Assistance Found</p>
+                                <p class="mt-1 text-amber-800">
+                                    Reference No. {{ $basisApplication->reference_no }} released on {{ $basisReleasedDate }}
+                                </p>
+                            </div>
+
+                            <button type="button"
+                               id="openPreviousAssistanceModalBtn"
+                               class="inline-flex items-center rounded-lg border border-amber-300 px-4 py-2 font-semibold text-amber-900 hover:bg-amber-100">
+                                View Previous Assistance Details
+                            </button>
+                        </div>
+
+                        <div>
+                            <label class="label">Cancellation Reason</label>
+                            <textarea name="cancellation_reason"
+                                class="input w-full h-24"
+                                placeholder="Explain why this application should be cancelled.">{{ old('cancellation_reason', $defaultCancellationReason) }}</textarea>
+                        </div>
+
+                        <div class="flex flex-wrap gap-3">
+                            <button type="button"
+                                id="cancelFrequencyBtn"
+                                class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">
+                                Cancel Application
+                            </button>
+                        </div>
+                    </div>
+                    @endif
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div id="frequencyCaseKeyWrap" style="display:none;">
+                            <label class="label">Incident / Admission Reference</label>
+                            <input type="text"
+                                name="frequency_case_key"
+                                class="input w-full"
+                                value="{{ old('frequency_case_key', $application->frequency_case_key) }}"
+                                placeholder="Case number, incident label, admission reference">
+                        </div>
+                    </div>
+
+                    <div id="frequencyExceptionWrap" style="display:none;">
+                        <label class="label">Exception Request Reason</label>
+                        <textarea name="frequency_exception_reason"
+                            class="input w-full h-24"
+                            placeholder="Explain why this case should be reviewed as an exception.">{{ old('frequency_exception_reason', $application->frequency_exception_reason) }}</textarea>
+                    </div>
+
+                    <div id="frequencyOverrideWrap" @if(!in_array($application->frequency_status, ['blocked', 'overridden'], true)) style="display:none;" @endif>
+                        <label class="label">Override Reason</label>
+                        <textarea name="frequency_override_reason"
+                            class="input w-full h-24"
+                            placeholder="Required only when a blocked frequency rule still needs to proceed after your review.">{{ old('frequency_override_reason', $application->frequency_override_reason) }}</textarea>
+                    </div>
                 </div>
             </div>
 
@@ -351,10 +508,9 @@
 
                     <div class="flex items-center gap-3">
 
-                        <a href="{{ asset('storage/' . ($file->file_path ?? $file->path)) }}"
-                            target="_blank"
+                        <a href="{{ route('documents.show', $file->id) }}"
                             class="px-3 py-2 bg-gray-200 rounded-lg text-sm hover:bg-gray-300">
-                            View
+                            Open
                         </a>
 
                         <p class="font-medium text-gray-700">
@@ -386,6 +542,22 @@
 
             <h2 class="font-bold text-[#234E70]">Notes & Schedule</h2>
 
+            <div class="rounded-2xl border {{ $googleConnected ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50' }} p-4">
+                <p class="font-semibold {{ $googleConnected ? 'text-emerald-800' : 'text-amber-800' }}">
+                    {{ $googleConnected ? 'Google Calendar connected' : 'Google Calendar not connected' }}
+                </p>
+
+                <p class="mt-1 text-sm {{ $googleConnected ? 'text-emerald-700' : 'text-amber-700' }}">
+                    @if($googleConnected)
+                        Saving a schedule will automatically create or update the social worker's Google Calendar event and generate a Google Meet link.
+                    @else
+                        Connect your Google account in
+                        <a href="{{ route('profile.edit') }}" class="font-semibold underline">Profile Settings</a>
+                        to auto-generate the calendar event and Meet link. Until then, you can still enter a meeting link manually.
+                    @endif
+                </p>
+            </div>
+
             <div>
                 <label class="label">Assessment Notes</label>
                 <textarea name="notes"
@@ -407,7 +579,17 @@
                     <input type="text"
                         name="meeting_link"
                         class="input w-full"
-                        value="{{ $application->meeting_link }}">
+                        value="{{ $application->meeting_link }}"
+                        placeholder="{{ $googleConnected ? 'Generated automatically after saving the schedule' : 'Paste a manual meeting link if Google is not connected' }}"
+                        @if($googleConnected) readonly @endif>
+
+                    @if($application->google_calendar_event_link)
+                        <a href="{{ $application->google_calendar_event_link }}"
+                           target="_blank"
+                           class="mt-2 inline-flex text-sm font-semibold text-[#234E70] underline">
+                            Open Google Calendar Event
+                        </a>
+                    @endif
                 </div>
 
             </div>
@@ -432,6 +614,83 @@
         </div>
 
     </form>
+
+    @if($basisApplication)
+    <div id="previousAssistanceModal" class="fixed inset-0 z-50 hidden">
+        <div id="previousAssistanceModalBackdrop" class="absolute inset-0 bg-slate-900/55"></div>
+
+        <div class="relative flex min-h-full items-center justify-center p-4">
+            <div class="w-full max-w-3xl rounded-2xl bg-white shadow-2xl">
+                <div class="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Previous Released Assistance</p>
+                        <h2 class="mt-1 text-2xl font-bold text-[#234E70]">{{ $basisApplication->reference_no }}</h2>
+                        <p class="mt-1 text-sm text-slate-500">Released on {{ $basisReleasedDate }}</p>
+                    </div>
+
+                    <button type="button"
+                        id="closePreviousAssistanceModalBtn"
+                        class="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700">
+                        Close
+                    </button>
+                </div>
+
+                <div class="space-y-6 px-6 py-5">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="label">Client</span>
+                            <p class="font-semibold text-slate-800">
+                                {{ $basisApplication->client?->first_name }} {{ $basisApplication->client?->last_name }}
+                            </p>
+                        </div>
+
+                        <div>
+                            <span class="label">Status</span>
+                            <p class="font-semibold text-emerald-700 uppercase">
+                                {{ str_replace('_', ' ', $basisApplication->status) }}
+                            </p>
+                        </div>
+
+                        <div>
+                            <span class="label">Type of Assistance</span>
+                            <p class="font-semibold text-slate-800">{{ $basisApplication->assistanceType?->name ?? '-' }}</p>
+                        </div>
+
+                        <div>
+                            <span class="label">Specific Assistance</span>
+                            <p class="font-semibold text-slate-800">{{ $basisApplication->assistanceSubtype?->name ?? '-' }}</p>
+                        </div>
+
+                        <div>
+                            <span class="label">Assistance Detail</span>
+                            <p class="font-semibold text-slate-800">{{ $basisApplication->assistanceDetail?->name ?? '-' }}</p>
+                        </div>
+
+                        <div>
+                            <span class="label">Mode of Assistance</span>
+                            <p class="font-semibold text-slate-800">{{ $basisApplication->modeOfAssistance?->name ?? $basisApplication->mode_of_assistance ?? '-' }}</p>
+                        </div>
+
+                        <div>
+                            <span class="label">Final Amount</span>
+                            <p class="font-semibold text-slate-800">PHP {{ number_format($basisApplication->final_amount ?? $basisApplication->recommended_amount ?? 0, 2) }}</p>
+                        </div>
+
+                        <div>
+                            <span class="label">Frequency Note</span>
+                            <p class="font-semibold text-slate-800">{{ $basisApplication->frequency_message ?? '-' }}</p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl bg-slate-50 px-4 py-4 text-sm">
+                        <p class="font-semibold text-slate-700">Notes</p>
+                        <p class="mt-2 text-slate-600">{{ $basisApplication->notes ?: 'No notes recorded.' }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 
 </main>
 
@@ -478,6 +737,152 @@ document.getElementById('backBtn').addEventListener('click', function () {
 });
 
 updateSteps();
+
+const assessmentActionInput = document.getElementById('assessmentActionInput');
+const cancelFrequencyBtn = document.getElementById('cancelFrequencyBtn');
+const previousAssistanceModal = document.getElementById('previousAssistanceModal');
+const openPreviousAssistanceModalBtn = document.getElementById('openPreviousAssistanceModalBtn');
+const closePreviousAssistanceModalBtn = document.getElementById('closePreviousAssistanceModalBtn');
+const previousAssistanceModalBackdrop = document.getElementById('previousAssistanceModalBackdrop');
+
+const assistanceTypeSelect = document.getElementById('assistanceTypeSelect');
+const assistanceSubtypeSelect = document.getElementById('assistanceSubtypeSelect');
+const assistanceDetailSelect = document.getElementById('assistanceDetailSelect');
+const frequencyRuleNotes = document.getElementById('frequencyRuleNotes');
+const frequencyCaseKeyWrap = document.getElementById('frequencyCaseKeyWrap');
+const frequencyExceptionWrap = document.getElementById('frequencyExceptionWrap');
+const frequencyOverrideWrap = document.getElementById('frequencyOverrideWrap');
+const frequencyRuleMap = @json($frequencyRuleMap);
+
+function currentFrequencyRule() {
+    const subtypeId = assistanceSubtypeSelect?.value || '';
+    const detailId = assistanceDetailSelect?.value || '';
+    const subtypeEntry = frequencyRuleMap[subtypeId];
+
+    if (!subtypeEntry) {
+        return null;
+    }
+
+    return subtypeEntry.detailRules?.[detailId] || subtypeEntry.subtypeRule || null;
+}
+
+function updateFrequencyRuleUI() {
+    const rule = currentFrequencyRule();
+
+    if (frequencyRuleNotes) {
+        frequencyRuleNotes.textContent = rule?.notes || 'Select an assistance item to review the applicable frequency rule.';
+    }
+
+    if (frequencyCaseKeyWrap) {
+        frequencyCaseKeyWrap.style.display = rule?.requires_case_key ? 'block' : 'none';
+    }
+
+    if (frequencyExceptionWrap) {
+        frequencyExceptionWrap.style.display = rule?.allows_exception_request ? 'block' : 'none';
+    }
+
+    if (frequencyOverrideWrap) {
+        const currentStatus = @json($application->frequency_status);
+        frequencyOverrideWrap.style.display = ['blocked', 'overridden'].includes(currentStatus) ? 'block' : 'none';
+    }
+}
+
+function updateSubtypeOptions() {
+    const selectedType = assistanceTypeSelect?.value || '';
+
+    Array.from(assistanceSubtypeSelect.options).forEach((option, index) => {
+        if (index === 0) {
+            return;
+        }
+
+        const matches = option.dataset.typeId === selectedType;
+        option.hidden = !matches;
+
+        if (!matches && option.selected) {
+            assistanceSubtypeSelect.value = '';
+        }
+    });
+
+    updateDetailOptions();
+    updateFrequencyRuleUI();
+}
+
+function updateDetailOptions() {
+    const selectedSubtype = assistanceSubtypeSelect?.value || '';
+    let hasVisibleDetails = false;
+
+    Array.from(assistanceDetailSelect.options).forEach((option, index) => {
+        if (index === 0) {
+            option.text = selectedSubtype ? 'Select detail' : 'No detail required';
+            return;
+        }
+
+        const matches = option.dataset.subtypeId === selectedSubtype;
+        option.hidden = !matches;
+
+        if (matches) {
+            hasVisibleDetails = true;
+        }
+
+        if (!matches && option.selected) {
+            assistanceDetailSelect.value = '';
+        }
+    });
+
+    if (!hasVisibleDetails) {
+        assistanceDetailSelect.value = '';
+    }
+
+    assistanceDetailSelect.disabled = !hasVisibleDetails;
+    updateFrequencyRuleUI();
+}
+
+assistanceTypeSelect?.addEventListener('change', updateSubtypeOptions);
+assistanceSubtypeSelect?.addEventListener('change', updateDetailOptions);
+assistanceDetailSelect?.addEventListener('change', updateFrequencyRuleUI);
+updateSubtypeOptions();
+
+cancelFrequencyBtn?.addEventListener('click', function () {
+    if (assessmentActionInput) {
+        assessmentActionInput.value = 'cancel_due_to_frequency';
+    }
+
+    if (confirm('Cancel this application based on the previous released assistance record?')) {
+        document.getElementById('assessmentForm').submit();
+        return;
+    }
+
+    if (assessmentActionInput) {
+        assessmentActionInput.value = 'save';
+    }
+});
+
+function togglePreviousAssistanceModal(show) {
+    if (!previousAssistanceModal) {
+        return;
+    }
+
+    previousAssistanceModal.classList.toggle('hidden', !show);
+    document.body.classList.toggle('overflow-hidden', show);
+}
+
+openPreviousAssistanceModalBtn?.addEventListener('click', function () {
+    togglePreviousAssistanceModal(true);
+});
+
+closePreviousAssistanceModalBtn?.addEventListener('click', function () {
+    togglePreviousAssistanceModal(false);
+});
+
+previousAssistanceModalBackdrop?.addEventListener('click', function () {
+    togglePreviousAssistanceModal(false);
+});
+
+document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') {
+        togglePreviousAssistanceModal(false);
+    }
+});
 
 let familyIndex = {{ count($application->familyMembers ?? []) }};
 
@@ -555,9 +960,34 @@ function removeRow(btn) {
     padding:10px 12px;
     outline:none;
 }
+.input-select{
+    appearance:none;
+    background:linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    padding-right:44px;
+}
 .input:focus{
     border-color:#234E70;
     box-shadow:0 0 0 2px rgba(35,78,112,.12);
+}
+.input:disabled{
+    color:#94a3b8;
+    background:#f8fafc;
+    cursor:not-allowed;
+}
+.select-shell{
+    position:relative;
+}
+.select-shell::after{
+    content:'';
+    position:absolute;
+    right:16px;
+    top:50%;
+    width:10px;
+    height:10px;
+    border-right:2px solid #64748b;
+    border-bottom:2px solid #64748b;
+    transform:translateY(-70%) rotate(45deg);
+    pointer-events:none;
 }
 </style>
 

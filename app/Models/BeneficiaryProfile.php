@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class BeneficiaryProfile extends Model
+{
+    protected $fillable = [
+        'client_id',
+        'relationship_id',
+        'last_name',
+        'first_name',
+        'middle_name',
+        'extension_name',
+        'sex',
+        'birthdate',
+        'contact_number',
+        'full_address',
+    ];
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
+    }
+
+    public function familyMembers()
+    {
+        return $this->hasMany(FamilyMember::class)->orderBy('id');
+    }
+}

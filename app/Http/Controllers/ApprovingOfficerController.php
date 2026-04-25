@@ -43,7 +43,8 @@ class ApprovingOfficerController extends Controller
             'familyMembers',
             'documents',
             'assistanceType',
-            'assistanceSubtype'
+            'assistanceSubtype',
+            'modeOfAssistance',
         ])->findOrFail($id);
 
         return view('approving-officer.show', compact('application'));

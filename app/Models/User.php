@@ -24,6 +24,11 @@ use Illuminate\Notifications\Notifiable;
     'birthdate',
     'sex',
     'civil_status',
+    'google_email',
+    'google_access_token',
+    'google_refresh_token',
+    'google_token_expires_at',
+    'google_calendar_connected_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -43,11 +48,20 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'deactivated_at' => 'datetime',
+            'google_access_token' => 'encrypted',
+            'google_refresh_token' => 'encrypted',
+            'google_token_expires_at' => 'datetime',
+            'google_calendar_connected_at' => 'datetime',
         ];
     }
 
     public function handledApplications()
     {
         return $this->hasMany(Application::class, 'social_worker_id');
+    }
+
+    public function hasGoogleCalendarConnection(): bool
+    {
+        return filled($this->google_refresh_token);
     }
 }

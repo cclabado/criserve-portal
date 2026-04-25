@@ -42,6 +42,12 @@ setTimeout(() => {
 </script>
 @endif
 
+@if(session('frequency_warning'))
+<div class="mb-4 px-4 py-3 rounded-lg bg-amber-100 text-amber-800 border border-amber-200">
+    {{ session('frequency_warning') }}
+</div>
+@endif
+
 <!-- HERO -->
 <div class="rounded-2xl bg-gradient-to-br from-[#0B3C5D] to-[#174A6B] p-8 text-white shadow">
 <h2 class="text-3xl font-bold mb-2">Application Management</h2>
@@ -64,6 +70,7 @@ Review and manage submitted applications efficiently.
 <option value="under_review" {{ request('status')=='under_review'?'selected':'' }}>Under Review</option>
 <option value="approved" {{ request('status')=='approved'?'selected':'' }}>Approved</option>
 <option value="denied" {{ request('status')=='denied'?'selected':'' }}>Denied</option>
+<option value="cancelled" {{ request('status')=='cancelled'?'selected':'' }}>Cancelled</option>
 </select>
 </div>
 
@@ -153,7 +160,25 @@ ID: {{ $app->reference_no }}
 
 <!-- CATEGORY -->
 <td class="px-6 py-4 text-sm">
-{{ $app->assistanceType->name ?? 'N/A' }}
+    <div class="font-medium text-slate-800">
+        {{ $app->assistanceType->name ?? 'N/A' }}
+    </div>
+    <div class="text-xs text-slate-500 mt-1">
+        {{ $app->assistanceSubtype->name ?? 'Subtype not set' }}
+    </div>
+    @if($app->frequency_status)
+    <div class="mt-2">
+        <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase
+            @if($app->frequency_status === 'eligible') bg-emerald-100 text-emerald-800
+            @elseif($app->frequency_status === 'review_required') bg-amber-100 text-amber-800
+            @elseif($app->frequency_status === 'blocked') bg-rose-100 text-rose-800
+            @elseif($app->frequency_status === 'overridden') bg-sky-100 text-sky-800
+            @else bg-slate-100 text-slate-700
+            @endif">
+            {{ str_replace('_', ' ', $app->frequency_status) }}
+        </span>
+    </div>
+    @endif
 </td>
 
 <!-- STATUS -->
@@ -179,6 +204,9 @@ bg-red-100 text-red-700
 
 @elseif($status == 'released')
         bg-emerald-100 text-emerald-700
+
+@elseif($status == 'cancelled')
+bg-slate-200 text-slate-700
         
 @else
 bg-gray-100 text-gray-600
@@ -251,6 +279,17 @@ bg-gray-100 text-gray-600
                         Mark Released
                     </button>
                 </form>
+
+            </div>
+
+        @elseif($status === 'released')
+
+            <div class="flex justify-end">
+
+                <a href="{{ route('socialworker.show', $app->id) }}"
+                class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-slate-100">
+                    View Details
+                </a>
 
             </div>
 
