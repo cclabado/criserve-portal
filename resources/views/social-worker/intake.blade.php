@@ -2,6 +2,41 @@
 
 @section('content')
 
+@php
+    $assistanceCatalog = $assistanceTypes->map(fn ($type) => [
+        'id' => $type->id,
+        'name' => $type->name,
+        'subtypes' => $type->subtypes->map(fn ($subtype) => [
+            'id' => $subtype->id,
+            'name' => $subtype->name,
+            'details' => $subtype->details->map(fn ($detail) => [
+                'id' => $detail->id,
+                'name' => $detail->name,
+            ])->values(),
+        ])->values(),
+    ])->values();
+
+    $modeOptions = $modesOfAssistance->map(fn ($mode) => [
+        'id' => $mode->id,
+        'name' => $mode->name,
+    ])->values();
+
+    $savedRecommendations = old('recommendations')
+        ? collect(old('recommendations'))->values()
+        : $application->assistanceRecommendations->map(fn ($recommendation) => [
+            'assistance_type_id' => $recommendation->assistance_type_id,
+            'assistance_subtype_id' => $recommendation->assistance_subtype_id,
+            'assistance_detail_id' => $recommendation->assistance_detail_id,
+            'mode_of_assistance_id' => $recommendation->mode_of_assistance_id,
+            'final_amount' => $recommendation->final_amount,
+            'frequency_override_reason' => $recommendation->frequency_override_reason,
+            'frequency_status' => $recommendation->frequency_status,
+            'frequency_message' => $recommendation->frequency_message,
+            'allows_override' => (bool) $recommendation->frequencyRule?->allows_exception_request,
+            'notes' => $recommendation->notes,
+        ])->values();
+@endphp
+
 <main class="p-8 max-w-6xl mx-auto space-y-6">
 
     <!-- HEADER -->
@@ -208,7 +243,7 @@
                  onclick="goToStep(3)"
                  class="step-card cursor-pointer">
                 <p class="text-xs uppercase">Step 3</p>
-                <p class="font-semibold">Recommendation</p>
+                <p class="font-semibold">Recommendations</p>
             </div>
 
         </div>
@@ -348,9 +383,16 @@
         <!-- ================= STEP 3 ================= -->
         <div id="step-3" class="step-content hidden bg-white p-6 rounded-xl shadow space-y-6">
 
-            <h2 class="text-lg font-bold text-[#234E70]">
-                Recommendation
-            </h2>
+            <div>
+                <div>
+                    <h2 class="text-lg font-bold text-[#234E70]">
+                        Recommendations
+                    </h2>
+                    <p class="text-sm text-gray-500 mt-1">
+                        Save the primary assistance amount, then add other identified needs below.
+                    </p>
+                </div>
+            </div>
 
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <p class="text-sm text-gray-500">
@@ -376,7 +418,7 @@
             <div class="grid grid-cols-2 gap-4">
 
                 <div>
-                    <label class="label">Recommended Amount</label>
+                    <label class="label">Primary Recommended Amount</label>
                     <input type="number"
                         id="recommended_amount"
                         name="recommended_amount"
@@ -386,7 +428,7 @@
                 </div>
 
                 <div>
-                    <label class="label">Final Amount</label>
+                    <label class="label">Primary Final Amount</label>
                     <input type="number"
                         step="0.01"
                         name="final_amount"
@@ -394,6 +436,25 @@
                         value="{{ $application->final_amount }}">
                 </div>
 
+            </div>
+
+            <div class="recommendation-panel">
+                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h3 class="text-base font-bold text-[#234E70]">Additional Assistance Recommendations</h3>
+                        <p class="text-sm text-gray-500 mt-1">
+                            Add cash relief, material assistance, psychosocial support, or another need identified during intake.
+                        </p>
+                    </div>
+
+                    <button type="button"
+                            id="addAssistanceRecommendationBtn"
+                            class="px-4 py-2 rounded-lg bg-[#234E70] text-white hover:bg-[#18384f]">
+                        Add Assistance
+                    </button>
+                </div>
+
+                <div id="additionalRecommendations" class="mt-4 space-y-4"></div>
             </div>
 
             <div hidden>
@@ -474,6 +535,10 @@ const intakeForm = document.getElementById('intakeForm');
 const recommendationStatus = document.getElementById('recommendationStatus');
 const generateRecommendationBtn = document.getElementById('generateRecommendationBtn');
 const recommendationUrl = @json(route('socialworker.recommendation.generate', $application->id));
+const frequencyCheckUrl = @json(route('socialworker.assistance-frequency.check', $application->id));
+const assistanceCatalog = @json($assistanceCatalog);
+const modeOptions = @json($modeOptions);
+let additionalRecommendations = @json($savedRecommendations);
 
 function updateSteps() {
     for (let i = 1; i <= totalSteps; i++) {
@@ -558,6 +623,239 @@ async function generateRecommendation() {
 }
 
 generateRecommendationBtn.addEventListener('click', generateRecommendation);
+
+const additionalRecommendationsContainer = document.getElementById('additionalRecommendations');
+const addAssistanceRecommendationBtn = document.getElementById('addAssistanceRecommendationBtn');
+
+function optionList(options, selectedValue, placeholder = 'Select') {
+    const selected = String(selectedValue || '');
+    return [
+        `<option value="">${placeholder}</option>`,
+        ...options.map((option) => {
+            const isSelected = String(option.id) === selected ? 'selected' : '';
+            return `<option value="${option.id}" ${isSelected}>${option.name}</option>`;
+        }),
+    ].join('');
+}
+
+function selectedType(row) {
+    return assistanceCatalog.find((type) => String(type.id) === String(row.assistance_type_id));
+}
+
+function selectedSubtype(row) {
+    return selectedType(row)?.subtypes.find((subtype) => String(subtype.id) === String(row.assistance_subtype_id));
+}
+
+function blankRecommendation() {
+    return {
+        assistance_type_id: '',
+        assistance_subtype_id: '',
+        assistance_detail_id: '',
+        mode_of_assistance_id: '',
+        final_amount: '',
+        frequency_override_reason: '',
+        frequency_status: '',
+        frequency_message: '',
+        notes: '',
+    };
+}
+
+function renderAdditionalRecommendations() {
+    if (!additionalRecommendations.length) {
+        additionalRecommendationsContainer.innerHTML = `
+            <div class="empty-state">
+                <p class="font-semibold text-gray-700">No additional assistance added.</p>
+                <p class="text-sm text-gray-500 mt-1">Use this when assessment identifies a second eligible need beyond the primary application assistance.</p>
+            </div>
+        `;
+        return;
+    }
+
+    additionalRecommendationsContainer.innerHTML = additionalRecommendations.map((row, index) => {
+        const type = selectedType(row);
+        const subtype = selectedSubtype(row);
+        const statusClass = row.frequency_status === 'blocked'
+            ? 'status-badge status-badge--blocked'
+            : row.frequency_status === 'eligible'
+                ? 'status-badge status-badge--eligible'
+                : 'status-badge';
+        const canOverride = row.frequency_status === 'blocked' && row.allows_override;
+        const blockedWithoutOverride = row.frequency_status === 'blocked' && !row.allows_override;
+
+        return `
+            <div class="additional-recommendation" data-index="${index}">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h4 class="font-bold text-[#234E70]">Additional Assistance ${index + 1}</h4>
+                        <p class="text-sm text-gray-500">Frequency is checked before this row is saved.</p>
+                    </div>
+                    <button type="button" class="text-sm font-semibold text-red-600" data-remove-recommendation="${index}">Remove</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <label class="label">Assistance Type</label>
+                        <select name="recommendations[${index}][assistance_type_id]" class="input" data-recommendation-field="assistance_type_id">
+                            ${optionList(assistanceCatalog, row.assistance_type_id)}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Specific Assistance</label>
+                        <select name="recommendations[${index}][assistance_subtype_id]" class="input" data-recommendation-field="assistance_subtype_id">
+                            ${optionList(type?.subtypes || [], row.assistance_subtype_id)}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Assistance Detail</label>
+                        <select name="recommendations[${index}][assistance_detail_id]" class="input" data-recommendation-field="assistance_detail_id">
+                            ${optionList(subtype?.details || [], row.assistance_detail_id, 'None')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Mode</label>
+                        <select name="recommendations[${index}][mode_of_assistance_id]" class="input" data-recommendation-field="mode_of_assistance_id">
+                            ${optionList(modeOptions, row.mode_of_assistance_id)}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Final Amount</label>
+                        <input type="number" step="0.01" name="recommendations[${index}][final_amount]" class="input" value="${row.final_amount || ''}" data-recommendation-field="final_amount">
+                    </div>
+                </div>
+
+                ${canOverride ? `
+                    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <label class="label">Override Reason</label>
+                        <textarea name="recommendations[${index}][frequency_override_reason]" class="input h-24 bg-white" data-recommendation-field="frequency_override_reason" placeholder="Explain why this blocked assistance should still be recommended.">${row.frequency_override_reason || ''}</textarea>
+                    </div>
+                ` : ''}
+
+                ${blockedWithoutOverride ? `
+                    <div class="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                        This assistance is blocked by the frequency rule and this rule does not allow override.
+                    </div>
+                ` : ''}
+
+                <div class="mt-4">
+                    <label class="label">Recommendation Notes</label>
+                    <textarea name="recommendations[${index}][notes]" class="input h-20" data-recommendation-field="notes">${row.notes || ''}</textarea>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div class="${statusClass}">
+                        ${row.frequency_status ? row.frequency_status.replace('_', ' ') : 'not checked'}
+                    </div>
+                    <button type="button" class="px-4 py-2 rounded-lg border border-[#234E70] text-[#234E70] hover:bg-[#234E70] hover:text-white" data-check-frequency="${index}">
+                        Check Frequency
+                    </button>
+                </div>
+                <p class="mt-2 text-sm text-gray-600">${row.frequency_message || 'Choose an assistance and run the frequency check.'}</p>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateRecommendationRow(index, field, value) {
+    additionalRecommendations[index][field] = value;
+
+    if (field === 'assistance_type_id') {
+        additionalRecommendations[index].assistance_subtype_id = '';
+        additionalRecommendations[index].assistance_detail_id = '';
+        additionalRecommendations[index].frequency_status = '';
+        additionalRecommendations[index].frequency_message = '';
+        renderAdditionalRecommendations();
+    }
+
+    if (field === 'assistance_subtype_id') {
+        additionalRecommendations[index].assistance_detail_id = '';
+        additionalRecommendations[index].frequency_status = '';
+        additionalRecommendations[index].frequency_message = '';
+        renderAdditionalRecommendations();
+    }
+}
+
+async function checkRecommendationFrequency(index) {
+    const row = additionalRecommendations[index];
+
+    if (!row.assistance_type_id || !row.assistance_subtype_id) {
+        row.frequency_status = 'missing';
+        row.frequency_message = 'Select an assistance type and specific assistance first.';
+        renderAdditionalRecommendations();
+        return;
+    }
+
+    row.frequency_status = 'checking';
+    row.frequency_message = 'Checking frequency rules...';
+    renderAdditionalRecommendations();
+
+    const formData = new FormData();
+    formData.append('_token', intakeForm.querySelector('input[name="_token"]').value);
+    ['assistance_type_id', 'assistance_subtype_id', 'assistance_detail_id', 'frequency_case_key', 'frequency_override_reason'].forEach((field) => {
+        formData.append(field, row[field] || '');
+    });
+
+    try {
+        const response = await fetch(frequencyCheckUrl, {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' },
+            body: formData,
+        });
+        const data = await response.json();
+
+        row.frequency_status = data.status || 'review_required';
+        row.frequency_message = data.message || 'Frequency check completed.';
+        row.allows_override = Boolean(data.rule?.allows_exception_request);
+    } catch (error) {
+        row.frequency_status = 'review_required';
+        row.frequency_message = 'Unable to check frequency right now. The server will check again when saving.';
+        row.allows_override = false;
+    }
+
+    renderAdditionalRecommendations();
+}
+
+addAssistanceRecommendationBtn.addEventListener('click', function () {
+    additionalRecommendations.push(blankRecommendation());
+    renderAdditionalRecommendations();
+});
+
+additionalRecommendationsContainer.addEventListener('input', function (event) {
+    const rowElement = event.target.closest('[data-index]');
+    const field = event.target.dataset.recommendationField;
+
+    if (!rowElement || !field) {
+        return;
+    }
+
+    updateRecommendationRow(Number(rowElement.dataset.index), field, event.target.value);
+});
+
+additionalRecommendationsContainer.addEventListener('change', function (event) {
+    const rowElement = event.target.closest('[data-index]');
+    const field = event.target.dataset.recommendationField;
+
+    if (!rowElement || !field) {
+        return;
+    }
+
+    updateRecommendationRow(Number(rowElement.dataset.index), field, event.target.value);
+});
+
+additionalRecommendationsContainer.addEventListener('click', function (event) {
+    const removeIndex = event.target.dataset.removeRecommendation;
+    const checkIndex = event.target.dataset.checkFrequency;
+
+    if (removeIndex !== undefined) {
+        additionalRecommendations.splice(Number(removeIndex), 1);
+        renderAdditionalRecommendations();
+    }
+
+    if (checkIndex !== undefined) {
+        checkRecommendationFrequency(Number(checkIndex));
+    }
+});
+
+renderAdditionalRecommendations();
 
 const summaryTabs = document.querySelectorAll('.summary-tab');
 const summaryPanels = document.querySelectorAll('.summary-panel');
@@ -673,6 +971,39 @@ summaryTabs.forEach((tab) => {
     padding:12px;
     border-radius:10px;
     border:1px solid #e5e7eb;
+}
+.recommendation-panel,
+.additional-recommendation,
+.empty-state{
+    border:1px solid #e5e7eb;
+    border-radius:16px;
+    background:#f8fafc;
+    padding:18px;
+}
+.additional-recommendation{
+    background:#fff;
+}
+.status-badge{
+    display:inline-flex;
+    align-items:center;
+    border-radius:999px;
+    border:1px solid #cbd5e1;
+    background:#f1f5f9;
+    padding:6px 12px;
+    font-size:12px;
+    font-weight:700;
+    color:#475569;
+    text-transform:uppercase;
+}
+.status-badge--eligible{
+    border-color:#bbf7d0;
+    background:#dcfce7;
+    color:#166534;
+}
+.status-badge--blocked{
+    border-color:#fecdd3;
+    background:#ffe4e6;
+    color:#be123c;
 }
 </style>
 

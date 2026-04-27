@@ -590,6 +590,11 @@ class SocialWorkerController extends Controller
             'client',
             'beneficiary',
             'familyMembers',
+            'assistanceRecommendations.assistanceType',
+            'assistanceRecommendations.assistanceSubtype',
+            'assistanceRecommendations.assistanceDetail',
+            'assistanceRecommendations.modeOfAssistance',
+            'assistanceRecommendations.frequencyRule',
             'assistanceType',
             'assistanceSubtype',
             'assistanceDetail',
@@ -600,7 +605,12 @@ class SocialWorkerController extends Controller
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
 
-        return view('social-worker.intake', compact('application'));
+        $assistanceTypes = AssistanceType::with(['subtypes.frequencyRule', 'subtypes.details.frequencyRule'])
+            ->orderBy('name')
+            ->get();
+        $modesOfAssistance = ModeOfAssistance::orderBy('name')->get();
+
+        return view('social-worker.intake', compact('application', 'assistanceTypes', 'modesOfAssistance'));
     }
 
     public function saveIntake(Request $request, $id)
@@ -611,6 +621,7 @@ class SocialWorkerController extends Controller
             'socialWorker',
             'beneficiary',
             'familyMembers',
+            'assistanceRecommendations',
             'assistanceType',
             'assistanceSubtype',
             'assistanceDetail',
@@ -619,6 +630,8 @@ class SocialWorkerController extends Controller
             'frequencyBasisApplication',
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
+
+        $recommendations = $this->validateAdditionalRecommendations($request, $application);
 
         $recommendation = app(AiRecommendationService::class)
             ->generate($application, $validated);
@@ -635,7 +648,11 @@ class SocialWorkerController extends Controller
         $application->ai_recommendation_generated_at = $recommendation['generated_at'];
         $application->social_worker_id = auth()->id();
         $application->status = 'for_approval';
-        $application->save();
+
+        DB::transaction(function () use ($application, $recommendations) {
+            $application->save();
+            $this->syncAssistanceRecommendations($application, $recommendations);
+        });
 
         return redirect()
             ->route('socialworker.applications')
@@ -661,6 +678,28 @@ class SocialWorkerController extends Controller
         );
     }
 
+    public function checkAdditionalAssistanceFrequency(Request $request, $id)
+    {
+        $application = Application::with(['client', 'beneficiaryProfile'])->findOrFail($id);
+        $this->claimOrEnsureOwnership($application);
+
+        $validated = $request->validate([
+            'assistance_type_id' => ['required', 'exists:assistance_types,id'],
+            'assistance_subtype_id' => ['required', 'exists:assistance_subtypes,id'],
+            'assistance_detail_id' => ['nullable', 'exists:assistance_details,id'],
+            'frequency_case_key' => ['nullable', 'string', 'max:255'],
+            'frequency_override_reason' => ['nullable', 'string'],
+        ]);
+
+        $this->validateAssistanceSelection(
+            (int) $validated['assistance_type_id'],
+            (int) $validated['assistance_subtype_id'],
+            isset($validated['assistance_detail_id']) ? (int) $validated['assistance_detail_id'] : null
+        );
+
+        return response()->json($this->evaluateAdditionalRecommendationFrequency($application, $validated));
+    }
+
     public function certificate($id)
     {
         $application = Application::with([
@@ -673,6 +712,9 @@ class SocialWorkerController extends Controller
             'frequencyRule',
             'frequencyBasisApplication',
             'documents',
+            'assistanceRecommendations.assistanceType',
+            'assistanceRecommendations.assistanceSubtype',
+            'assistanceRecommendations.assistanceDetail',
             'socialWorker',
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
@@ -787,6 +829,127 @@ class SocialWorkerController extends Controller
         return $request->validate($rules);
     }
 
+    protected function validateAdditionalRecommendations(Request $request, Application $application): array
+    {
+        $validated = $request->validate([
+            'recommendations' => ['nullable', 'array'],
+            'recommendations.*.assistance_type_id' => ['nullable', 'exists:assistance_types,id'],
+            'recommendations.*.assistance_subtype_id' => ['nullable', 'exists:assistance_subtypes,id'],
+            'recommendations.*.assistance_detail_id' => ['nullable', 'exists:assistance_details,id'],
+            'recommendations.*.mode_of_assistance_id' => ['nullable', 'exists:mode_of_assistances,id'],
+            'recommendations.*.recommended_amount' => ['nullable', 'numeric', 'min:0'],
+            'recommendations.*.final_amount' => ['nullable', 'numeric', 'min:0'],
+            'recommendations.*.frequency_case_key' => ['nullable', 'string', 'max:255'],
+            'recommendations.*.frequency_override_reason' => ['nullable', 'string'],
+            'recommendations.*.notes' => ['nullable', 'string'],
+        ]);
+
+        $rows = collect($validated['recommendations'] ?? [])
+            ->filter(fn (array $row) => filled($row['assistance_type_id'] ?? null)
+                || filled($row['assistance_subtype_id'] ?? null)
+                || filled($row['final_amount'] ?? null))
+            ->values();
+
+        $seen = [];
+        $primarySignature = $this->recommendationSignature([
+            'assistance_subtype_id' => $application->assistance_subtype_id,
+            'assistance_detail_id' => $application->assistance_detail_id,
+        ]);
+
+        return $rows->map(function (array $row, int $index) use ($application, &$seen, $primarySignature) {
+            $detailId = filled($row['assistance_detail_id'] ?? null) ? (int) $row['assistance_detail_id'] : null;
+
+            validator($row, [
+                'assistance_type_id' => ['required', 'exists:assistance_types,id'],
+                'assistance_subtype_id' => ['required', 'exists:assistance_subtypes,id'],
+                'mode_of_assistance_id' => ['required', 'exists:mode_of_assistances,id'],
+                'final_amount' => ['required', 'numeric', 'min:0'],
+            ])->validate();
+
+            $this->validateAssistanceSelection(
+                (int) $row['assistance_type_id'],
+                (int) $row['assistance_subtype_id'],
+                $detailId
+            );
+
+            $signature = $this->recommendationSignature([
+                'assistance_subtype_id' => $row['assistance_subtype_id'],
+                'assistance_detail_id' => $detailId,
+            ]);
+
+            if ($signature === $primarySignature || isset($seen[$signature])) {
+                throw ValidationException::withMessages([
+                    "recommendations.{$index}.assistance_subtype_id" => 'This assistance is already included in the intake recommendation.',
+                ]);
+            }
+
+            $seen[$signature] = true;
+
+            $frequency = $this->evaluateAdditionalRecommendationFrequency($application, $row);
+
+            $allowsOverride = (bool) ($frequency['rule']?->allows_exception_request ?? false);
+
+            if ($frequency['status'] === 'blocked' && (! $allowsOverride || blank($row['frequency_override_reason'] ?? null))) {
+                throw ValidationException::withMessages([
+                    "recommendations.{$index}.assistance_subtype_id" => $frequency['message'],
+                ]);
+            }
+
+            if ($frequency['status'] === 'blocked' && $allowsOverride) {
+                $frequency['status'] = 'overridden';
+                $frequency['message'] = 'Frequency rule overridden by social worker. '.$frequency['message'];
+            }
+
+            return [
+                'assistance_type_id' => (int) $row['assistance_type_id'],
+                'assistance_subtype_id' => (int) $row['assistance_subtype_id'],
+                'assistance_detail_id' => $detailId,
+                'mode_of_assistance_id' => (int) $row['mode_of_assistance_id'],
+                'recommended_amount' => null,
+                'final_amount' => $row['final_amount'],
+                'frequency_rule_id' => $frequency['rule']?->id,
+                'frequency_basis_application_id' => $frequency['basis_application_id'],
+                'frequency_status' => $frequency['status'],
+                'frequency_message' => $frequency['message'],
+                'frequency_case_key' => $row['frequency_case_key'] ?? null,
+                'frequency_override_reason' => $row['frequency_override_reason'] ?? null,
+                'frequency_checked_at' => now(),
+                'notes' => $row['notes'] ?? null,
+                'sort_order' => $index,
+            ];
+        })->all();
+    }
+
+    protected function syncAssistanceRecommendations(Application $application, array $recommendations): void
+    {
+        $application->assistanceRecommendations()->delete();
+
+        foreach ($recommendations as $recommendation) {
+            $application->assistanceRecommendations()->create($recommendation);
+        }
+    }
+
+    protected function evaluateAdditionalRecommendationFrequency(Application $application, array $row): array
+    {
+        return $this->frequencyEligibility->evaluate([
+            'client_id' => $application->client_id,
+            'beneficiary_profile_id' => $application->beneficiary_profile_id,
+            'frequency_subject' => $application->beneficiary_profile_id ? 'beneficiary' : 'client',
+            'assistance_subtype_id' => (int) $row['assistance_subtype_id'],
+            'assistance_detail_id' => filled($row['assistance_detail_id'] ?? null) ? (int) $row['assistance_detail_id'] : null,
+            'frequency_case_key' => $row['frequency_case_key'] ?? null,
+            'frequency_override_reason' => $row['frequency_override_reason'] ?? null,
+        ], $application);
+    }
+
+    protected function recommendationSignature(array $row): string
+    {
+        return implode(':', [
+            (int) ($row['assistance_subtype_id'] ?? 0),
+            filled($row['assistance_detail_id'] ?? null) ? (int) $row['assistance_detail_id'] : 'none',
+        ]);
+    }
+
     protected function extractIntakeFields(array $validated): array
     {
         return [
@@ -814,22 +977,7 @@ class SocialWorkerController extends Controller
                 ->familyMembers()
                 ->with('relationshipData')
                 ->orderBy('id')
-                ->get()
-                ->unique(function (FamilyMember $member) {
-                    if ($member->person_id) {
-                        return 'person:'.$member->person_id;
-                    }
-
-                    return implode('|', [
-                        strtolower(trim((string) $member->last_name)),
-                        strtolower(trim((string) $member->first_name)),
-                        strtolower(trim((string) ($member->middle_name ?? ''))),
-                        strtolower(trim((string) ($member->extension_name ?? ''))),
-                        (string) $member->birthdate,
-                        (string) $member->relationship,
-                    ]);
-                })
-                ->values();
+                ->get();
         }
 
         return $application->client
@@ -837,22 +985,7 @@ class SocialWorkerController extends Controller
             ->whereNull('beneficiary_profile_id')
             ->with('relationshipData')
             ->orderBy('id')
-            ->get()
-            ->unique(function (FamilyMember $member) {
-                if ($member->person_id) {
-                    return 'person:'.$member->person_id;
-                }
-
-                return implode('|', [
-                    strtolower(trim((string) $member->last_name)),
-                    strtolower(trim((string) $member->first_name)),
-                    strtolower(trim((string) ($member->middle_name ?? ''))),
-                    strtolower(trim((string) ($member->extension_name ?? ''))),
-                    (string) $member->birthdate,
-                    (string) $member->relationship,
-                ]);
-            })
-            ->values();
+            ->get();
     }
 
     protected function validateAssistanceSelection(int $typeId, int $subtypeId, ?int $detailId): void

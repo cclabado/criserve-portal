@@ -52,10 +52,6 @@ Route::middleware(['auth', 'role:client'])->group(function () {
         ->name('client.dashboard');
     Route::get('/client/applications', [ClientDashboardController::class, 'applications'])
         ->name('client.applications');
-    Route::get('/client/family', [ClientDashboardController::class, 'family'])
-        ->name('client.family');
-    Route::post('/client/family', [ClientDashboardController::class, 'updateFamily'])
-        ->name('client.family.update');
 
     Route::get('/client/application', [ApplicationController::class, 'create']);
     Route::post('/client/beneficiary-profile/lookup', [ApplicationController::class, 'lookupBeneficiaryProfile'])
@@ -132,6 +128,8 @@ Route::middleware(['auth', 'role:social_worker'])->group(function () {
     ->name('socialworker.intake');
     Route::post('/social-worker/application/{id}/recommendation', [SocialWorkerController::class, 'generateRecommendation'])
         ->name('socialworker.recommendation.generate');
+    Route::post('/social-worker/application/{id}/assistance-frequency', [SocialWorkerController::class, 'checkAdditionalAssistanceFrequency'])
+        ->name('socialworker.assistance-frequency.check');
     Route::post('/social-worker/application/{id}/intake', [SocialWorkerController::class, 'saveIntake'])
         ->name('socialworker.intake.save');
     Route::get('/social-worker/application/{id}/show',

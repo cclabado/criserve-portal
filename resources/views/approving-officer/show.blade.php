@@ -2,6 +2,12 @@
 
 @section('content')
 
+@php
+    $primaryFinalAmount = (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
+    $additionalFinalAmount = $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount);
+    $totalRecommendedAmount = $primaryFinalAmount + $additionalFinalAmount;
+@endphp
+
 <main class="p-8 max-w-6xl mx-auto space-y-6">
 
     <div>
@@ -70,9 +76,9 @@
             </div>
 
             <div>
-                <p class="text-sm text-gray-500">Final Amount</p>
+                <p class="text-sm text-gray-500">Total Final Amount</p>
                 <p class="text-2xl font-bold text-[#234E70]">
-                    PHP {{ number_format($application->final_amount ?? $application->recommended_amount ?? 0, 2) }}
+                    PHP {{ number_format($totalRecommendedAmount, 2) }}
                 </p>
             </div>
 
@@ -89,6 +95,57 @@
             </div>
         </div>
     </div>
+
+    @if($application->assistanceRecommendations->isNotEmpty())
+        <div class="card">
+            <h2 class="title">Additional Assistance Recommendations</h2>
+
+            <div class="space-y-3">
+                @foreach($application->assistanceRecommendations as $recommendation)
+                    <div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                                <p class="font-semibold text-[#234E70]">
+                                    {{ $recommendation->assistanceType->name ?? '-' }}
+                                    @if($recommendation->assistanceSubtype)
+                                        / {{ $recommendation->assistanceSubtype->name }}
+                                    @endif
+                                    @if($recommendation->assistanceDetail)
+                                        / {{ $recommendation->assistanceDetail->name }}
+                                    @endif
+                                </p>
+                                <p class="mt-1 text-sm text-gray-500">
+                                    Mode: {{ $recommendation->modeOfAssistance->name ?? '-' }}
+                                </p>
+                            </div>
+
+                            <div class="text-left md:text-right">
+                                <p class="text-xs text-gray-500">Final Amount</p>
+                                <p class="text-lg font-bold text-[#234E70]">
+                                    PHP {{ number_format($recommendation->final_amount, 2) }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 grid gap-3 text-sm md:grid-cols-2">
+                            <div>
+                                <span class="muted">Frequency Status</span><br>
+                                {{ strtoupper(str_replace('_', ' ', $recommendation->frequency_status ?? 'not checked')) }}
+                            </div>
+                            <div>
+                                <span class="muted">Frequency Message</span><br>
+                                {{ $recommendation->frequency_message ?: '-' }}
+                            </div>
+                        </div>
+
+                        @if($recommendation->notes)
+                            <p class="mt-3 text-sm text-gray-700">{{ $recommendation->notes }}</p>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
 
     <div class="card">
         <h2 class="title">Assessment Notes</h2>

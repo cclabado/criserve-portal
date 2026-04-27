@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Application;
+use App\Models\ApplicationAssistanceRecommendation;
 use App\Models\AssistanceFrequencyRule;
 use Carbon\Carbon;
 
@@ -114,7 +115,65 @@ class FrequencyEligibilityService
             $query->whereRaw('LOWER(TRIM(frequency_case_key)) = ?', [$caseKey]);
         }
 
-        return $query->latest('updated_at')->latest('id')->first();
+        $primaryApplication = $query->latest('updated_at')->latest('id')->first();
+        $recommendationApplication = $this->resolvePriorRecommendationApplication(
+            $payload,
+            $rule,
+            $caseKey,
+            $currentApplication
+        );
+
+        if (! $primaryApplication) {
+            return $recommendationApplication;
+        }
+
+        if (! $recommendationApplication) {
+            return $primaryApplication;
+        }
+
+        return $recommendationApplication->updated_at->greaterThan($primaryApplication->updated_at)
+            ? $recommendationApplication
+            : $primaryApplication;
+    }
+
+    protected function resolvePriorRecommendationApplication(
+        array $payload,
+        AssistanceFrequencyRule $rule,
+        ?string $caseKey,
+        ?Application $currentApplication
+    ): ?Application {
+        $query = ApplicationAssistanceRecommendation::query()
+            ->with('application')
+            ->where('assistance_subtype_id', $payload['assistance_subtype_id'])
+            ->whereHas('application', function ($applicationQuery) use ($payload, $currentApplication) {
+                $applicationQuery->where('status', 'released');
+
+                if (($payload['frequency_subject'] ?? 'client') === 'beneficiary') {
+                    if (empty($payload['beneficiary_profile_id'])) {
+                        $applicationQuery->whereRaw('1 = 0');
+                        return;
+                    }
+
+                    $applicationQuery->where('beneficiary_profile_id', $payload['beneficiary_profile_id']);
+                } else {
+                    $applicationQuery->where('client_id', $payload['client_id'])
+                        ->whereNull('beneficiary_profile_id');
+                }
+
+                if ($currentApplication) {
+                    $applicationQuery->where('id', '!=', $currentApplication->id);
+                }
+            });
+
+        if ($rule->assistance_detail_id) {
+            $query->where('assistance_detail_id', $rule->assistance_detail_id);
+        }
+
+        if (in_array($rule->rule_type, ['per_incident', 'per_admission'], true) && $caseKey) {
+            $query->whereRaw('LOWER(TRIM(frequency_case_key)) = ?', [$caseKey]);
+        }
+
+        return $query->latest('updated_at')->latest('id')->first()?->application;
     }
 
     protected function evaluateWindowRule(

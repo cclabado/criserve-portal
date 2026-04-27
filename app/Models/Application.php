@@ -182,5 +182,10 @@ class Application extends Model
     {
         return $this->hasMany(Document::class);
     }
+
+    public function assistanceRecommendations()
+    {
+        return $this->hasMany(ApplicationAssistanceRecommendation::class)->orderBy('sort_order')->orderBy('id');
+    }
 }
     

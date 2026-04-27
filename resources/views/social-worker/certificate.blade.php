@@ -259,8 +259,20 @@
         $application->assistanceSubtype?->name,
         $application->assistanceDetail?->name,
     ])));
+    $additionalAssistanceLabels = $application->assistanceRecommendations->map(function ($recommendation) {
+        return trim(implode(' - ', array_filter([
+            $recommendation->assistanceType?->name,
+            $recommendation->assistanceSubtype?->name,
+            $recommendation->assistanceDetail?->name,
+        ])));
+    })->filter();
+    $assistanceLabel = collect([$assistanceLabel])
+        ->merge($additionalAssistanceLabels)
+        ->filter()
+        ->implode('; ');
     $purpose = $application->problem_statement ?: $application->crisis_type ?: ($assistanceLabel ?: 'financial assistance');
-    $amount = (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
+    $amount = (float) ($application->final_amount ?? $application->recommended_amount ?? 0)
+        + $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount);
     $amountFormatted = 'PhP '.number_format($amount, 2);
     $amountWhole = (int) round($amount);
     $amountWords = $amountWhole > 0
