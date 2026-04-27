@@ -5,8 +5,8 @@
 @php
     $user = auth()->user();
     $existingClient = $client;
-    $relationships = \App\Models\Relationship::all();
-    $familyRelationships = $relationships->where('id', '!=', 1)->values();
+    $relationships = \App\Models\Relationship::where('name', '!=', 'Other')->get();
+    $familyRelationships = $relationships->where('name', '!=', 'Self')->values();
     $assistanceTypes = \App\Models\AssistanceType::with(['subtypes.frequencyRule', 'subtypes.details.frequencyRule'])->get();
     $modesOfAssistance = \App\Models\ModeOfAssistance::orderBy('name')->get();
 

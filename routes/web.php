@@ -52,6 +52,10 @@ Route::middleware(['auth', 'role:client'])->group(function () {
         ->name('client.dashboard');
     Route::get('/client/applications', [ClientDashboardController::class, 'applications'])
         ->name('client.applications');
+    Route::get('/client/family', [ClientDashboardController::class, 'family'])
+        ->name('client.family');
+    Route::post('/client/family', [ClientDashboardController::class, 'updateFamily'])
+        ->name('client.family.update');
 
     Route::get('/client/application', [ApplicationController::class, 'create']);
     Route::post('/client/beneficiary-profile/lookup', [ApplicationController::class, 'lookupBeneficiaryProfile'])

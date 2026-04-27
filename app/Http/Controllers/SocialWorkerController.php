@@ -814,7 +814,22 @@ class SocialWorkerController extends Controller
                 ->familyMembers()
                 ->with('relationshipData')
                 ->orderBy('id')
-                ->get();
+                ->get()
+                ->unique(function (FamilyMember $member) {
+                    if ($member->person_id) {
+                        return 'person:'.$member->person_id;
+                    }
+
+                    return implode('|', [
+                        strtolower(trim((string) $member->last_name)),
+                        strtolower(trim((string) $member->first_name)),
+                        strtolower(trim((string) ($member->middle_name ?? ''))),
+                        strtolower(trim((string) ($member->extension_name ?? ''))),
+                        (string) $member->birthdate,
+                        (string) $member->relationship,
+                    ]);
+                })
+                ->values();
         }
 
         return $application->client
@@ -822,7 +837,22 @@ class SocialWorkerController extends Controller
             ->whereNull('beneficiary_profile_id')
             ->with('relationshipData')
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->unique(function (FamilyMember $member) {
+                if ($member->person_id) {
+                    return 'person:'.$member->person_id;
+                }
+
+                return implode('|', [
+                    strtolower(trim((string) $member->last_name)),
+                    strtolower(trim((string) $member->first_name)),
+                    strtolower(trim((string) ($member->middle_name ?? ''))),
+                    strtolower(trim((string) ($member->extension_name ?? ''))),
+                    (string) $member->birthdate,
+                    (string) $member->relationship,
+                ]);
+            })
+            ->values();
     }
 
     protected function validateAssistanceSelection(int $typeId, int $subtypeId, ?int $detailId): void

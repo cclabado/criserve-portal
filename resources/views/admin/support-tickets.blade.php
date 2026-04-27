@@ -31,26 +31,41 @@
             </div>
         </div>
 
-        <form method="GET" class="mt-6 flex flex-col gap-3 md:flex-row">
-            <input
-                type="text"
-                name="search"
-                value="{{ $filters['search'] }}"
-                placeholder="Search by name, email, subject, or message"
-                class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:bg-white"
-            >
+        <form method="GET" class="mt-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+            <div class="grid gap-4 xl:grid-cols-[minmax(0,1.75fr)_280px_auto_auto] xl:items-end">
+                <label class="space-y-2">
+                    <span class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Search Tickets</span>
+                    <input
+                        type="text"
+                        name="search"
+                        value="{{ $filters['search'] }}"
+                        placeholder="Search by name, email, subject, or message"
+                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                    >
+                </label>
 
-            <select name="status" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:bg-white">
-                <option value="all" {{ $filters['status'] === 'all' ? 'selected' : '' }}>All Statuses</option>
-                <option value="open" {{ $filters['status'] === 'open' ? 'selected' : '' }}>Open</option>
-                <option value="in_progress" {{ $filters['status'] === 'in_progress' ? 'selected' : '' }}>In Progress</option>
-                <option value="resolved" {{ $filters['status'] === 'resolved' ? 'selected' : '' }}>Resolved</option>
-                <option value="closed" {{ $filters['status'] === 'closed' ? 'selected' : '' }}>Closed</option>
-            </select>
+                <label class="space-y-2">
+                    <span class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Status</span>
+                    <select name="status" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100">
+                        <option value="all" {{ $filters['status'] === 'all' ? 'selected' : '' }}>All Statuses</option>
+                        <option value="open" {{ $filters['status'] === 'open' ? 'selected' : '' }}>Open</option>
+                        <option value="in_progress" {{ $filters['status'] === 'in_progress' ? 'selected' : '' }}>In Progress</option>
+                        <option value="resolved" {{ $filters['status'] === 'resolved' ? 'selected' : '' }}>Resolved</option>
+                        <option value="closed" {{ $filters['status'] === 'closed' ? 'selected' : '' }}>Closed</option>
+                    </select>
+                </label>
 
-            <button type="submit" class="rounded-xl bg-[#163750] px-5 py-3 text-sm font-semibold text-white hover:bg-[#123149]">
-                Filter
-            </button>
+                <button type="submit" class="rounded-xl bg-[#163750] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#123149]">
+                    Filter
+                </button>
+
+                <a
+                    href="{{ route('admin.support-tickets') }}"
+                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                >
+                    Clear
+                </a>
+            </div>
         </form>
     </section>
 

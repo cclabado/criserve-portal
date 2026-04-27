@@ -33,7 +33,11 @@ class ApplicationController extends Controller
     {
         $user = auth()->user();
         $client = Client::with([
-                'familyMembers.relationshipData',
+                'familyMembers' => function ($query) {
+                    $query->whereNull('application_id')
+                        ->whereNull('beneficiary_profile_id')
+                        ->with('relationshipData');
+                },
                 'beneficiaryProfiles.familyMembers.relationshipData',
             ])
             ->where('user_id', $user->id)

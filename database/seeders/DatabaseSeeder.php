@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
     public function run()
     {
         $this->call(RelationshipSeeder::class);
+        $this->call(RelationshipBackfillSeeder::class);
         $this->call(ModeOfAssistanceSeeder::class);
         $this->call(AssistanceSeeder::class);
         $this->call(AssistanceFrequencyRuleSeeder::class);

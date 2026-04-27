@@ -65,6 +65,16 @@
             <span class="text-sm tracking-wide">Applications</span>
         </a>
 
+        <a href="/client/family"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('client/family*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('client/family*') }}">
+                family_restroom
+            </span>
+
+            <span class="text-sm tracking-wide">My Family</span>
+        </a>
+
         <a href="/client/application"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('client/application') }}">
 

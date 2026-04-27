@@ -216,8 +216,64 @@ class FamilyNetworkService
             $nodes->put($application->beneficiary->person->id, $this->formatNode($application->beneficiary->person, 'Beneficiary'));
         }
 
+        $defaultAnchorRole = $application->usesBeneficiaryHousehold() ? 'Beneficiary Household Root' : 'Client Household Root';
+        $inferredAnchorRole = $this->inferAnchorRoleFromEdges($edges);
+
         return [
-            'anchor' => $anchorPerson ? $this->formatNode($anchorPerson, $application->usesBeneficiaryHousehold() ? 'Beneficiary Household Root' : 'Client Household Root') : null,
+            'anchor' => $anchorPerson ? [
+                ...$this->formatNode($anchorPerson, $defaultAnchorRole),
+                'role_display' => $inferredAnchorRole ?: $defaultAnchorRole,
+            ] : null,
+            'nodes' => $nodes->values()->all(),
+            'edges' => $edges->all(),
+        ];
+    }
+
+    public function buildClientNetwork(Client $client): array
+    {
+        $client->loadMissing([
+            'user',
+            'person.users',
+            'familyMembers' => function ($query) {
+                $query->whereNull('beneficiary_profile_id')
+                    ->whereNull('application_id')
+                    ->with(['person.users', 'relationshipData'])
+                    ->orderBy('id');
+            },
+        ]);
+
+        $anchorPerson = $client->person ?: $this->syncClient($client);
+        $nodes = collect();
+        $edges = collect();
+
+        if ($anchorPerson) {
+            $anchorPerson->loadMissing('users');
+            $nodes->put($anchorPerson->id, $this->formatNode($anchorPerson, 'Client Household Root'));
+        }
+
+        foreach ($client->familyMembers as $member) {
+            if (! $member->person) {
+                continue;
+            }
+
+            $nodes->put($member->person->id, $this->formatNode($member->person, 'Family Member'));
+
+            if ($anchorPerson && $anchorPerson->id !== $member->person->id) {
+                $edges->push([
+                    'from' => $anchorPerson->id,
+                    'to' => $member->person->id,
+                    'label' => $member->relationshipData->name ?? $member->relationship ?? 'Related',
+                ]);
+            }
+        }
+
+        $inferredAnchorRole = $this->inferAnchorRoleFromEdges($edges);
+
+        return [
+            'anchor' => $anchorPerson ? [
+                ...$this->formatNode($anchorPerson, 'Client Household Root'),
+                'role_display' => $inferredAnchorRole ?: 'Client Household Root',
+            ] : null,
             'nodes' => $nodes->values()->all(),
             'edges' => $edges->all(),
         ];
@@ -265,11 +321,11 @@ class FamilyNetworkService
     protected function resolveHouseholdMembers(Application $application): Collection
     {
         if ($application->usesBeneficiaryHousehold() && $application->beneficiaryProfile) {
-            return $application->beneficiaryProfile
+            return $this->deduplicateHouseholdMembers($application->beneficiaryProfile
                 ->familyMembers()
                 ->with(['person.users', 'relationshipData'])
                 ->orderBy('id')
-                ->get();
+                ->get());
         }
 
         return $application->client
@@ -278,7 +334,28 @@ class FamilyNetworkService
                 ->with(['person.users', 'relationshipData'])
                 ->orderBy('id')
                 ->get()
+                ->pipe(fn (Collection $members) => $this->deduplicateHouseholdMembers($members))
             : collect();
+    }
+
+    protected function deduplicateHouseholdMembers(Collection $members): Collection
+    {
+        return $members
+            ->unique(function (FamilyMember $member) {
+                if ($member->person_id) {
+                    return 'person:'.$member->person_id;
+                }
+
+                return implode('|', [
+                    strtolower(trim((string) $member->last_name)),
+                    strtolower(trim((string) $member->first_name)),
+                    strtolower(trim((string) ($member->middle_name ?? ''))),
+                    strtolower(trim((string) ($member->extension_name ?? ''))),
+                    (string) $member->birthdate,
+                    (string) $member->relationship,
+                ]);
+            })
+            ->values();
     }
 
     protected function formatNode(Person $person, string $role): array
@@ -293,5 +370,31 @@ class FamilyNetworkService
             'has_account' => (bool) $linkedAccount,
             'account_email' => $linkedAccount?->email,
         ];
+    }
+
+    protected function inferAnchorRoleFromEdges(Collection $edges): ?string
+    {
+        $labels = $edges
+            ->pluck('label')
+            ->map(fn ($label) => strtolower(trim((string) $label)))
+            ->values();
+
+        if ($labels->contains(fn ($label) => in_array($label, ['mother', 'father', 'parent', 'guardian', 'grandmother', 'grandfather'], true))) {
+            return 'Child';
+        }
+
+        if ($labels->contains(fn ($label) => in_array($label, ['son', 'daughter', 'child'], true))) {
+            return 'Parent';
+        }
+
+        if ($labels->contains(fn ($label) => in_array($label, ['wife', 'husband', 'spouse', 'partner'], true))) {
+            return 'Spouse';
+        }
+
+        if ($labels->contains(fn ($label) => in_array($label, ['brother', 'sister', 'sibling'], true))) {
+            return 'Sibling';
+        }
+
+        return null;
     }
 }
