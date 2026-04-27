@@ -50,7 +50,7 @@
         </div>
     @endif
 
-    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <article class="metric-card">
             <p class="metric-label">Users</p>
             <p class="metric-value">{{ number_format($stats['total_users']) }}</p>
@@ -73,6 +73,12 @@
             <p class="metric-label">Released</p>
             <p class="metric-value">{{ number_format($stats['released']) }}</p>
             <p class="metric-copy">Approved cases already released.</p>
+        </article>
+
+        <article class="metric-card">
+            <p class="metric-label">Open Support Tickets</p>
+            <p class="metric-value">{{ number_format($stats['open_support_tickets']) }}</p>
+            <p class="metric-copy">Support requests waiting for review.</p>
         </article>
     </section>
 
@@ -111,6 +117,11 @@
                 <a href="{{ route('admin.libraries') }}" class="btn-secondary inline-flex items-center gap-2">
                     <span class="material-symbols-outlined text-[18px]">library_books</span>
                     Open Libraries
+                </a>
+
+                <a href="{{ route('admin.support-tickets') }}" class="btn-secondary inline-flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">support_agent</span>
+                    Open Support Tickets
                 </a>
             </div>
         </div>

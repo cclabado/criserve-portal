@@ -5,9 +5,9 @@
 <main class="p-8 max-w-6xl mx-auto space-y-6">
 
     <div>
-        <a href="{{ route('approving.applications') }}"
+        <a href="{{ ($readOnly ?? false) ? route('approving.my-approvals') : route('approving.applications') }}"
            class="text-sm text-gray-500 hover:text-[#234E70]">
-            &larr; Back to Approvals
+            &larr; Back to {{ ($readOnly ?? false) ? 'My Approvals' : 'Approvals' }}
         </a>
 
         <h1 class="mt-2 text-3xl font-bold text-[#234E70]">
@@ -78,8 +78,13 @@
 
             <div>
                 <p class="text-sm text-gray-500">Current Status</p>
-                <p class="font-semibold text-amber-600">
-                    FOR APPROVAL
+                <p class="font-semibold
+                    @if($application->status === 'approved') text-emerald-600
+                    @elseif($application->status === 'denied') text-red-600
+                    @elseif($application->status === 'released') text-sky-600
+                    @else text-amber-600
+                    @endif">
+                    {{ strtoupper(str_replace('_', ' ', $application->status)) }}
                 </p>
             </div>
         </div>
@@ -128,51 +133,53 @@
         </div>
     </div>
 
-    <div class="card">
-        <h2 class="title">Final Decision</h2>
+    @if(!($readOnly ?? false) && $application->status === 'for_approval')
+        <div class="card">
+            <h2 class="title">Final Decision</h2>
 
-        <div class="grid grid-cols-2 gap-6 items-end">
-            <form method="POST"
-                  action="{{ route('approving.approve', $application->id) }}"
-                  class="space-y-3">
-                @csrf
+            <div class="grid grid-cols-2 gap-6 items-end">
+                <form method="POST"
+                      action="{{ route('approving.approve', $application->id) }}"
+                      class="space-y-3">
+                    @csrf
 
-                <div>
-                    <label class="label">Final Approved Amount</label>
+                    <div>
+                        <label class="label">Final Approved Amount</label>
 
-                    <input type="number"
-                           step="0.01"
-                           name="final_amount"
-                           class="input w-full"
-                           value="{{ $application->final_amount ?? $application->recommended_amount }}">
-                </div>
+                        <input type="number"
+                               step="0.01"
+                               name="final_amount"
+                               class="input w-full"
+                               value="{{ $application->final_amount ?? $application->recommended_amount }}">
+                    </div>
 
-                <button type="submit"
-                        class="w-full rounded-lg bg-green-600 px-5 py-3 text-white hover:bg-green-700">
-                    Approve Application
-                </button>
-            </form>
+                    <button type="submit"
+                            class="w-full rounded-lg bg-green-600 px-5 py-3 text-white hover:bg-green-700">
+                        Approve Application
+                    </button>
+                </form>
 
-            <form method="POST"
-                  action="{{ route('approving.deny', $application->id) }}"
-                  class="space-y-3">
-                @csrf
+                <form method="POST"
+                      action="{{ route('approving.deny', $application->id) }}"
+                      class="space-y-3">
+                    @csrf
 
-                <div>
-                    <label class="label">Reason for Denial</label>
+                    <div>
+                        <label class="label">Reason for Denial</label>
 
-                    <textarea name="denial_reason"
-                              class="input h-24 w-full"
-                              placeholder="Enter denial reason..."></textarea>
-                </div>
+                        <textarea name="denial_reason"
+                                  class="input h-24 w-full"
+                                  placeholder="Enter denial reason..."></textarea>
+                    </div>
 
-                <button type="submit"
-                        class="w-full rounded-lg bg-red-600 px-5 py-3 text-white hover:bg-red-700">
-                    Deny Application
-                </button>
-            </form>
+                    <button type="submit"
+                            class="w-full rounded-lg bg-red-600 px-5 py-3 text-white hover:bg-red-700">
+                        Deny Application
+                    </button>
+                </form>
+            </div>
         </div>
-    </div>
+    @endif
 
 </main>
 

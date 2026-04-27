@@ -66,6 +66,11 @@ class AssistanceSeeder extends Seeder
                     'Transfer of Cadaver',
                     'Casualties during Disaster / Calamity',
                 ],
+                'Transportation Assistance' => [
+                    'Land Travel',
+                    'Sea Travel',
+                    'Air Travel',
+                ],
             ];
 
             foreach ($detailLibrary as $subtypeName => $details) {

@@ -30,7 +30,6 @@ body { font-family: 'Inter', sans-serif; }
 
 <body class="bg-gray-100">
 
-<!-- NAV -->
 <header class="flex justify-between items-center px-8 py-4 bg-white shadow">
     <h1 class="font-bold text-[#0B3C5D]">CrIServe Portal</h1>
 
@@ -42,31 +41,57 @@ body { font-family: 'Inter', sans-serif; }
     </div>
 </header>
 
-<!-- MAIN -->
 <div class="max-w-6xl mx-auto mt-10 grid grid-cols-12 gap-8 px-6">
 
-<!-- LEFT PANEL -->
 <div class="col-span-4 bg-gradient-to-br from-[#0B3C5D] to-[#174A6B] text-white p-8 rounded-xl">
 <h2 class="text-2xl font-bold mb-4">CrIServe Portal Registration</h2>
 <p class="text-sm mb-6 text-blue-100">
 Join the unified digital infrastructure for public service.
 </p>
 <ul class="space-y-3 text-sm">
-<li>✔ End-to-end encrypted identity verification</li>
-<li>✔ Personalized service dashboard</li>
+<li>- End-to-end encrypted identity verification</li>
+<li>- Personalized service dashboard</li>
 </ul>
 </div>
 
-<!-- FORM -->
 <div class="col-span-8 bg-white rounded-xl p-8 shadow">
 
+<div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+<p class="font-bold">One client, one account only.</p>
+<p class="mt-1">
+If you already registered before, please sign in with your existing account. If you forgot your password, use password reset through your email. If you no longer have access to that email, please contact support for account recovery.
+</p>
+<div class="mt-4 flex flex-wrap gap-3">
+<a href="{{ route('login') }}" class="inline-flex items-center rounded-lg bg-[#0B3C5D] px-4 py-2 text-xs font-bold text-white hover:opacity-90">
+Sign In
+</a>
+<a href="{{ route('password.request') }}" class="inline-flex items-center rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100">
+Forgot Password
+</a>
+<a href="{{ route('support.create', ['source' => 'account-recovery']) }}" class="inline-flex items-center rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100">
+Contact Support
+</a>
+</div>
+</div>
+
 @if ($errors->any())
-<div class="mb-4 p-4 bg-red-100 border border-red-300 text-red-700 rounded">
+<div class="mb-4 rounded-xl border border-red-300 bg-red-100 p-4 text-red-700">
 <ul class="text-sm space-y-1">
 @foreach ($errors->all() as $error)
-<li>• {{ $error }}</li>
+<li>- {{ $error }}</li>
 @endforeach
 </ul>
+<div class="mt-4 flex flex-wrap gap-3">
+<a href="{{ route('login') }}" class="inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700">
+Go to Sign In
+</a>
+<a href="{{ route('password.request') }}" class="inline-flex items-center rounded-lg border border-red-300 bg-white px-4 py-2 text-xs font-bold text-red-700 hover:bg-red-50">
+Reset Password
+</a>
+<a href="{{ route('support.create', ['source' => 'account-recovery']) }}" class="inline-flex items-center rounded-lg border border-red-300 bg-white px-4 py-2 text-xs font-bold text-red-700 hover:bg-red-50">
+Contact Support
+</a>
+</div>
 </div>
 @endif
 
@@ -79,7 +104,6 @@ Join the unified digital infrastructure for public service.
 <form method="POST" action="{{ route('register') }}" class="space-y-8">
 @csrf
 
-<!-- STEP 1 -->
 <div>
 <span class="text-xs font-bold bg-gray-200 px-2 py-1 rounded">STEP 1</span>
 <h3 class="text-lg font-bold mt-2 text-[#0B3C5D]">Account Credentials</h3>
@@ -108,7 +132,6 @@ Join the unified digital infrastructure for public service.
 </div>
 </div>
 
-<!-- STEP 2 -->
 <div>
 <span class="text-xs font-bold bg-gray-200 px-2 py-1 rounded">STEP 2</span>
 <h3 class="text-lg font-bold mt-2 text-[#0B3C5D]">Personal Information</h3>
@@ -171,7 +194,6 @@ Join the unified digital infrastructure for public service.
 </div>
 </div>
 
-<!-- ACTION -->
 <div class="flex justify-end gap-4 pt-6 border-t">
 
 <button type="reset" class="px-6 py-3 bg-gray-200 rounded-lg">

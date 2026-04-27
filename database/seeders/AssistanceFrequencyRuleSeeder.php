@@ -16,7 +16,7 @@ class AssistanceFrequencyRuleSeeder extends Seeder
                 'rule_type' => 'once_per_year',
                 'interval_months' => 12,
                 'allows_exception_request' => true,
-                'notes' => 'General rule: once a year. Exception review may apply for consecutive family deaths or medical travel needs.',
+                'notes' => 'General rule: once a year for transportation assistance. Exception review may apply for consecutive family deaths or medical travel needs.',
             ],
             'Cash Relief Assistance' => [
                 'rule_type' => 'per_incident',
@@ -93,6 +93,17 @@ class AssistanceFrequencyRuleSeeder extends Seeder
                 ],
                 $payload
             );
+        }
+
+        $transportationSubtype = AssistanceSubtype::where('name', 'Transportation Assistance')->first();
+
+        if ($transportationSubtype) {
+            $transportationDetailIds = AssistanceDetail::where('assistance_subtype_id', $transportationSubtype->id)
+                ->pluck('id');
+
+            if ($transportationDetailIds->isNotEmpty()) {
+                AssistanceFrequencyRule::whereIn('assistance_detail_id', $transportationDetailIds)->delete();
+            }
         }
     }
 }

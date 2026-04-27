@@ -26,7 +26,7 @@ class FrequencyEligibilityService
 
         $referenceDate = now()->startOfDay();
         $caseKey = $this->normalizeCaseKey($payload['frequency_case_key'] ?? null);
-        $exceptionReason = trim((string) ($payload['frequency_exception_reason'] ?? ''));
+        $justification = trim((string) ($payload['frequency_override_reason'] ?? ''));
 
         if ($rule->requires_case_key && $caseKey === null) {
             return [
@@ -53,7 +53,7 @@ class FrequencyEligibilityService
             : $priorApplication->created_at->copy()->startOfDay();
 
         return match ($rule->rule_type) {
-            'once_per_year' => $this->evaluateWindowRule($rule, $priorApplication, $priorDate, $referenceDate, $exceptionReason, 'year'),
+            'once_per_year' => $this->evaluateWindowRule($rule, $priorApplication, $priorDate, $referenceDate, $justification, 'year'),
             'every_n_months' => $this->evaluateMonthRule($rule, $priorApplication, $priorDate, $referenceDate),
             'every_n_months_review' => $this->evaluateMonthReviewRule($rule, $priorApplication, $priorDate, $referenceDate),
             'per_incident', 'per_admission' => $this->evaluateIncidentRule($rule, $priorApplication),
@@ -95,7 +95,11 @@ class FrequencyEligibilityService
             $query->where('assistance_detail_id', $rule->assistance_detail_id);
         }
 
-        if (! empty($payload['beneficiary_profile_id'])) {
+        if (($payload['frequency_subject'] ?? 'client') === 'beneficiary') {
+            if (empty($payload['beneficiary_profile_id'])) {
+                return null;
+            }
+
             $query->where('beneficiary_profile_id', $payload['beneficiary_profile_id']);
         } else {
             $query->where('client_id', $payload['client_id'])

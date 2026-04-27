@@ -19,6 +19,7 @@
                 'last_name' => $member->last_name,
                 'first_name' => $member->first_name,
                 'middle_name' => $member->middle_name,
+                'extension_name' => $member->extension_name,
                 'relationship' => $member->relationship,
                 'birthdate' => $member->birthdate,
             ];
@@ -31,6 +32,7 @@
                 'last_name' => $lastName,
                 'first_name' => old("family_first_name.$index"),
                 'middle_name' => old("family_middle_name.$index"),
+                'extension_name' => old("family_extension_name.$index"),
                 'relationship' => old("family_relationship.$index"),
                 'birthdate' => old("family_birthdate.$index"),
             ];
@@ -248,7 +250,7 @@ Continue &rarr;
     </p>
 </template>
 
-<div class="grid grid-cols-4 text-xs text-gray-500 px-4 mb-2">
+<div class="grid gap-4 px-4 mb-2 text-xs text-gray-500 md:grid-cols-[1.5fr_1fr_0.9fr_0.45fr]">
 <div>FULL NAME</div>
 <div>RELATIONSHIP</div>
 <div>DATE OF BIRTH</div>
@@ -257,13 +259,14 @@ Continue &rarr;
 
 <div id="family-table" class="space-y-3">
     <template x-for="(member, index) in familyRows" :key="index">
-        <div class="grid grid-cols-4 items-center bg-gray-100 rounded-xl px-4 py-3 family-row">
+        <div class="grid items-center gap-4 rounded-xl bg-gray-100 px-4 py-3 family-row md:grid-cols-[1.5fr_1fr_0.9fr_0.45fr]">
             <input type="hidden" name="family_id[]" :value="member.id ?? ''">
 
-            <div class="flex gap-1">
-                <input name="family_last_name[]" placeholder="Last" x-model="member.last_name" class="bg-transparent outline-none w-1/3">
-                <input name="family_first_name[]" placeholder="First" x-model="member.first_name" class="bg-transparent outline-none w-1/3">
-                <input name="family_middle_name[]" placeholder="Middle" x-model="member.middle_name" class="bg-transparent outline-none w-1/3">
+            <div class="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-4">
+                <input name="family_last_name[]" placeholder="Last" x-model="member.last_name" class="min-w-0 rounded-lg border border-transparent bg-white/70 px-3 py-2 outline-none transition focus:border-[#234E70] focus:bg-white">
+                <input name="family_first_name[]" placeholder="First" x-model="member.first_name" class="min-w-0 rounded-lg border border-transparent bg-white/70 px-3 py-2 outline-none transition focus:border-[#234E70] focus:bg-white">
+                <input name="family_middle_name[]" placeholder="Middle" x-model="member.middle_name" class="min-w-0 rounded-lg border border-transparent bg-white/70 px-3 py-2 outline-none transition focus:border-[#234E70] focus:bg-white">
+                <input name="family_extension_name[]" placeholder="Ext." x-model="member.extension_name" class="min-w-0 rounded-lg border border-transparent bg-white/70 px-3 py-2 outline-none transition focus:border-[#234E70] focus:bg-white">
             </div>
 
             <div class="select-shell">
@@ -275,9 +278,9 @@ Continue &rarr;
             </select>
             </div>
 
-            <input type="date" name="family_birthdate[]" x-model="member.birthdate" class="bg-transparent outline-none">
+            <input type="date" name="family_birthdate[]" x-model="member.birthdate" class="min-w-0 rounded-lg border border-transparent bg-white/70 px-3 py-2 outline-none transition focus:border-[#234E70] focus:bg-white">
 
-            <div class="text-center">
+            <div class="text-center md:text-right">
                 <button type="button" @click="removeRow(index)" class="text-red-500">Remove</button>
             </div>
         </div>
@@ -666,6 +669,7 @@ function applicationForm() {
                 last_name: '',
                 first_name: '',
                 middle_name: '',
+                extension_name: '',
                 relationship: '',
                 birthdate: '',
             };
@@ -681,6 +685,7 @@ function applicationForm() {
                 last_name: row.last_name ?? '',
                 first_name: row.first_name ?? '',
                 middle_name: row.middle_name ?? '',
+                extension_name: row.extension_name ?? '',
                 relationship: row.relationship ? String(row.relationship) : '',
                 birthdate: row.birthdate ?? '',
             }));

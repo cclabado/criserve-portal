@@ -11,6 +11,7 @@ class Application extends Model
         'beneficiary_profile_id',
         'user_id',
         'social_worker_id',
+        'approving_officer_id',
         'reference_no', 
         'assistance_type_id',
         'assistance_subtype_id',
@@ -114,6 +115,11 @@ class Application extends Model
         return $this->belongsTo(User::class, 'social_worker_id');
     }
 
+    public function approvingOfficer()
+    {
+        return $this->belongsTo(User::class, 'approving_officer_id');
+    }
+
     public function beneficiaryProfile()
     {
         return $this->belongsTo(BeneficiaryProfile::class);
@@ -122,6 +128,11 @@ class Application extends Model
     public function beneficiary()
     {
         return $this->hasOne(Beneficiary::class);
+    }
+
+    public function applicationFamilyMembers()
+    {
+        return $this->hasMany(FamilyMember::class)->orderBy('id');
     }
 
     public function usesBeneficiaryHousehold(): bool

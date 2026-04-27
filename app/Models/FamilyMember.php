@@ -9,6 +9,8 @@ class FamilyMember extends Model
     protected $fillable = [
         'application_id',
         'client_id',
+        'linked_user_id',
+        'person_id',
         'beneficiary_profile_id',
         'last_name',
         'first_name',
@@ -26,6 +28,16 @@ class FamilyMember extends Model
     public function client()
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function linkedUser()
+    {
+        return $this->belongsTo(User::class, 'linked_user_id');
+    }
+
+    public function person()
+    {
+        return $this->belongsTo(Person::class);
     }
 
     public function beneficiaryProfile()

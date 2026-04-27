@@ -10,6 +10,16 @@
         'overridden' => 'bg-sky-100 text-sky-800 border border-sky-200',
         'not_applicable' => 'bg-slate-100 text-slate-700 border border-slate-200',
     ];
+    $statusBadgeClasses = match ($application->status) {
+        'submitted' => 'bg-amber-100 text-amber-700 border border-amber-200',
+        'under_review' => 'bg-blue-100 text-blue-700 border border-blue-200',
+        'for_approval' => 'bg-indigo-100 text-indigo-700 border border-indigo-200',
+        'approved' => 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+        'released' => 'bg-sky-100 text-sky-700 border border-sky-200',
+        'denied' => 'bg-rose-100 text-rose-700 border border-rose-200',
+        'cancelled' => 'bg-slate-200 text-slate-700 border border-slate-300',
+        default => 'bg-slate-100 text-slate-700 border border-slate-200',
+    };
 @endphp
 
 <div class="max-w-7xl mx-auto py-8 space-y-8">
@@ -20,14 +30,62 @@
         ← BACK TO DASHBOARD
     </a>
 
-    <h1 class="text-3xl font-bold text-[#234E70]">
-        Application Details
-    </h1>
+    <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-[#234E70]">
+                Application Details
+            </h1>
 
-    <p class="text-gray-500">
-        Reference No: {{ $application->reference_no }}
+            <p class="text-gray-500">
+                Reference No: {{ $application->reference_no }}
+            </p>
+        </div>
+
+        <span class="inline-flex w-fit items-center rounded-full px-4 py-2 text-xs font-bold uppercase {{ $statusBadgeClasses }}">
+            {{ str_replace('_', ' ', $application->status) }}
+        </span>
+    </div>
+</div>
+
+<div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+    <div class="mb-5">
+        <h2 class="text-lg font-bold text-[#234E70]">
+            Application Status
+        </h2>
+        <div class="w-14 h-1 bg-[#234E70] rounded mt-1"></div>
+    </div>
+
+    <div class="grid gap-6 md:grid-cols-2">
+        <div>
+            <p class="text-xs text-gray-500">Current Status</p>
+            <div class="mt-2">
+                <span class="inline-flex items-center rounded-full px-4 py-2 text-sm font-bold uppercase tracking-[0.12em] {{ $statusBadgeClasses }}">
+                    {{ str_replace('_', ' ', $application->status) }}
+                </span>
+            </div>
+        </div>
+
+        <div>
+            <p class="text-xs text-gray-500">Application Reference</p>
+            <p class="mt-2 font-semibold text-gray-800">{{ $application->reference_no }}</p>
+        </div>
+    </div>
+</div>
+
+@if(in_array($application->status, ['denied', 'cancelled'], true) && filled($application->denial_reason))
+<div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+    <div class="mb-5">
+        <h2 class="text-lg font-bold text-[#234E70]">
+            {{ $application->status === 'cancelled' ? 'Cancellation Reason' : 'Denial Reason' }}
+        </h2>
+        <div class="w-14 h-1 bg-[#234E70] rounded mt-1"></div>
+    </div>
+
+    <p class="font-semibold text-gray-800 whitespace-pre-line">
+        {{ $application->denial_reason }}
     </p>
 </div>
+@endif
 
 <!-- ================= CLIENT ================= -->
 <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">

@@ -128,6 +128,73 @@
     </div>
 </div>
 
+@if(!empty($familyNetwork['nodes']))
+<div class="card">
+    <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+            <h2 class="title">Family Network</h2>
+            <p class="text-sm text-gray-500">
+                Connected people detected from the client, beneficiary, and household records for this case.
+            </p>
+        </div>
+    </div>
+
+    @if($familyNetwork['anchor'])
+    <div class="network-anchor">
+        <p class="network-kicker">{{ $familyNetwork['anchor']['role'] }}</p>
+        <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+                <p class="network-name">{{ $familyNetwork['anchor']['name'] }}</p>
+                <p class="text-sm text-slate-500">
+                    Birthdate: {{ $familyNetwork['anchor']['birthdate'] ?: 'Not recorded' }}
+                </p>
+            </div>
+
+            @if($familyNetwork['anchor']['has_account'])
+            <span class="network-badge">
+                Linked client account: {{ $familyNetwork['anchor']['account_email'] }}
+            </span>
+            @endif
+        </div>
+    </div>
+    @endif
+
+    <div class="mt-5 grid gap-4 md:grid-cols-2">
+        @foreach($familyNetwork['edges'] as $edge)
+            @php
+                $memberNode = collect($familyNetwork['nodes'])->firstWhere('id', $edge['to']);
+            @endphp
+
+            @if($memberNode)
+            <div class="network-card">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="network-kicker">{{ $edge['label'] }}</p>
+                        <p class="network-name text-lg">{{ $memberNode['name'] }}</p>
+                        <p class="text-sm text-slate-500">
+                            Birthdate: {{ $memberNode['birthdate'] ?: 'Not recorded' }}
+                        </p>
+                    </div>
+
+                    @if($memberNode['has_account'])
+                    <span class="network-badge">
+                        Account linked
+                    </span>
+                    @endif
+                </div>
+
+                @if($memberNode['account_email'])
+                <p class="mt-3 text-xs font-medium text-sky-700">
+                    {{ $memberNode['account_email'] }}
+                </p>
+                @endif
+            </div>
+            @endif
+        @endforeach
+    </div>
+</div>
+@endif
+
 <!-- ASSISTANCE -->
 <div class="card">
     <h2 class="title">Assessment Details</h2>
@@ -245,16 +312,9 @@
         </div>
     </div>
 
-    @if($application->frequency_exception_reason)
-    <div class="mt-4">
-        <span class="muted">Exception Request Reason</span><br>
-        {{ $application->frequency_exception_reason }}
-    </div>
-    @endif
-
     @if($application->frequency_override_reason)
     <div class="mt-4">
-        <span class="muted">Override Reason</span><br>
+        <span class="muted">Justification</span><br>
         {{ $application->frequency_override_reason }}
     </div>
     @endif
@@ -313,6 +373,40 @@
 .muted{
     color:#6b7280;
     font-size:12px;
+}
+.network-anchor,
+.network-card{
+    border:1px solid #dbe7f0;
+    background:linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
+    border-radius:18px;
+    padding:18px;
+}
+.network-anchor{
+    margin-top:8px;
+}
+.network-kicker{
+    font-size:11px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:#64748b;
+    font-weight:800;
+}
+.network-name{
+    margin-top:6px;
+    font-size:22px;
+    line-height:1.2;
+    font-weight:800;
+    color:#163750;
+}
+.network-badge{
+    display:inline-flex;
+    align-items:center;
+    border-radius:999px;
+    background:#e0f2fe;
+    color:#075985;
+    padding:6px 10px;
+    font-size:12px;
+    font-weight:700;
 }
 </style>
 

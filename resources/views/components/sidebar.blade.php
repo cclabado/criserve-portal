@@ -3,14 +3,24 @@
     @php
         $role = auth()->user()->role ?? 'client';
 
-        $navClass = function ($path) {
-            return request()->is($path)
+        $matchesPath = function ($paths) {
+            foreach ((array) $paths as $path) {
+                if (request()->is($path)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        $navClass = function ($path) use ($matchesPath) {
+            return $matchesPath($path)
                 ? 'bg-sky-50 text-sky-900 font-semibold border-r-4 border-sky-700 shadow-sm'
                 : 'text-slate-600 hover:text-sky-700 hover:bg-slate-100';
         };
 
-        $iconClass = function ($path) {
-            return request()->is($path)
+        $iconClass = function ($path) use ($matchesPath) {
+            return $matchesPath($path)
                 ? 'text-sky-700'
                 : 'text-slate-500 group-hover:text-sky-700';
         };
@@ -45,10 +55,20 @@
             <span class="text-sm tracking-wide">Dashboard</span>
         </a>
 
-        <a href="/client/application"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('client/application*') }}">
+        <a href="/client/applications"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass(['client/applications*', 'client/application/*']) }}">
 
-            <span class="material-symbols-outlined {{ $iconClass('client/application*') }}">
+            <span class="material-symbols-outlined {{ $iconClass(['client/applications*', 'client/application/*']) }}">
+                folder_open
+            </span>
+
+            <span class="text-sm tracking-wide">Applications</span>
+        </a>
+
+        <a href="/client/application"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('client/application') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('client/application') }}">
                 description
             </span>
 
@@ -137,6 +157,16 @@
             <span class="text-sm tracking-wide">User Management</span>
         </a>
 
+        <a href="/admin/support-tickets"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/support-tickets*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('admin/support-tickets*') }}">
+                support_agent
+            </span>
+
+            <span class="text-sm tracking-wide">Support Tickets</span>
+        </a>
+
         <a href="/social-worker/applications"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-sky-700 hover:bg-slate-100">
 
@@ -185,6 +215,18 @@
 
                 <span class="text-sm tracking-wide">
                     Approvals
+                </span>
+            </a>
+
+            <a href="/approving-officer/my-approvals"
+            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('approving-officer/my-approvals*') }}">
+
+                <span class="material-symbols-outlined {{ $iconClass('approving-officer/my-approvals*') }}">
+                    approval_delegation
+                </span>
+
+                <span class="text-sm tracking-wide">
+                    My Approvals
                 </span>
             </a>
 

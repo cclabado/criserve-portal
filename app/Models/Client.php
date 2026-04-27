@@ -8,6 +8,7 @@ class Client extends Model
 {
     protected $fillable = [
         'user_id',
+        'person_id',
         'last_name',
         'first_name',
         'middle_name',
@@ -27,6 +28,11 @@ class Client extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function person()
+    {
+        return $this->belongsTo(Person::class);
     }
 
     public function familyMembers()

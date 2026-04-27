@@ -14,6 +14,7 @@ use App\Models\ModeOfAssistance;
 use App\Models\Relationship;
 use App\Notifications\InitialAssessmentScheduledNotification;
 use App\Services\AiRecommendationService;
+use App\Services\FamilyNetworkService;
 use App\Services\FrequencyEligibilityService;
 use App\Services\GoogleCalendarService;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -25,7 +26,8 @@ class SocialWorkerController extends Controller
 {
     public function __construct(
         protected GoogleCalendarService $googleCalendar,
-        protected FrequencyEligibilityService $frequencyEligibility
+        protected FrequencyEligibilityService $frequencyEligibility,
+        protected FamilyNetworkService $familyNetwork
     ) {
     }
 
@@ -242,8 +244,9 @@ class SocialWorkerController extends Controller
         $this->claimOrEnsureOwnership($application);
 
         $householdMembers = $this->resolveHouseholdMembers($application);
+        $familyNetwork = $this->familyNetwork->buildApplicationNetwork($application);
 
-        return view('social-worker.show', compact('application', 'householdMembers'));
+        return view('social-worker.show', compact('application', 'householdMembers', 'familyNetwork'));
     }
 
     public function assess($id)
@@ -266,6 +269,29 @@ class SocialWorkerController extends Controller
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
 
+        $beneficiaryProfileId = $application->beneficiary_profile_id;
+        $frequencyPreview = null;
+
+        if ($application->assistance_subtype_id) {
+            $frequencyPreview = $this->frequencyEligibility->evaluate([
+                'client_id' => $application->client_id,
+                'beneficiary_profile_id' => $beneficiaryProfileId,
+                'frequency_subject' => $beneficiaryProfileId ? 'beneficiary' : 'client',
+                'assistance_subtype_id' => (int) $application->assistance_subtype_id,
+                'assistance_detail_id' => $application->assistance_detail_id ? (int) $application->assistance_detail_id : null,
+                'frequency_case_key' => $application->frequency_case_key,
+                'frequency_override_reason' => $application->frequency_override_reason,
+            ], $application);
+
+            if (! empty($frequencyPreview['basis_application_id']) && ! $application->frequencyBasisApplication) {
+                $application->setRelation(
+                    'frequencyBasisApplication',
+                    Application::with(['client', 'assistanceType', 'assistanceSubtype', 'assistanceDetail', 'modeOfAssistance'])
+                        ->find($frequencyPreview['basis_application_id'])
+                );
+            }
+        }
+
         $relationships = Relationship::all();
         $assistanceTypes = AssistanceType::all();
         $assistanceSubtypes = AssistanceSubtype::with(['frequencyRule', 'details.frequencyRule'])->get();
@@ -274,6 +300,7 @@ class SocialWorkerController extends Controller
 
         return view('social-worker.assess', compact(
             'application',
+            'frequencyPreview',
             'householdMembers',
             'relationships',
             'assistanceTypes',
@@ -293,7 +320,6 @@ class SocialWorkerController extends Controller
             'assistance_detail_id' => ['nullable', 'exists:assistance_details,id'],
             'mode_of_assistance_id' => ['required', 'exists:mode_of_assistances,id'],
             'frequency_case_key' => ['nullable', 'string', 'max:255'],
-            'frequency_exception_reason' => ['nullable', 'string'],
             'frequency_override_reason' => ['nullable', 'string'],
             'assessment_action' => ['nullable', 'in:save,cancel_due_to_frequency'],
             'cancellation_reason' => ['nullable', 'string'],
@@ -366,6 +392,7 @@ class SocialWorkerController extends Controller
                     'full_address' => $request->beneficiary_address,
                 ]);
                 $beneficiaryProfile->save();
+                $this->familyNetwork->syncBeneficiaryProfile($beneficiaryProfile);
 
                 if ($application->beneficiary_profile_id !== $beneficiaryProfile->id) {
                     $application->beneficiary_profile_id = $beneficiaryProfile->id;
@@ -385,10 +412,11 @@ class SocialWorkerController extends Controller
             $frequencyEvaluation = $this->frequencyEligibility->evaluate([
                 'client_id' => $application->client_id,
                 'beneficiary_profile_id' => $beneficiaryProfileId,
+                'frequency_subject' => $beneficiaryProfileId ? 'beneficiary' : 'client',
                 'assistance_subtype_id' => (int) $request->assistance_subtype_id,
                 'assistance_detail_id' => $request->filled('assistance_detail_id') ? (int) $request->assistance_detail_id : null,
                 'frequency_case_key' => $request->frequency_case_key,
-                'frequency_exception_reason' => $request->frequency_exception_reason,
+                'frequency_override_reason' => $request->frequency_override_reason,
             ], $application);
 
             $frequencyStatus = $frequencyEvaluation['status'];
@@ -423,10 +451,12 @@ class SocialWorkerController extends Controller
                         $member = (clone $familyQuery)->find($fam['id']);
                         if ($member) {
                             $member->update($payload);
+                            $this->familyNetwork->syncFamilyMember($member);
                             $submittedIds[] = $member->id;
                         }
                     } else {
                         $new = FamilyMember::create($payload);
+                        $this->familyNetwork->syncFamilyMember($new);
                         $submittedIds[] = $new->id;
                     }
                 }
@@ -448,13 +478,23 @@ class SocialWorkerController extends Controller
                 'frequency_message' => $frequencyMessage,
                 'frequency_reference_date' => null,
                 'frequency_case_key' => $request->frequency_case_key,
-                'frequency_exception_reason' => $request->frequency_exception_reason,
+                'frequency_exception_reason' => null,
                 'frequency_override_reason' => $request->frequency_override_reason,
                 'frequency_checked_at' => now(),
                 'mode_of_assistance' => $mode->name,
                 'social_worker_id' => auth()->id(),
                 'denial_reason' => null,
             ]);
+            $this->familyNetwork->syncClient($application->client);
+            if ($application->beneficiary) {
+                $this->familyNetwork->syncBeneficiary($application->beneficiary->fresh());
+            }
+            $this->familyNetwork->syncApplicationNetwork($application->fresh([
+                'client.user',
+                'beneficiary',
+                'beneficiaryProfile',
+                'familyMembers',
+            ]));
 
             if ($request->assessment_action === 'cancel_due_to_frequency') {
                 $application->status = 'cancelled';

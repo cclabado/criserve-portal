@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Application;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
@@ -20,7 +21,11 @@ class AiRecommendationService
         try {
             $response = Http::baseUrl(rtrim(config('services.openai.base_url'), '/'))
                 ->withToken(config('services.openai.api_key'))
+                ->connectTimeout((int) config('services.openai.connect_timeout', 15))
                 ->timeout((int) config('services.openai.timeout', 30))
+                ->retry(2, 750, function (\Exception $exception) {
+                    return $exception instanceof ConnectionException;
+                })
                 ->acceptJson()
                 ->post('/responses', [
                     'model' => config('services.openai.model'),
@@ -49,6 +54,11 @@ class AiRecommendationService
                 ->throw();
 
             return $this->normalizeResponse($response->json());
+        } catch (ConnectionException $exception) {
+            return $this->fallback(
+                $intakeData,
+                'AI service connection failed. A fallback recommendation was used instead.'
+            );
         } catch (RequestException $exception) {
             return $this->fallback(
                 $intakeData,

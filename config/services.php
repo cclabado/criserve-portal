@@ -39,6 +39,7 @@ return [
         'api_key' => env('OPENAI_API_KEY'),
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
         'model' => env('OPENAI_MODEL', 'gpt-5.2'),
+        'connect_timeout' => env('OPENAI_CONNECT_TIMEOUT', 15),
         'timeout' => env('OPENAI_TIMEOUT', 30),
     ],
 
@@ -57,6 +58,10 @@ return [
             'profile',
             'https://www.googleapis.com/auth/calendar.events',
         ],
+    ],
+
+    'support' => [
+        'email' => env('SUPPORT_EMAIL', env('MAIL_FROM_ADDRESS', 'support@example.com')),
     ],
 
 ];

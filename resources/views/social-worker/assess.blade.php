@@ -5,6 +5,8 @@
 @php
     $socialWorker = auth()->user();
     $googleConnected = $socialWorker?->hasGoogleCalendarConnection();
+    $currentFrequencyStatus = $frequencyPreview['status'] ?? $application->frequency_status;
+    $currentFrequencyMessage = $frequencyPreview['message'] ?? $application->frequency_message ?? $application->frequencyRule?->notes;
     $basisApplication = $application->frequencyBasisApplication;
     $basisReleasedDate = $basisApplication?->updated_at?->format('M d, Y') ?? $basisApplication?->created_at?->format('M d, Y');
     $defaultCancellationReason = $basisApplication
@@ -418,15 +420,15 @@
                     <div>
                         <h3 class="font-semibold text-amber-900">Frequency of Assistance Review</h3>
                         <p id="frequencyRuleNotes" class="mt-1 text-sm text-amber-800">
-                            {{ $application->frequency_message ?: ($application->frequencyRule->notes ?? 'Select an assistance item to review the applicable frequency rule.') }}
+                            {{ $currentFrequencyMessage ?: ($application->frequencyRule->notes ?? 'Select an assistance item to review the applicable frequency rule.') }}
                         </p>
                     </div>
 
-                    @if($application->frequency_status)
+                    @if($currentFrequencyStatus)
                     <div class="rounded-lg bg-white/70 px-4 py-3 text-sm text-amber-900">
                         <span class="font-semibold">Current Status:</span>
-                        <span class="ml-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase {{ $frequencyBadgeClasses[$application->frequency_status] ?? $frequencyBadgeClasses['not_applicable'] }}">
-                            {{ str_replace('_', ' ', $application->frequency_status) }}
+                        <span class="ml-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase {{ $frequencyBadgeClasses[$currentFrequencyStatus] ?? $frequencyBadgeClasses['not_applicable'] }}">
+                            {{ str_replace('_', ' ', $currentFrequencyStatus) }}
                         </span>
                         @if($basisApplication)
                             <span class="block mt-1 text-amber-800">
@@ -481,18 +483,11 @@
                         </div>
                     </div>
 
-                    <div id="frequencyExceptionWrap" style="display:none;">
-                        <label class="label">Exception Request Reason</label>
-                        <textarea name="frequency_exception_reason"
-                            class="input w-full h-24"
-                            placeholder="Explain why this case should be reviewed as an exception.">{{ old('frequency_exception_reason', $application->frequency_exception_reason) }}</textarea>
-                    </div>
-
-                    <div id="frequencyOverrideWrap" @if(!in_array($application->frequency_status, ['blocked', 'overridden'], true)) style="display:none;" @endif>
-                        <label class="label">Override Reason</label>
+                    <div id="frequencyOverrideWrap" @if(!in_array($currentFrequencyStatus, ['blocked', 'overridden'], true) && !($application->frequencyRule?->allows_exception_request ?? false)) style="display:none;" @endif>
+                        <label class="label">Justification</label>
                         <textarea name="frequency_override_reason"
                             class="input w-full h-24"
-                            placeholder="Required only when a blocked frequency rule still needs to proceed after your review.">{{ old('frequency_override_reason', $application->frequency_override_reason) }}</textarea>
+                            placeholder="Explain why this case should still proceed under frequency review.">{{ old('frequency_override_reason', $application->frequency_override_reason) }}</textarea>
                     </div>
                 </div>
             </div>
@@ -750,7 +745,6 @@ const assistanceSubtypeSelect = document.getElementById('assistanceSubtypeSelect
 const assistanceDetailSelect = document.getElementById('assistanceDetailSelect');
 const frequencyRuleNotes = document.getElementById('frequencyRuleNotes');
 const frequencyCaseKeyWrap = document.getElementById('frequencyCaseKeyWrap');
-const frequencyExceptionWrap = document.getElementById('frequencyExceptionWrap');
 const frequencyOverrideWrap = document.getElementById('frequencyOverrideWrap');
 const frequencyRuleMap = @json($frequencyRuleMap);
 
@@ -777,13 +771,10 @@ function updateFrequencyRuleUI() {
         frequencyCaseKeyWrap.style.display = rule?.requires_case_key ? 'block' : 'none';
     }
 
-    if (frequencyExceptionWrap) {
-        frequencyExceptionWrap.style.display = rule?.allows_exception_request ? 'block' : 'none';
-    }
-
     if (frequencyOverrideWrap) {
-        const currentStatus = @json($application->frequency_status);
-        frequencyOverrideWrap.style.display = ['blocked', 'overridden'].includes(currentStatus) ? 'block' : 'none';
+        const currentStatus = @json($currentFrequencyStatus);
+        const shouldShow = ['blocked', 'overridden'].includes(currentStatus) || !!rule?.allows_exception_request;
+        frequencyOverrideWrap.style.display = shouldShow ? 'block' : 'none';
     }
 }
 

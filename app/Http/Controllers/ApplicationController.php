@@ -14,13 +14,18 @@ use App\Models\FamilyMember;
 use App\Models\Document;
 use Illuminate\Http\JsonResponse;
 use App\Models\ModeOfAssistance;
+use App\Services\FamilyNetworkService;
 use App\Services\FrequencyEligibilityService;
+use App\Services\IdentityMappingService;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 class ApplicationController extends Controller
 {
     public function __construct(
-        protected FrequencyEligibilityService $frequencyEligibility
+        protected FrequencyEligibilityService $frequencyEligibility,
+        protected IdentityMappingService $identityMapping,
+        protected FamilyNetworkService $familyNetwork
     ) {
     }
 
@@ -74,6 +79,7 @@ class ApplicationController extends Controller
                     'last_name' => $member->last_name,
                     'first_name' => $member->first_name,
                     'middle_name' => $member->middle_name,
+                    'extension_name' => $member->extension_name,
                     'relationship' => $member->relationship,
                     'birthdate' => $member->birthdate,
                 ];
@@ -83,6 +89,8 @@ class ApplicationController extends Controller
 
     public function store(Request $request)
     {
+        $this->enforceSubmissionCooldown($request);
+
         $validated = $request->validate([
             'last_name' => ['required', 'string', 'max:255'],
             'first_name' => ['required', 'string', 'max:255'],
@@ -106,6 +114,7 @@ class ApplicationController extends Controller
             'family_last_name' => ['array'],
             'family_first_name' => ['array'],
             'family_middle_name' => ['array'],
+            'family_extension_name' => ['array'],
             'family_relationship' => ['array'],
             'family_birthdate' => ['array'],
             'assistance_type_id' => ['required', 'exists:assistance_types,id'],
@@ -155,6 +164,7 @@ class ApplicationController extends Controller
             'full_address' => $request->full_address
         ]);
         $client->save();
+        $this->familyNetwork->syncClient($client);
 
         $beneficiaryProfile = null;
 
@@ -162,13 +172,20 @@ class ApplicationController extends Controller
             $beneficiaryProfile = $this->upsertBeneficiaryProfile($client, $request);
         }
 
+        $this->ensureNoDuplicateActiveApplication(
+            clientId: $client->id,
+            beneficiaryProfileId: $beneficiaryProfile?->id,
+            subtypeId: (int) $request->assistance_subtype_id,
+            detailId: $request->filled('assistance_detail_id') ? (int) $request->assistance_detail_id : null
+        );
+
         $frequencyEvaluation = $this->frequencyEligibility->evaluate([
             'client_id' => $client->id,
             'beneficiary_profile_id' => $beneficiaryProfile?->id,
+            'frequency_subject' => $beneficiaryProfile ? 'beneficiary' : 'client',
             'assistance_subtype_id' => (int) $request->assistance_subtype_id,
             'assistance_detail_id' => $request->filled('assistance_detail_id') ? (int) $request->assistance_detail_id : null,
             'frequency_case_key' => $request->frequency_case_key,
-            'frequency_exception_reason' => $request->frequency_exception_reason,
         ]);
 
         if ($frequencyEvaluation['status'] === 'blocked') {
@@ -216,7 +233,7 @@ class ApplicationController extends Controller
             'frequency_message' => $frequencyEvaluation['message'],
             'frequency_reference_date' => null,
             'frequency_case_key' => $request->frequency_case_key,
-            'frequency_exception_reason' => $request->frequency_exception_reason,
+            'frequency_exception_reason' => null,
             'frequency_checked_at' => now(),
             'mode_of_assistance' => $mode->name,
             'status' => 'submitted'
@@ -262,6 +279,12 @@ class ApplicationController extends Controller
 
         // ================= FAMILY =================
         $this->syncFamilyMembers($client, $application, $request, $beneficiaryProfile);
+        $this->familyNetwork->syncApplicationNetwork($application->fresh([
+            'client.user',
+            'beneficiary',
+            'beneficiaryProfile',
+            'familyMembers',
+        ]));
 
         
         // ================= DOCUMENTS =================
@@ -307,6 +330,7 @@ class ApplicationController extends Controller
             'full_address' => $request->bene_full_address,
         ]);
         $profile->save();
+        $this->identityMapping->syncBeneficiaryProfile($profile);
 
         return $profile;
     }
@@ -342,6 +366,7 @@ class ApplicationController extends Controller
                 'last_name' => $lastName,
                 'first_name' => $firstName,
                 'middle_name' => $request->input("family_middle_name.$index"),
+                'extension_name' => $request->input("family_extension_name.$index"),
                 'relationship' => $relationship,
                 'birthdate' => $request->input("family_birthdate.$index"),
             ];
@@ -353,13 +378,16 @@ class ApplicationController extends Controller
 
                 if ($member) {
                     $member->update($payload);
+                    $this->identityMapping->syncFamilyMember($member);
                     $submittedIds[] = $member->id;
                 }
 
                 continue;
             }
 
-            $submittedIds[] = $relation->create($payload)->id;
+            $member = $relation->create($payload);
+            $this->identityMapping->syncFamilyMember($member);
+            $submittedIds[] = $member->id;
         }
 
         $toDelete = array_diff($existingIds, $submittedIds);
@@ -434,5 +462,60 @@ class ApplicationController extends Controller
                 ]);
             }
         }
+    }
+
+    protected function enforceSubmissionCooldown(Request $request): void
+    {
+        $key = 'client-application-submit:'.$request->user()->id;
+        $maxAttempts = 2;
+        $decaySeconds = 600;
+
+        if (RateLimiter::tooManyAttempts($key, $maxAttempts)) {
+            $seconds = max(1, RateLimiter::availableIn($key));
+            $minutes = (int) ceil($seconds / 60);
+
+            throw ValidationException::withMessages([
+                'documents' => "Please wait {$minutes} minute(s) before submitting another application.",
+            ]);
+        }
+
+        RateLimiter::hit($key, $decaySeconds);
+    }
+
+    protected function ensureNoDuplicateActiveApplication(
+        int $clientId,
+        ?int $beneficiaryProfileId,
+        int $subtypeId,
+        ?int $detailId
+    ): void
+    {
+        $duplicateQuery = Application::query()
+            ->where('client_id', $clientId)
+            ->where('assistance_subtype_id', $subtypeId)
+            ->whereIn('status', ['submitted', 'under_review', 'for_approval', 'approved']);
+
+        if ($beneficiaryProfileId) {
+            $duplicateQuery->where('beneficiary_profile_id', $beneficiaryProfileId);
+        } else {
+            $duplicateQuery->whereNull('beneficiary_profile_id');
+        }
+
+        if ($detailId) {
+            $duplicateQuery->where('assistance_detail_id', $detailId);
+        } else {
+            $duplicateQuery->whereNull('assistance_detail_id');
+        }
+
+        $existingApplication = $duplicateQuery->latest('id')->first();
+
+        if (! $existingApplication) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'assistance_detail_id' => 'A similar application is already active under reference no. '
+                .$existingApplication->reference_no
+                .'. Please wait for that application to be completed before submitting another one.',
+        ]);
     }
 }

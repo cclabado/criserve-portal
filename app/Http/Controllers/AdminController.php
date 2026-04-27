@@ -8,6 +8,7 @@ use App\Models\AssistanceSubtype;
 use App\Models\AssistanceType;
 use App\Models\ModeOfAssistance;
 use App\Models\Relationship;
+use App\Models\SupportTicket;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,6 +31,7 @@ class AdminController extends Controller
             'total_applications' => Application::count(),
             'for_approval' => Application::where('status', 'for_approval')->count(),
             'released' => Application::where('status', 'released')->count(),
+            'open_support_tickets' => SupportTicket::where('status', 'open')->count(),
         ];
 
         $applications = Application::with(['client', 'assistanceType'])
@@ -41,6 +43,50 @@ class AdminController extends Controller
             'stats',
             'applications',
         ));
+    }
+
+    public function supportTickets(Request $request): View
+    {
+        $tickets = SupportTicket::query()
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $search = $request->string('search')->trim();
+
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('subject', 'like', "%{$search}%")
+                        ->orWhere('message', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->filled('status') && $request->status !== 'all', function ($query) use ($request) {
+                $query->where('status', $request->status);
+            })
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
+
+        return view('admin.support-tickets', [
+            'tickets' => $tickets,
+            'filters' => [
+                'search' => (string) $request->input('search', ''),
+                'status' => (string) $request->input('status', 'all'),
+            ],
+        ]);
+    }
+
+    public function updateSupportTicket(Request $request, SupportTicket $supportTicket): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'in:open,in_progress,resolved,closed'],
+        ]);
+
+        $supportTicket->update([
+            'status' => $validated['status'],
+        ]);
+
+        return redirect()
+            ->to(route('admin.support-tickets'))
+            ->with('success', 'Support ticket status updated successfully.');
     }
 
     public function libraries(): View

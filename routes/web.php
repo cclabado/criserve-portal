@@ -8,10 +8,16 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\SocialWorkerGoogleController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\SupportTicketController;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/support', [SupportTicketController::class, 'create'])
+    ->name('support.create');
+Route::post('/support', [SupportTicketController::class, 'store'])
+    ->name('support.store');
 
 /*
 |--------------------------------------------------------------------------
@@ -44,6 +50,8 @@ Route::middleware(['auth', 'role:client'])->group(function () {
 
     Route::get('/client/dashboard', [ClientDashboardController::class, 'index'])
         ->name('client.dashboard');
+    Route::get('/client/applications', [ClientDashboardController::class, 'applications'])
+        ->name('client.applications');
 
     Route::get('/client/application', [ApplicationController::class, 'create']);
     Route::post('/client/beneficiary-profile/lookup', [ApplicationController::class, 'lookupBeneficiaryProfile'])
@@ -69,6 +77,10 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.libraries');
     Route::get('/admin/users', [AdminController::class, 'users'])
         ->name('admin.users');
+    Route::get('/admin/support-tickets', [AdminController::class, 'supportTickets'])
+        ->name('admin.support-tickets');
+    Route::patch('/admin/support-tickets/{supportTicket}', [AdminController::class, 'updateSupportTicket'])
+        ->name('admin.support-tickets.update');
     Route::patch('/admin/users/{user}', [AdminController::class, 'updateUser'])
         ->name('admin.users.update');
     Route::patch('/admin/users/{user}/role', [AdminController::class, 'updateUserRole'])
@@ -143,6 +155,9 @@ Route::middleware(['auth', 'role:approving_officer'])->group(function () {
 
     Route::get('/applications', [App\Http\Controllers\ApprovingOfficerController::class, 'applications'])
         ->name('approving.applications');
+
+    Route::get('/my-approvals', [App\Http\Controllers\ApprovingOfficerController::class, 'myApprovals'])
+        ->name('approving.my-approvals');
 
     Route::get('/application/{id}', [App\Http\Controllers\ApprovingOfficerController::class, 'show'])
         ->name('approving.show');

@@ -9,6 +9,7 @@ class Beneficiary extends Model
     protected $fillable = [
         'application_id',
         'beneficiary_profile_id',
+        'person_id',
         'relationship_id',
         'last_name',
         'first_name',
@@ -28,6 +29,11 @@ class Beneficiary extends Model
     public function beneficiaryProfile()
     {
         return $this->belongsTo(BeneficiaryProfile::class);
+    }
+
+    public function person()
+    {
+        return $this->belongsTo(Person::class);
     }
 
     public function relationshipData()
