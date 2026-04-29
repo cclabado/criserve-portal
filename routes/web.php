@@ -95,6 +95,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.libraries.modes-of-assistance.store');
     Route::post('/admin/libraries/relationships', [AdminController::class, 'storeRelationship'])
         ->name('admin.libraries.relationships.store');
+    Route::post('/admin/libraries/referral-institutions', [AdminController::class, 'storeReferralInstitution'])
+        ->name('admin.libraries.referral-institutions.store');
 
 });
 
@@ -138,7 +140,10 @@ Route::middleware(['auth', 'role:social_worker'])->group(function () {
     Route::get('/social-worker/application/{id}/certificate',
     [SocialWorkerController::class, 'certificate'])
     ->name('socialworker.certificate');
-    Route::post('/social-worker/application/{id}/release',
+    Route::get('/social-worker/application/{id}/general-intake-sheet',
+    [SocialWorkerController::class, 'generalIntakeSheet'])
+    ->name('socialworker.general-intake-sheet');
+     Route::post('/social-worker/application/{id}/release',
     [SocialWorkerController::class, 'release'])
     ->name('socialworker.release');
 });

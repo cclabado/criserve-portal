@@ -8,6 +8,7 @@ use App\Models\AssistanceSubtype;
 use App\Models\AssistanceType;
 use App\Models\ModeOfAssistance;
 use App\Models\Relationship;
+use App\Models\ReferralInstitution;
 use App\Models\SupportTicket;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -94,8 +95,14 @@ class AdminController extends Controller
         $assistanceTypes = AssistanceType::with('subtypes.details')->orderBy('name')->get();
         $modesOfAssistance = ModeOfAssistance::orderBy('name')->get();
         $relationships = Relationship::orderBy('name')->get();
+        $referralInstitutions = ReferralInstitution::orderBy('name')->get();
 
-        return view('admin.libraries', compact('assistanceTypes', 'modesOfAssistance', 'relationships'));
+        return view('admin.libraries', compact(
+            'assistanceTypes',
+            'modesOfAssistance',
+            'relationships',
+            'referralInstitutions'
+        ));
     }
 
     public function users(Request $request): View
@@ -265,6 +272,12 @@ class AdminController extends Controller
             'name' => ['required', 'string', 'max:255', 'unique:mode_of_assistances,name'],
         ]);
 
+        if (strtolower(trim($validated['name'])) === 'referral') {
+            return back()
+                ->withInput()
+                ->withErrors(['name' => 'Referral is managed through the Referral Institution library, not as a mode of assistance.']);
+        }
+
         ModeOfAssistance::create($validated);
 
         return redirect()
@@ -283,5 +296,25 @@ class AdminController extends Controller
         return redirect()
             ->to(route('admin.libraries'))
             ->with('success', 'Relationship library item added successfully.');
+    }
+
+    public function storeReferralInstitution(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:referral_institutions,name'],
+            'addressee' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'contact_number' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        ReferralInstitution::create([
+            ...$validated,
+            'is_active' => true,
+        ]);
+
+        return redirect()
+            ->to(route('admin.libraries'))
+            ->with('success', 'Referral institution added successfully.');
     }
 }

@@ -47,7 +47,7 @@
                 <tr>
                     <th class="px-6 py-4">Applicant</th>
                     <th class="px-6 py-4">Assistance Type</th>
-                    <th class="px-6 py-4">Final Amount</th>
+                    <th class="px-6 py-4">Recommended Amount</th>
                     <th class="px-6 py-4">Status</th>
                     <th class="px-6 py-4 text-right">Action</th>
                 </tr>

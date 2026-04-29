@@ -130,6 +130,42 @@
 
                 <button type="submit" class="btn-primary mt-4">Add Assistance Detail</button>
             </form>
+
+            <form method="POST"
+                  action="{{ route('admin.libraries.referral-institutions.store') }}"
+                  class="library-form mt-4">
+                @csrf
+                <h3 class="library-form-title">Referral Institution / Government Agency</h3>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div>
+                        <label class="label">Institution / Agency Name</label>
+                        <input type="text" name="name" class="input" placeholder="Department of Health">
+                    </div>
+
+                    <div>
+                        <label class="label">Addressee</label>
+                        <input type="text" name="addressee" class="input" placeholder="Regional Director">
+                    </div>
+
+                    <div>
+                        <label class="label">Email</label>
+                        <input type="email" name="email" class="input" placeholder="office@example.gov.ph">
+                    </div>
+
+                    <div>
+                        <label class="label">Contact Number</label>
+                        <input type="text" name="contact_number" class="input" placeholder="(02) 8123 4567">
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <label class="label">Address</label>
+                    <textarea name="address" class="input min-h-[90px]" placeholder="Office address"></textarea>
+                </div>
+
+                <button type="submit" class="btn-primary mt-4">Add Referral Institution</button>
+            </form>
         </div>
 
         <div class="panel-card">
@@ -175,6 +211,33 @@
                         <span class="tag-pill">{{ $relationship->name }}</span>
                     @empty
                         <p class="text-sm text-slate-500">No relationship records found.</p>
+                    @endforelse
+                </div>
+            </div>
+
+            <div class="mt-6">
+                <p class="panel-kicker">Referral Institutions / Government Agencies</p>
+                <div class="mt-3 space-y-3">
+                    @forelse($referralInstitutions as $institution)
+                        <div class="soft-card">
+                            <p class="soft-card-title">{{ $institution->name }}</p>
+                            <p class="soft-card-copy">
+                                @if($institution->addressee)
+                                    Addressee: {{ $institution->addressee }}<br>
+                                @endif
+                                @if($institution->address)
+                                    Address: {{ $institution->address }}<br>
+                                @endif
+                                @if($institution->email)
+                                    Email: {{ $institution->email }}<br>
+                                @endif
+                                @if($institution->contact_number)
+                                    Contact: {{ $institution->contact_number }}
+                                @endif
+                            </p>
+                        </div>
+                    @empty
+                        <p class="text-sm text-slate-500">No referral institutions added yet.</p>
                     @endforelse
                 </div>
             </div>

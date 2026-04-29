@@ -6,9 +6,17 @@
     $assistanceCatalog = $assistanceTypes->map(fn ($type) => [
         'id' => $type->id,
         'name' => $type->name,
-        'subtypes' => $type->subtypes->map(fn ($subtype) => [
+        'is_non_monetary' => str_contains(strtolower($type->name), 'psychosocial')
+            || str_contains(strtolower($type->name), 'referral'),
+        'subtypes' => str_contains(strtolower($type->name), 'referral')
+            ? []
+            : $type->subtypes->map(fn ($subtype) => [
             'id' => $subtype->id,
             'name' => $subtype->name,
+            'is_non_monetary' => str_contains(strtolower($type->name), 'psychosocial')
+                || str_contains(strtolower($type->name), 'referral')
+                || str_contains(strtolower($subtype->name), 'psychosocial')
+                || str_contains(strtolower($subtype->name), 'referral'),
             'details' => $subtype->details->map(fn ($detail) => [
                 'id' => $detail->id,
                 'name' => $detail->name,
@@ -21,6 +29,15 @@
         'name' => $mode->name,
     ])->values();
 
+    $referralInstitutionOptions = $referralInstitutions->map(fn ($institution) => [
+        'id' => $institution->id,
+        'name' => $institution->name,
+        'addressee' => $institution->addressee,
+        'address' => $institution->address,
+        'email' => $institution->email,
+        'contact_number' => $institution->contact_number,
+    ])->values();
+
     $savedRecommendations = old('recommendations')
         ? collect(old('recommendations'))->values()
         : $application->assistanceRecommendations->map(fn ($recommendation) => [
@@ -28,13 +45,31 @@
             'assistance_subtype_id' => $recommendation->assistance_subtype_id,
             'assistance_detail_id' => $recommendation->assistance_detail_id,
             'mode_of_assistance_id' => $recommendation->mode_of_assistance_id,
+            'referral_institution_id' => $recommendation->referral_institution_id,
             'final_amount' => $recommendation->final_amount,
             'frequency_override_reason' => $recommendation->frequency_override_reason,
             'frequency_status' => $recommendation->frequency_status,
             'frequency_message' => $recommendation->frequency_message,
-            'allows_override' => (bool) $recommendation->frequencyRule?->allows_exception_request,
             'notes' => $recommendation->notes,
         ])->values();
+
+    $recentCrisisTypes = old('recent_crisis_types', $application->recent_crisis_types ?? []);
+    $supportSystems = old('support_systems', $application->support_systems ?? []);
+    $externalResources = old('external_resources', $application->external_resources ?? []);
+    $selfHelpEfforts = old('self_help_efforts', $application->self_help_efforts ?? []);
+    $clientSectors = old('client_sectors', $application->client_sectors ?? ($application->client_sector ? [$application->client_sector] : []));
+    $clientSubCategories = old('client_sub_categories', $application->client_sub_categories ?? ($application->client_sub_category ? [$application->client_sub_category] : []));
+    $disabilityTypes = old('disability_types', $application->disability_types ?? ($application->disability_type ? [$application->disability_type] : []));
+    $incomeSources = collect(old('income_sources', $application->income_sources ?? []));
+    $incomeSourceLabels = [
+        'Salaries/Wages from Employment',
+        'Entrepreneurial income/profits',
+        'Cash assistance from domestic source',
+        'Cash assistance from abroad',
+        'Transfers from the government (e.g. 4Ps)',
+        'Pension',
+        'Other income',
+    ];
 @endphp
 
 <main class="p-8 max-w-6xl mx-auto space-y-6">
@@ -53,6 +88,13 @@
         <p class="text-gray-500">
             Reference: {{ $application->reference_no }}
         </p>
+
+        <a href="{{ route('socialworker.general-intake-sheet', $application->id) }}"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="mt-3 inline-flex items-center justify-center rounded-lg bg-[#234E70] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#18384f]">
+            Print General Intake Sheet
+        </a>
     </div>
     <div class="bg-white p-6 rounded-2xl shadow space-y-6">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -251,55 +293,163 @@
         <!-- ================= STEP 1 ================= -->
         <div id="step-1" class="step-content bg-white p-6 rounded-xl shadow space-y-6">
 
-            <h2 class="text-lg font-bold text-[#234E70]">
-                Financial Capacity
-            </h2>
+            <div>
+                <h2 class="text-lg font-bold text-[#234E70]">General Intake Sheet</h2>
+                <p class="text-sm text-gray-500 mt-1">Client visit details, financial resources, and budget information.</p>
+            </div>
 
             <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="label">Client Type</label>
+                    <select name="gis_client_type" class="input w-full">
+                        <option value="">Select</option>
+                        <option value="New" @selected(old('gis_client_type', $application->gis_client_type) === 'New')>New Walk-in</option>
+                        <option value="Returning" @selected(old('gis_client_type', $application->gis_client_type) === 'Returning')>Returning</option>
+                        <option value="Referral" @selected(old('gis_client_type', $application->gis_client_type) === 'Referral')>Referral</option>
+                    </select>
+                </div>
 
                 <div>
-                    <label class="label">Combined Monthly Income</label>
+                    <label class="label">GIS Service Point</label>
+                    <select name="gis_visit_type" class="input w-full">
+                        <option value="">Select</option>
+                        @foreach(['AICS Onsite', 'AKAP', 'Malasakit Center', 'Offsite', 'Others'] as $visitType)
+                            <option value="{{ $visitType }}" @selected(old('gis_visit_type', $application->gis_visit_type) === $visitType)>{{ $visitType }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label class="label">Diagnosis / Cause of Death</label>
+                    <input type="text"
+                           name="diagnosis_or_cause_of_death"
+                           class="input w-full"
+                           value="{{ old('diagnosis_or_cause_of_death', $application->diagnosis_or_cause_of_death) }}">
+                </div>
+
+                <div>
+                    <label class="label">Amount Needed</label>
                     <input type="number"
                            step="0.01"
-                           name="monthly_income"
+                           name="amount_needed"
                            class="input w-full"
-                           value="{{ $application->monthly_income }}">
+                           value="{{ old('amount_needed', $application->amount_needed) }}">
+                </div>
+            </div>
+
+            <div class="gis-section">
+                <h3 class="gis-section-title">I. Income and Financial Resources</h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <p class="text-sm font-semibold text-gray-700">Occupation/s of Family Member</p>
+                    </div>
+
+                    <div>
+                        <label class="label">Employed Family Members</label>
+                        <input type="number"
+                               name="working_members"
+                               class="input w-full"
+                               value="{{ old('working_members', $application->working_members) }}">
+                    </div>
+
+                    <div>
+                        <label class="label">Seasonal Employee Members</label>
+                        <input type="number"
+                               name="seasonal_worker_members"
+                               class="input w-full"
+                               value="{{ old('seasonal_worker_members', $application->seasonal_worker_members) }}">
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="label">Combined Monthly Income</label>
+                        <input type="number"
+                               step="0.01"
+                               name="monthly_income"
+                               class="input w-full"
+                               value="{{ old('monthly_income', $application->monthly_income) }}">
+                    </div>
+
+                    <div>
+                        <label class="label">Insurance Coverage</label>
+                        <label class="check-box">
+                            <input type="checkbox"
+                                   name="has_insurance_coverage"
+                                   value="1"
+                                   @checked(old('has_insurance_coverage', $application->has_insurance_coverage))>
+                            Yes
+                        </label>
+                    </div>
+
+                    <div>
+                        <label class="label">Savings</label>
+                        <label class="check-box">
+                            <input type="checkbox"
+                                   name="has_savings"
+                                   value="1"
+                                   @checked(old('has_savings', $application->has_savings))>
+                            Yes
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="gis-section">
+                <h3 class="gis-section-title">II. Budget and Expenses</h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">Monthly Expenses of the Family</label>
+                        <input type="number"
+                               step="0.01"
+                               name="monthly_expenses"
+                               class="input w-full"
+                               value="{{ old('monthly_expenses', $application->monthly_expenses) }}">
+                    </div>
+
+                    <div>
+                        <label class="label">Availability of Emergency Fund</label>
+                        <label class="check-box">
+                            <input type="hidden" name="emergency_fund" value="No">
+                            <input type="checkbox"
+                                   name="emergency_fund"
+                                   value="Yes"
+                                   @checked(old('emergency_fund', $application->emergency_fund) === 'Yes')>
+                            Yes, emergency fund is available
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="gis-section">
+                <h3 class="gis-section-title">Income in the Past 6 Months</h3>
+
+                <div class="grid gap-3">
+                    @foreach($incomeSourceLabels as $index => $label)
+                        @php
+                            $incomeRow = $incomeSources->firstWhere('source', $label) ?? [];
+                        @endphp
+                        <div class="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3">
+                            <input type="hidden" name="income_sources[{{ $index }}][source]" value="{{ $label }}">
+                            <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{{ $label }}</div>
+                            <input type="number"
+                                   step="0.01"
+                                   name="income_sources[{{ $index }}][amount]"
+                                   class="input w-full"
+                                   value="{{ $incomeRow['amount'] ?? '' }}"
+                                   placeholder="Amount">
+                        </div>
+                    @endforeach
                 </div>
 
-                <div>
-                    <label class="label">Monthly Expenses</label>
+                <div class="mt-4">
+                    <label class="label">Total Income in the Past 6 Months</label>
                     <input type="number"
                            step="0.01"
-                           name="monthly_expenses"
+                           name="total_income_past_six_months"
                            class="input w-full"
-                           value="{{ $application->monthly_expenses }}">
+                           value="{{ old('total_income_past_six_months', $application->total_income_past_six_months) }}">
                 </div>
-
-                <div>
-                    <label class="label">Household Members</label>
-                    <input type="number"
-                           name="household_members"
-                           class="input w-full"
-                           value="{{ $application->household_members }}">
-                </div>
-
-                <div>
-                    <label class="label">Working Members</label>
-                    <input type="number"
-                           name="working_members"
-                           class="input w-full"
-                           value="{{ $application->working_members }}">
-                </div>
-
-                <div class="col-span-2">
-                    <label class="label">Savings Available</label>
-                    <input type="number"
-                           step="0.01"
-                           name="savings"
-                           class="input w-full"
-                           value="{{ $application->savings }}">
-                </div>
-
             </div>
 
         </div>
@@ -307,75 +457,186 @@
         <!-- ================= STEP 2 ================= -->
         <div id="step-2" class="step-content hidden bg-white p-6 rounded-xl shadow space-y-6">
 
-            <h2 class="text-lg font-bold text-[#234E70]">
-                Crisis Severity & Risk Factors
-            </h2>
-
-            <div class="grid grid-cols-2 gap-4">
-
-                <div>
-                    <label class="label">Type of Crisis</label>
-                    <select name="crisis_type" class="input w-full">
-                        <option value="">Select</option>
-                        <option value="Hospitalization" @selected($application->crisis_type === 'Hospitalization')>Hospitalization</option>
-                        <option value="Death" @selected($application->crisis_type === 'Death')>Death in Family</option>
-                        <option value="Disaster" @selected($application->crisis_type === 'Disaster')>Fire/Flood/Disaster</option>
-                        <option value="Loss of Livelihood" @selected($application->crisis_type === 'Loss of Livelihood')>Loss of Livelihood</option>
-                        <option value="Food Need" @selected($application->crisis_type === 'Food Need')>Food Need</option>
-                        <option value="Education Need" @selected($application->crisis_type === 'Education Need')>Education Need</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="label">Urgency Level</label>
-                    <select name="urgency_level" class="input w-full">
-                        <option value="">Select</option>
-                        <option value="Low" @selected($application->urgency_level === 'Low')>Low</option>
-                        <option value="Medium" @selected($application->urgency_level === 'Medium')>Medium</option>
-                        <option value="High" @selected($application->urgency_level === 'High')>High</option>
-                        <option value="Critical" @selected($application->urgency_level === 'Critical')>Critical</option>
-                    </select>
-                </div>
-
+            <div>
+                <h2 class="text-lg font-bold text-[#234E70]">GIS Crisis, Support, and Sector Assessment</h2>
+                <p class="text-sm text-gray-500 mt-1">Sections III to IX of the General Intake Sheet.</p>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="gis-section">
+                <h3 class="gis-section-title">III. Severity of the Crisis</h3>
 
-                <label class="check-box">
-                    <input type="checkbox" name="has_elderly" value="1" @checked($application->has_elderly)>
-                    Elderly in Household
-                </label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">How long does the patient suffer from the disease?</label>
+                        <select name="disease_duration" class="input w-full">
+                            <option value="">Select</option>
+                            @foreach(['Recently diagnosed (3 months and below)', '3 months to a year', 'Chronic or lifelong', 'Not applicable'] as $duration)
+                                <option value="{{ $duration }}" @selected(old('disease_duration', $application->disease_duration) === $duration)>{{ $duration }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <label class="check-box">
-                    <input type="checkbox" name="has_child" value="1" @checked($application->has_child)>
-                    Child in Need
-                </label>
+                    <div>
+                        <label class="label">Crisis Experienced in the Past 3 Months</label>
+                        <select name="experienced_recent_crisis" class="input w-full">
+                            <option value="">Select</option>
+                            <option value="1" @selected((string) old('experienced_recent_crisis', $application->experienced_recent_crisis) === '1')>Yes</option>
+                            <option value="0" @selected((string) old('experienced_recent_crisis', $application->experienced_recent_crisis) === '0')>No</option>
+                        </select>
+                    </div>
 
-                <label class="check-box">
-                    <input type="checkbox" name="has_pwd" value="1" @checked($application->has_pwd)>
-                    Person with Disability
-                </label>
+                </div>
 
-                <label class="check-box">
-                    <input type="checkbox" name="has_pregnant" value="1" @checked($application->has_pregnant)>
-                    Pregnant Household Member
-                </label>
+                <p class="mt-4 text-sm font-semibold text-gray-700">
+                    If yes, which among the following crises did the family experience in the past three (3) months (check all that apply):
+                </p>
 
-                <label class="check-box">
-                    <input type="checkbox" name="earner_unable_to_work" value="1" @checked($application->earner_unable_to_work)>
-                    Main Earner Unable to Work
-                </label>
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    @foreach(['Hospitalization', 'Death of a family member', 'Catastrophic Event (fire, earthquake, flooding, etc.)', 'Disablement', 'Inability to secure stable employment', 'Loss of Livelihood', 'Others'] as $crisisOption)
+                        <label class="check-box">
+                            <input type="checkbox" name="recent_crisis_types[]" value="{{ $crisisOption }}" @checked(in_array($crisisOption, $recentCrisisTypes, true))>
+                            {{ $crisisOption }}
+                        </label>
+                    @endforeach
+                </div>
+            </div>
 
-                <label class="check-box">
-                    <input type="checkbox" name="has_philhealth" value="1" @checked($application->has_philhealth)>
-                    Has PhilHealth / Health Card
-                </label>
+            <div class="gis-section">
+                <h3 class="gis-section-title">IV. Availability of Support Systems</h3>
 
-                <label class="check-box">
-                    <input type="checkbox" name="has_family_support" value="1" @checked($application->has_family_support)>
-                    Has Family Support
-                </label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    @foreach(['Family', 'Friend/s', 'Employed Relatives', 'Employer', 'Seasonal Employee', 'Church/Community Organization', 'Not applicable'] as $supportOption)
+                        <label class="check-box">
+                            <input type="checkbox" name="support_systems[]" value="{{ $supportOption }}" @checked(in_array($supportOption, $supportSystems, true))>
+                            {{ $supportOption }}
+                        </label>
+                    @endforeach
+                </div>
+            </div>
 
+            <div class="gis-section">
+                <h3 class="gis-section-title">V. External Resources Tapped by the Family</h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    @foreach(['Health Card', 'Guarantee Letter from other agencies', 'MSS Discount', 'Senior Citizen Discount', 'PWD Discount', 'PhilHealth', 'Others'] as $resourceOption)
+                        <label class="check-box">
+                            <input type="checkbox" name="external_resources[]" value="{{ $resourceOption }}" @checked(in_array($resourceOption, $externalResources, true))>
+                            {{ $resourceOption }}
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+
+            <div class="gis-section">
+                <h3 class="gis-section-title">VI. Self-Help and Client Efforts</h3>
+
+                <div class="grid grid-cols-1 gap-3">
+                    @foreach(['Successfully sought employment opportunities or explored additional income sources', 'Successfully reached out to relevant organizations or agencies for financial assistance or support'] as $effortOption)
+                        <label class="check-box">
+                            <input type="checkbox" name="self_help_efforts[]" value="{{ $effortOption }}" @checked(in_array($effortOption, $selfHelpEfforts, true))>
+                            {{ $effortOption }}
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+
+            <div class="gis-section">
+                <h3 class="gis-section-title">VII. Vulnerability and Risk Factors</h3>
+
+                <div class="grid grid-cols-1 gap-3">
+                    <label class="check-box">
+                        <input type="checkbox"
+                               name="has_vulnerable_household_member"
+                               value="1"
+                               @checked(old('has_vulnerable_household_member', $application->has_vulnerable_household_member))>
+                        There are elderly/ Child in need/ PWD/ Pregnant in the household
+                    </label>
+
+                    <label class="check-box">
+                        <input type="checkbox"
+                               name="earner_unable_to_work"
+                               value="1"
+                               @checked(old('earner_unable_to_work', $application->earner_unable_to_work))>
+                        A member is physically or mentally incapacitated to work
+                    </label>
+
+                    <label class="check-box">
+                        <input type="checkbox"
+                               name="has_unstable_employment"
+                               value="1"
+                               @checked(old('has_unstable_employment', $application->has_unstable_employment))>
+                        Inability to secure stable employment
+                    </label>
+                </div>
+            </div>
+
+            <div class="gis-section">
+                <h3 class="gis-section-title">VIII. Client Sector</h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="label">Target Sector</label>
+                        <div class="grid gap-2">
+                            @foreach(['FHONA', 'WEDC', 'PWD', 'CNSP', 'SC', 'YNSP', 'PLHIV'] as $sector)
+                                <label class="check-box">
+                                    <input type="checkbox"
+                                           name="client_sectors[]"
+                                           value="{{ $sector }}"
+                                           data-client-sector-option
+                                           @checked(in_array($sector, $clientSectors, true))>
+                                    {{ $sector }}
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="label">Specify Sub-Category</label>
+                        <div class="grid gap-2">
+                            @foreach([
+                                ['Solo Parent', 'FHONA'],
+                                ['Indigenous People', 'FHONA'],
+                                ['Street Dwellers', 'FHONA'],
+                                ['KIA/WIA', 'CNSP'],
+                                ['4PS Beneficiary', 'FHONA'],
+                                ['Stateless Person', 'FHONA'],
+                                ['Asylum Seekers', 'FHONA'],
+                                ['Refugees', 'FHONA'],
+                                ['Recovering Person Who Used Drugs', 'YNSP'],
+                                ['Minimum Wage Earner', 'FHONA'],
+                                ['Earner (specify approximate monthly income)', 'FHONA'],
+                                ['No Regular Income', 'FHONA'],
+                                ['Others', ''],
+                            ] as [$subCategory, $mappedSector])
+                                <label class="check-box">
+                                    <input type="checkbox"
+                                           name="client_sub_categories[]"
+                                           value="{{ $subCategory }}"
+                                           data-client-sub-category-option
+                                           data-target-sector="{{ $mappedSector }}"
+                                           @checked(in_array($subCategory, $clientSubCategories, true))>
+                                    {{ $subCategory }}
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <div id="disabilityTypeField" class="{{ in_array('PWD', $clientSectors, true) ? '' : 'hidden' }}">
+                        <label class="label">Type of Disability</label>
+                        <div class="grid gap-2">
+                            @foreach(['Speech Impairment', 'Mental Disability', 'Learning Disability', 'Visual Disability', 'Psychosocial Disability', 'Intellectual Disability', 'Deaf/Hard-of-Hearing', 'Physical Disability', 'Cancer', 'Rare Disease'] as $disability)
+                                <label class="check-box">
+                                    <input type="checkbox"
+                                           name="disability_types[]"
+                                           value="{{ $disability }}"
+                                           data-disability-type-option
+                                           @checked(in_array($disability, $disabilityTypes, true))>
+                                    {{ $disability }}
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
             </div>
 
         </div>
@@ -386,17 +647,29 @@
             <div>
                 <div>
                     <h2 class="text-lg font-bold text-[#234E70]">
-                        Recommendations
+                        Problem, Assessment, and Recommendations
                     </h2>
                     <p class="text-sm text-gray-500 mt-1">
-                        Save the primary assistance amount, then add other identified needs below.
+                        Document the presented problem and assessment before finalizing the assistance recommendation.
                     </p>
                 </div>
             </div>
 
+            <div class="gis-section">
+                <h3 class="gis-section-title">IX. Problem Presented</h3>
+                <textarea name="problem_statement"
+                        class="input w-full h-28">{{ old('problem_statement', $application->problem_statement) }}</textarea>
+            </div>
+
+            <div class="gis-section">
+                <h3 class="gis-section-title">X. Social Worker's Assessment</h3>
+                <textarea name="social_worker_assessment"
+                        class="input w-full h-32">{{ old('social_worker_assessment', $application->social_worker_assessment) }}</textarea>
+            </div>
+
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <p class="text-sm text-gray-500">
-                    Generate an AI recommendation from the intake data, then adjust the final amount if needed.
+                    Generate an AI estimate from the intake data, then add recommended assistance rows below.
                 </p>
 
                 <button type="button"
@@ -415,10 +688,10 @@
                 @endif
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div>
 
                 <div>
-                    <label class="label">Primary Recommended Amount</label>
+                    <label class="label">AI Recommended Amount</label>
                     <input type="number"
                         id="recommended_amount"
                         name="recommended_amount"
@@ -427,23 +700,14 @@
                         readonly>
                 </div>
 
-                <div>
-                    <label class="label">Primary Final Amount</label>
-                    <input type="number"
-                        step="0.01"
-                        name="final_amount"
-                        class="input w-full"
-                        value="{{ $application->final_amount }}">
-                </div>
-
             </div>
 
             <div class="recommendation-panel">
                 <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <h3 class="text-base font-bold text-[#234E70]">Additional Assistance Recommendations</h3>
+                        <h3 class="text-base font-bold text-[#234E70]">Recommended Assistance</h3>
                         <p class="text-sm text-gray-500 mt-1">
-                            Add cash relief, material assistance, psychosocial support, or another need identified during intake.
+                            Add every assistance to be recommended. The total recommended amount is computed from all monetary rows.
                         </p>
                     </div>
 
@@ -493,18 +757,6 @@
                 </div>
             </div>
 
-            <div>
-                <label class="label">Problem Statement</label>
-                <textarea name="problem_statement"
-                        class="input w-full h-28">{{ $application->problem_statement }}</textarea>
-            </div>
-
-            <div>
-                <label class="label">Social Worker Assessment</label>
-                <textarea name="social_worker_assessment"
-                        class="input w-full h-32">{{ $application->social_worker_assessment }}</textarea>
-            </div>
-
         </div>
 
         <!-- BUTTONS -->
@@ -538,7 +790,56 @@ const recommendationUrl = @json(route('socialworker.recommendation.generate', $a
 const frequencyCheckUrl = @json(route('socialworker.assistance-frequency.check', $application->id));
 const assistanceCatalog = @json($assistanceCatalog);
 const modeOptions = @json($modeOptions);
+const referralInstitutionOptions = @json($referralInstitutionOptions);
 let additionalRecommendations = @json($savedRecommendations);
+const clientSectorOptions = document.querySelectorAll('[data-client-sector-option]');
+const clientSubCategoryOptions = document.querySelectorAll('[data-client-sub-category-option]');
+const disabilityTypeField = document.getElementById('disabilityTypeField');
+const disabilityTypeOptions = document.querySelectorAll('[data-disability-type-option]');
+
+function syncDisabilityTypeField() {
+    if (!disabilityTypeField) {
+        return;
+    }
+
+    const isPwd = Array.from(clientSectorOptions).some((option) => option.value === 'PWD' && option.checked);
+    disabilityTypeField.classList.toggle('hidden', !isPwd);
+
+    if (!isPwd) {
+        disabilityTypeOptions.forEach((option) => option.checked = false);
+    }
+}
+
+clientSectorOptions.forEach((option) => {
+    option.addEventListener('change', syncDisabilityTypeField);
+});
+clientSubCategoryOptions.forEach((option) => {
+    option.addEventListener('change', function () {
+        const mappedSector = this.dataset.targetSector;
+
+        if (this.checked && mappedSector) {
+            const sectorOption = Array.from(clientSectorOptions).find((item) => item.value === mappedSector);
+            if (sectorOption) {
+                sectorOption.checked = true;
+            }
+        }
+
+        syncDisabilityTypeField();
+    });
+});
+disabilityTypeOptions.forEach((option) => {
+    option.addEventListener('change', function () {
+        if (this.checked) {
+            const pwdOption = Array.from(clientSectorOptions).find((item) => item.value === 'PWD');
+            if (pwdOption) {
+                pwdOption.checked = true;
+            }
+        }
+
+        syncDisabilityTypeField();
+    });
+});
+syncDisabilityTypeField();
 
 function updateSteps() {
     for (let i = 1; i <= totalSteps; i++) {
@@ -646,12 +947,58 @@ function selectedSubtype(row) {
     return selectedType(row)?.subtypes.find((subtype) => String(subtype.id) === String(row.assistance_subtype_id));
 }
 
+function isNonMonetaryService(row) {
+    const type = selectedType(row);
+    const subtype = selectedSubtype(row);
+
+    return Boolean(type?.is_non_monetary || subtype?.is_non_monetary || isMaterialService(row));
+}
+
+function isReferralService(row) {
+    const type = selectedType(row);
+    const subtype = selectedSubtype(row);
+
+    return Boolean(
+        type?.name?.toLowerCase().includes('referral') ||
+        subtype?.name?.toLowerCase().includes('referral')
+    );
+}
+
+function isPsychosocialService(row) {
+    const type = selectedType(row);
+    const subtype = selectedSubtype(row);
+
+    return Boolean(
+        type?.name?.toLowerCase().includes('psychosocial') ||
+        subtype?.name?.toLowerCase().includes('psychosocial')
+    );
+}
+
+function isMaterialService(row) {
+    const type = selectedType(row);
+    const subtype = selectedSubtype(row);
+
+    return Boolean(
+        type?.name?.toLowerCase().includes('material') ||
+        subtype?.name?.toLowerCase().includes('material')
+    );
+}
+
+function requiresModeOfAssistance(row) {
+    return !isNonMonetaryService(row) && !isMaterialService(row);
+}
+
+function selectedReferralInstitution(row) {
+    return referralInstitutionOptions.find((institution) => String(institution.id) === String(row.referral_institution_id));
+}
+
 function blankRecommendation() {
     return {
         assistance_type_id: '',
         assistance_subtype_id: '',
         assistance_detail_id: '',
         mode_of_assistance_id: '',
+        referral_institution_id: '',
         final_amount: '',
         frequency_override_reason: '',
         frequency_status: '',
@@ -665,7 +1012,7 @@ function renderAdditionalRecommendations() {
         additionalRecommendationsContainer.innerHTML = `
             <div class="empty-state">
                 <p class="font-semibold text-gray-700">No additional assistance added.</p>
-                <p class="text-sm text-gray-500 mt-1">Use this when assessment identifies a second eligible need beyond the primary application assistance.</p>
+                <p class="text-sm text-gray-500 mt-1">Add each assistance that will be included in the final recommendation.</p>
             </div>
         `;
         return;
@@ -674,20 +1021,30 @@ function renderAdditionalRecommendations() {
     additionalRecommendationsContainer.innerHTML = additionalRecommendations.map((row, index) => {
         const type = selectedType(row);
         const subtype = selectedSubtype(row);
-        const statusClass = row.frequency_status === 'blocked'
-            ? 'status-badge status-badge--blocked'
+        const nonMonetaryService = isNonMonetaryService(row);
+        const referralService = isReferralService(row);
+        const psychosocialService = isPsychosocialService(row);
+        const showModeOfAssistance = requiresModeOfAssistance(row);
+        const showAssistanceDetail = !referralService && !psychosocialService;
+        const referralInstitution = selectedReferralInstitution(row);
+        const statusClass = row.frequency_status === 'not_eligible'
+            ? 'status-badge status-badge--not-eligible'
             : row.frequency_status === 'eligible'
                 ? 'status-badge status-badge--eligible'
                 : 'status-badge';
-        const canOverride = row.frequency_status === 'blocked' && row.allows_override;
-        const blockedWithoutOverride = row.frequency_status === 'blocked' && !row.allows_override;
+        const canOverride = row.frequency_status === 'not_eligible';
+        const statusLabel = nonMonetaryService
+            ? 'added service'
+            : row.frequency_status === 'not_eligible'
+            ? 'not eligible'
+            : (row.frequency_status ? row.frequency_status.replace('_', ' ') : 'not checked');
 
         return `
             <div class="additional-recommendation" data-index="${index}">
                 <div class="flex items-start justify-between gap-4">
                     <div>
-                        <h4 class="font-bold text-[#234E70]">Additional Assistance ${index + 1}</h4>
-                        <p class="text-sm text-gray-500">Frequency is checked before this row is saved.</p>
+                        <h4 class="font-bold text-[#234E70]">Recommended Assistance ${index + 1}</h4>
+                        <p class="text-sm text-gray-500">${nonMonetaryService ? 'Added service. No amount or frequency check is required.' : 'Frequency is checked before this row is saved.'}</p>
                     </div>
                     <button type="button" class="text-sm font-semibold text-red-600" data-remove-recommendation="${index}">Remove</button>
                 </div>
@@ -699,40 +1056,51 @@ function renderAdditionalRecommendations() {
                             ${optionList(assistanceCatalog, row.assistance_type_id)}
                         </select>
                     </div>
-                    <div>
+                    ${referralService ? '' : `<div>
                         <label class="label">Specific Assistance</label>
                         <select name="recommendations[${index}][assistance_subtype_id]" class="input" data-recommendation-field="assistance_subtype_id">
                             ${optionList(type?.subtypes || [], row.assistance_subtype_id)}
                         </select>
-                    </div>
-                    <div>
+                    </div>`}
+                    ${showAssistanceDetail ? `<div>
                         <label class="label">Assistance Detail</label>
                         <select name="recommendations[${index}][assistance_detail_id]" class="input" data-recommendation-field="assistance_detail_id">
                             ${optionList(subtype?.details || [], row.assistance_detail_id, 'None')}
                         </select>
-                    </div>
-                    <div>
+                    </div>` : ''}
+                    ${showModeOfAssistance ? `<div>
                         <label class="label">Mode</label>
                         <select name="recommendations[${index}][mode_of_assistance_id]" class="input" data-recommendation-field="mode_of_assistance_id">
                             ${optionList(modeOptions, row.mode_of_assistance_id)}
                         </select>
-                    </div>
-                    <div>
-                        <label class="label">Final Amount</label>
+                    </div>` : ''}
+                    ${nonMonetaryService ? '' : `<div>
+                        <label class="label">Recommended Amount</label>
                         <input type="number" step="0.01" name="recommendations[${index}][final_amount]" class="input" value="${row.final_amount || ''}" data-recommendation-field="final_amount">
-                    </div>
+                    </div>`}
                 </div>
 
-                ${canOverride ? `
-                    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                        <label class="label">Override Reason</label>
-                        <textarea name="recommendations[${index}][frequency_override_reason]" class="input h-24 bg-white" data-recommendation-field="frequency_override_reason" placeholder="Explain why this blocked assistance should still be recommended.">${row.frequency_override_reason || ''}</textarea>
+                ${referralService ? `
+                    <div class="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
+                        <label class="label">Referral Institution / Government Agency</label>
+                        <select name="recommendations[${index}][referral_institution_id]" class="input bg-white" data-recommendation-field="referral_institution_id">
+                            ${optionList(referralInstitutionOptions, row.referral_institution_id, 'Select institution or agency')}
+                        </select>
+                        ${referralInstitution ? `
+                            <div class="mt-3 grid gap-2 text-sm text-sky-900 md:grid-cols-2">
+                                <p><span class="font-semibold">Addressee:</span> ${referralInstitution.addressee || '-'}</p>
+                                <p><span class="font-semibold">Email:</span> ${referralInstitution.email || '-'}</p>
+                                <p><span class="font-semibold">Contact:</span> ${referralInstitution.contact_number || '-'}</p>
+                                <p><span class="font-semibold">Address:</span> ${referralInstitution.address || '-'}</p>
+                            </div>
+                        ` : `<p class="mt-2 text-sm text-sky-800">Choose the institution or agency where the client will be referred.</p>`}
                     </div>
                 ` : ''}
 
-                ${blockedWithoutOverride ? `
-                    <div class="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                        This assistance is blocked by the frequency rule and this rule does not allow override.
+                ${nonMonetaryService ? `
+                    <input type="hidden" name="recommendations[${index}][final_amount]" value="">
+                    <div class="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
+                        This is a non-monetary added service. No amount or frequency check is required.
                     </div>
                 ` : ''}
 
@@ -741,15 +1109,22 @@ function renderAdditionalRecommendations() {
                     <textarea name="recommendations[${index}][notes]" class="input h-20" data-recommendation-field="notes">${row.notes || ''}</textarea>
                 </div>
 
-                <div class="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                ${nonMonetaryService ? '' : `<div class="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div class="${statusClass}">
-                        ${row.frequency_status ? row.frequency_status.replace('_', ' ') : 'not checked'}
+                        ${statusLabel}
                     </div>
                     <button type="button" class="px-4 py-2 rounded-lg border border-[#234E70] text-[#234E70] hover:bg-[#234E70] hover:text-white" data-check-frequency="${index}">
                         Check Frequency
                     </button>
                 </div>
-                <p class="mt-2 text-sm text-gray-600">${row.frequency_message || 'Choose an assistance and run the frequency check.'}</p>
+                <p class="mt-2 text-sm text-gray-600">${row.frequency_message || 'Choose an assistance and run the frequency check.'}</p>`}
+
+                ${!nonMonetaryService && canOverride ? `
+                    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <label class="label">Override Reason</label>
+                        <textarea name="recommendations[${index}][frequency_override_reason]" class="input h-24 bg-white" data-recommendation-field="frequency_override_reason" placeholder="Explain why this not eligible assistance should still be recommended.">${row.frequency_override_reason || ''}</textarea>
+                    </div>
+                ` : ''}
             </div>
         `;
     }).join('');
@@ -761,6 +1136,9 @@ function updateRecommendationRow(index, field, value) {
     if (field === 'assistance_type_id') {
         additionalRecommendations[index].assistance_subtype_id = '';
         additionalRecommendations[index].assistance_detail_id = '';
+        additionalRecommendations[index].final_amount = '';
+        additionalRecommendations[index].mode_of_assistance_id = '';
+        additionalRecommendations[index].referral_institution_id = '';
         additionalRecommendations[index].frequency_status = '';
         additionalRecommendations[index].frequency_message = '';
         renderAdditionalRecommendations();
@@ -768,6 +1146,15 @@ function updateRecommendationRow(index, field, value) {
 
     if (field === 'assistance_subtype_id') {
         additionalRecommendations[index].assistance_detail_id = '';
+        additionalRecommendations[index].final_amount = isNonMonetaryService(additionalRecommendations[index])
+            ? ''
+            : additionalRecommendations[index].final_amount;
+        additionalRecommendations[index].mode_of_assistance_id = requiresModeOfAssistance(additionalRecommendations[index])
+            ? additionalRecommendations[index].mode_of_assistance_id
+            : '';
+        additionalRecommendations[index].referral_institution_id = isReferralService(additionalRecommendations[index])
+            ? additionalRecommendations[index].referral_institution_id
+            : '';
         additionalRecommendations[index].frequency_status = '';
         additionalRecommendations[index].frequency_message = '';
         renderAdditionalRecommendations();
@@ -776,6 +1163,13 @@ function updateRecommendationRow(index, field, value) {
 
 async function checkRecommendationFrequency(index) {
     const row = additionalRecommendations[index];
+
+    if (isNonMonetaryService(row)) {
+        row.frequency_status = 'eligible';
+        row.frequency_message = 'Added non-monetary service. No frequency check is required.';
+        renderAdditionalRecommendations();
+        return;
+    }
 
     if (!row.assistance_type_id || !row.assistance_subtype_id) {
         row.frequency_status = 'missing';
@@ -802,13 +1196,11 @@ async function checkRecommendationFrequency(index) {
         });
         const data = await response.json();
 
-        row.frequency_status = data.status || 'review_required';
+        row.frequency_status = data.status === 'eligible' ? 'eligible' : 'not_eligible';
         row.frequency_message = data.message || 'Frequency check completed.';
-        row.allows_override = Boolean(data.rule?.allows_exception_request);
     } catch (error) {
-        row.frequency_status = 'review_required';
+        row.frequency_status = 'not_eligible';
         row.frequency_message = 'Unable to check frequency right now. The server will check again when saving.';
-        row.allows_override = false;
     }
 
     renderAdditionalRecommendations();
@@ -972,6 +1364,17 @@ summaryTabs.forEach((tab) => {
     border-radius:10px;
     border:1px solid #e5e7eb;
 }
+.gis-section{
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    background:#fff;
+    padding:18px;
+}
+.gis-section-title{
+    color:#234E70;
+    font-weight:800;
+    margin-bottom:14px;
+}
 .recommendation-panel,
 .additional-recommendation,
 .empty-state{
@@ -1000,7 +1403,7 @@ summaryTabs.forEach((tab) => {
     background:#dcfce7;
     color:#166534;
 }
-.status-badge--blocked{
+.status-badge--not-eligible{
     border-color:#fecdd3;
     background:#ffe4e6;
     color:#be123c;

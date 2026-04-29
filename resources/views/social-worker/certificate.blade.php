@@ -271,8 +271,10 @@
         ->filter()
         ->implode('; ');
     $purpose = $application->problem_statement ?: $application->crisis_type ?: ($assistanceLabel ?: 'financial assistance');
-    $amount = (float) ($application->final_amount ?? $application->recommended_amount ?? 0)
-        + $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount);
+    $recommendationTotal = $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount);
+    $amount = $application->assistanceRecommendations->isNotEmpty()
+        ? $recommendationTotal
+        : (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
     $amountFormatted = 'PhP '.number_format($amount, 2);
     $amountWhole = (int) round($amount);
     $amountWords = $amountWhole > 0

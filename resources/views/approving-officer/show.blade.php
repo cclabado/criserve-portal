@@ -3,9 +3,10 @@
 @section('content')
 
 @php
-    $primaryFinalAmount = (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
-    $additionalFinalAmount = $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount);
-    $totalRecommendedAmount = $primaryFinalAmount + $additionalFinalAmount;
+    $recommendationFinalAmount = $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount);
+    $totalRecommendedAmount = $application->assistanceRecommendations->isNotEmpty()
+        ? $recommendationFinalAmount
+        : (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
 @endphp
 
 <main class="p-8 max-w-6xl mx-auto space-y-6">
@@ -76,7 +77,7 @@
             </div>
 
             <div>
-                <p class="text-sm text-gray-500">Total Final Amount</p>
+                <p class="text-sm text-gray-500">Total Recommended Amount</p>
                 <p class="text-2xl font-bold text-[#234E70]">
                     PHP {{ number_format($totalRecommendedAmount, 2) }}
                 </p>
@@ -98,9 +99,23 @@
 
     @if($application->assistanceRecommendations->isNotEmpty())
         <div class="card">
-            <h2 class="title">Additional Assistance Recommendations</h2>
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <h2 class="title mb-1">Specific Assistance Recommended</h2>
+                    <p class="text-sm text-gray-500">Certificate of Eligibility is available after approval.</p>
+                </div>
 
-            <div class="space-y-3">
+                @if(in_array($application->status, ['approved', 'released'], true))
+                    <a href="{{ route('socialworker.certificate', $application->id) }}"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="inline-flex items-center justify-center rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700">
+                        Print Certificate of Eligibility
+                    </a>
+                @endif
+            </div>
+
+            <div class="mt-4 space-y-3">
                 @foreach($application->assistanceRecommendations as $recommendation)
                     <div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
                         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -117,10 +132,18 @@
                                 <p class="mt-1 text-sm text-gray-500">
                                     Mode: {{ $recommendation->modeOfAssistance->name ?? '-' }}
                                 </p>
+                                @if($recommendation->referralInstitution)
+                                    <p class="mt-1 text-sm text-gray-500">
+                                        Referral: {{ $recommendation->referralInstitution->name }}
+                                        @if($recommendation->referralInstitution->email)
+                                            ({{ $recommendation->referralInstitution->email }})
+                                        @endif
+                                    </p>
+                                @endif
                             </div>
 
                             <div class="text-left md:text-right">
-                                <p class="text-xs text-gray-500">Final Amount</p>
+                                <p class="text-xs text-gray-500">Recommended Amount</p>
                                 <p class="text-lg font-bold text-[#234E70]">
                                     PHP {{ number_format($recommendation->final_amount, 2) }}
                                 </p>
@@ -201,13 +224,13 @@
                     @csrf
 
                     <div>
-                        <label class="label">Final Approved Amount</label>
+                        <label class="label">Approved Amount</label>
 
                         <input type="number"
                                step="0.01"
                                name="final_amount"
                                class="input w-full"
-                               value="{{ $application->final_amount ?? $application->recommended_amount }}">
+                               value="{{ $totalRecommendedAmount }}">
                     </div>
 
                     <button type="submit"

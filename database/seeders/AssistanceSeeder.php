@@ -30,12 +30,7 @@ class AssistanceSeeder extends Seeder
                     'Wireless Mental Health and Psychosocial Support (WiSUPPORT)',
                     'Face-to-face Counseling with Psychological First Aid/Psychosocial Support',
                 ],
-                'Referral to Other Services' => [
-                    'Legal Services',
-                    'Psychosocial Interventions',
-                    'Temporary Shelter / Residential Facilities',
-                    'LSWDO Case Management',
-                ],
+                'Referral' => [],
             ];
 
             $typeModels = [];

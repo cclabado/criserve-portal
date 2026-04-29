@@ -12,6 +12,7 @@ use App\Models\Document;
 use App\Models\FamilyMember;
 use App\Models\ModeOfAssistance;
 use App\Models\Relationship;
+use App\Models\ReferralInstitution;
 use App\Notifications\InitialAssessmentScheduledNotification;
 use App\Services\AiRecommendationService;
 use App\Services\FamilyNetworkService;
@@ -240,6 +241,11 @@ class SocialWorkerController extends Controller
             'modeOfAssistance',
             'frequencyRule',
             'frequencyBasisApplication',
+            'assistanceRecommendations.assistanceType',
+            'assistanceRecommendations.assistanceSubtype',
+            'assistanceRecommendations.assistanceDetail',
+            'assistanceRecommendations.modeOfAssistance',
+            'assistanceRecommendations.referralInstitution',
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
 
@@ -595,6 +601,7 @@ class SocialWorkerController extends Controller
             'assistanceRecommendations.assistanceDetail',
             'assistanceRecommendations.modeOfAssistance',
             'assistanceRecommendations.frequencyRule',
+            'assistanceRecommendations.referralInstitution',
             'assistanceType',
             'assistanceSubtype',
             'assistanceDetail',
@@ -609,8 +616,14 @@ class SocialWorkerController extends Controller
             ->orderBy('name')
             ->get();
         $modesOfAssistance = ModeOfAssistance::orderBy('name')->get();
+        $referralInstitutions = ReferralInstitution::where('is_active', true)->orderBy('name')->get();
 
-        return view('social-worker.intake', compact('application', 'assistanceTypes', 'modesOfAssistance'));
+        return view('social-worker.intake', compact(
+            'application',
+            'assistanceTypes',
+            'modesOfAssistance',
+            'referralInstitutions'
+        ));
     }
 
     public function saveIntake(Request $request, $id)
@@ -640,7 +653,7 @@ class SocialWorkerController extends Controller
         $application->problem_statement = $validated['problem_statement'] ?? null;
         $application->social_worker_assessment = $validated['social_worker_assessment'] ?? null;
         $application->recommended_amount = $recommendation['recommended_amount'];
-        $application->final_amount = $validated['final_amount'] ?? $recommendation['recommended_amount'];
+        $application->final_amount = collect($recommendations)->sum(fn (array $row) => (float) ($row['final_amount'] ?? 0));
         $application->ai_recommendation_summary = $recommendation['summary'];
         $application->ai_recommendation_confidence = $recommendation['confidence'];
         $application->ai_recommendation_source = $recommendation['source'];
@@ -715,6 +728,7 @@ class SocialWorkerController extends Controller
             'assistanceRecommendations.assistanceType',
             'assistanceRecommendations.assistanceSubtype',
             'assistanceRecommendations.assistanceDetail',
+            'assistanceRecommendations.referralInstitution',
             'socialWorker',
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
@@ -724,6 +738,29 @@ class SocialWorkerController extends Controller
         }
 
         return view('social-worker.certificate', compact('application'));
+    }
+
+    public function generalIntakeSheet($id)
+    {
+        $application = Application::with([
+            'client',
+            'beneficiary.relationshipData',
+            'familyMembers.relationshipData',
+            'assistanceType',
+            'assistanceSubtype',
+            'assistanceDetail',
+            'modeOfAssistance',
+            'documents',
+            'assistanceRecommendations.assistanceType',
+            'assistanceRecommendations.assistanceSubtype',
+            'assistanceRecommendations.assistanceDetail',
+            'assistanceRecommendations.modeOfAssistance',
+            'assistanceRecommendations.referralInstitution',
+            'socialWorker',
+        ])->findOrFail($id);
+        $this->claimOrEnsureOwnership($application);
+
+        return view('social-worker.general-intake-sheet', compact('application'));
     }
 
     public function release($id)
@@ -805,12 +842,13 @@ class SocialWorkerController extends Controller
     {
         $rules = [
             'monthly_income' => ['required', 'numeric', 'min:0'],
-            'household_members' => ['required', 'integer', 'min:1'],
+            'household_members' => ['nullable', 'integer', 'min:1'],
             'working_members' => ['required', 'integer', 'min:0'],
+            'seasonal_worker_members' => ['required', 'integer', 'min:0'],
             'monthly_expenses' => ['required', 'numeric', 'min:0'],
-            'savings' => ['required', 'numeric', 'min:0'],
-            'crisis_type' => ['required', 'string', 'max:255'],
-            'urgency_level' => ['required', 'in:Low,Medium,High,Critical'],
+            'savings' => ['nullable', 'numeric', 'min:0'],
+            'crisis_type' => ['nullable', 'string', 'max:255'],
+            'urgency_level' => ['nullable', 'in:Low,Medium,High,Critical'],
             'has_elderly' => ['nullable', 'boolean'],
             'has_child' => ['nullable', 'boolean'],
             'has_pwd' => ['nullable', 'boolean'],
@@ -818,7 +856,40 @@ class SocialWorkerController extends Controller
             'earner_unable_to_work' => ['nullable', 'boolean'],
             'has_philhealth' => ['nullable', 'boolean'],
             'has_family_support' => ['nullable', 'boolean'],
-            'final_amount' => ['nullable', 'numeric', 'min:0'],
+            'has_vulnerable_household_member' => ['nullable', 'boolean'],
+            'has_unstable_employment' => ['nullable', 'boolean'],
+            'has_insurance_coverage' => ['nullable', 'boolean'],
+            'has_savings' => ['nullable', 'boolean'],
+            'amount_needed' => ['required', 'numeric', 'min:0'],
+            'gis_client_type' => ['nullable', 'in:New,Returning,Referral'],
+            'gis_visit_type' => ['nullable', 'string', 'max:255'],
+            'diagnosis_or_cause_of_death' => ['nullable', 'string', 'max:255'],
+            'occupation_sources' => ['nullable', 'string', 'max:255'],
+            'insurance_coverage' => ['nullable', 'string', 'max:255'],
+            'emergency_fund' => ['nullable', 'string', 'max:255'],
+            'disease_duration' => ['nullable', 'string', 'max:255'],
+            'experienced_recent_crisis' => ['nullable', 'boolean'],
+            'recent_crisis_types' => ['nullable', 'array'],
+            'recent_crisis_types.*' => ['string', 'max:255'],
+            'support_systems' => ['nullable', 'array'],
+            'support_systems.*' => ['string', 'max:255'],
+            'external_resources' => ['nullable', 'array'],
+            'external_resources.*' => ['string', 'max:255'],
+            'self_help_efforts' => ['nullable', 'array'],
+            'self_help_efforts.*' => ['string', 'max:255'],
+            'client_sector' => ['nullable', 'string', 'max:255'],
+            'client_sectors' => ['nullable', 'array'],
+            'client_sectors.*' => ['string', 'max:255'],
+            'client_sub_category' => ['nullable', 'string', 'max:255'],
+            'client_sub_categories' => ['nullable', 'array'],
+            'client_sub_categories.*' => ['string', 'max:255'],
+            'disability_type' => ['nullable', 'string', 'max:255'],
+            'disability_types' => ['nullable', 'array'],
+            'disability_types.*' => ['string', 'max:255'],
+            'total_income_past_six_months' => ['nullable', 'numeric', 'min:0'],
+            'income_sources' => ['nullable', 'array'],
+            'income_sources.*.source' => ['nullable', 'string', 'max:255'],
+            'income_sources.*.amount' => ['nullable', 'numeric', 'min:0'],
         ];
 
         if ($includeNotes) {
@@ -837,6 +908,7 @@ class SocialWorkerController extends Controller
             'recommendations.*.assistance_subtype_id' => ['nullable', 'exists:assistance_subtypes,id'],
             'recommendations.*.assistance_detail_id' => ['nullable', 'exists:assistance_details,id'],
             'recommendations.*.mode_of_assistance_id' => ['nullable', 'exists:mode_of_assistances,id'],
+            'recommendations.*.referral_institution_id' => ['nullable', 'exists:referral_institutions,id'],
             'recommendations.*.recommended_amount' => ['nullable', 'numeric', 'min:0'],
             'recommendations.*.final_amount' => ['nullable', 'numeric', 'min:0'],
             'recommendations.*.frequency_case_key' => ['nullable', 'string', 'max:255'],
@@ -847,37 +919,74 @@ class SocialWorkerController extends Controller
         $rows = collect($validated['recommendations'] ?? [])
             ->filter(fn (array $row) => filled($row['assistance_type_id'] ?? null)
                 || filled($row['assistance_subtype_id'] ?? null)
-                || filled($row['final_amount'] ?? null))
+                || filled($row['final_amount'] ?? null)
+                || filled($row['referral_institution_id'] ?? null))
             ->values();
 
         $seen = [];
-        $primarySignature = $this->recommendationSignature([
-            'assistance_subtype_id' => $application->assistance_subtype_id,
-            'assistance_detail_id' => $application->assistance_detail_id,
-        ]);
 
-        return $rows->map(function (array $row, int $index) use ($application, &$seen, $primarySignature) {
+        return $rows->map(function (array $row, int $index) use ($application, &$seen) {
             $detailId = filled($row['assistance_detail_id'] ?? null) ? (int) $row['assistance_detail_id'] : null;
-
-            validator($row, [
-                'assistance_type_id' => ['required', 'exists:assistance_types,id'],
-                'assistance_subtype_id' => ['required', 'exists:assistance_subtypes,id'],
-                'mode_of_assistance_id' => ['required', 'exists:mode_of_assistances,id'],
-                'final_amount' => ['required', 'numeric', 'min:0'],
-            ])->validate();
-
-            $this->validateAssistanceSelection(
-                (int) $row['assistance_type_id'],
-                (int) $row['assistance_subtype_id'],
-                $detailId
+            $isNonMonetary = $this->isNonMonetaryAssistance(
+                (int) ($row['assistance_type_id'] ?? 0),
+                (int) ($row['assistance_subtype_id'] ?? 0)
+            );
+            $isReferralService = $this->isReferralAssistance(
+                (int) ($row['assistance_type_id'] ?? 0),
+                (int) ($row['assistance_subtype_id'] ?? 0)
+            );
+            $isPsychosocialService = $this->isPsychosocialAssistance(
+                (int) ($row['assistance_type_id'] ?? 0),
+                (int) ($row['assistance_subtype_id'] ?? 0)
+            );
+            $requiresModeOfAssistance = $this->requiresModeOfAssistance(
+                (int) ($row['assistance_type_id'] ?? 0),
+                (int) ($row['assistance_subtype_id'] ?? 0)
             );
 
+            if ($isPsychosocialService) {
+                $detailId = null;
+                $row['assistance_detail_id'] = null;
+            }
+
+            $rowRules = [
+                'assistance_type_id' => ['required', 'exists:assistance_types,id'],
+            ];
+
+            if (! $isReferralService) {
+                $rowRules['assistance_subtype_id'] = ['required', 'exists:assistance_subtypes,id'];
+            }
+
+            if (! $isNonMonetary) {
+                $rowRules['final_amount'] = ['required', 'numeric', 'min:0'];
+            }
+
+            if ($requiresModeOfAssistance) {
+                $rowRules['mode_of_assistance_id'] = ['required', 'exists:mode_of_assistances,id'];
+            }
+
+            if ($isReferralService) {
+                $rowRules['referral_institution_id'] = ['required', 'exists:referral_institutions,id'];
+            }
+
+            validator($row, $rowRules)->validate();
+
+            if (! $isReferralService) {
+                $this->validateAssistanceSelection(
+                    (int) $row['assistance_type_id'],
+                    (int) $row['assistance_subtype_id'],
+                    $detailId,
+                    ! $isPsychosocialService
+                );
+            }
+
             $signature = $this->recommendationSignature([
-                'assistance_subtype_id' => $row['assistance_subtype_id'],
+                'assistance_type_id' => $row['assistance_type_id'],
+                'assistance_subtype_id' => $row['assistance_subtype_id'] ?? null,
                 'assistance_detail_id' => $detailId,
             ]);
 
-            if ($signature === $primarySignature || isset($seen[$signature])) {
+            if (isset($seen[$signature])) {
                 throw ValidationException::withMessages([
                     "recommendations.{$index}.assistance_subtype_id" => 'This assistance is already included in the intake recommendation.',
                 ]);
@@ -885,28 +994,36 @@ class SocialWorkerController extends Controller
 
             $seen[$signature] = true;
 
-            $frequency = $this->evaluateAdditionalRecommendationFrequency($application, $row);
+            $frequency = $isNonMonetary
+                ? [
+                    'rule' => null,
+                    'basis_application_id' => null,
+                    'status' => 'eligible',
+                    'message' => 'Added non-monetary service. No frequency check is required.',
+                ]
+                : $this->evaluateAdditionalRecommendationFrequency($application, $row);
 
-            $allowsOverride = (bool) ($frequency['rule']?->allows_exception_request ?? false);
+            $isEligible = ($frequency['status'] ?? null) === 'eligible';
 
-            if ($frequency['status'] === 'blocked' && (! $allowsOverride || blank($row['frequency_override_reason'] ?? null))) {
+            if (! $isEligible && blank($row['frequency_override_reason'] ?? null)) {
                 throw ValidationException::withMessages([
                     "recommendations.{$index}.assistance_subtype_id" => $frequency['message'],
                 ]);
             }
 
-            if ($frequency['status'] === 'blocked' && $allowsOverride) {
+            if (! $isEligible) {
                 $frequency['status'] = 'overridden';
                 $frequency['message'] = 'Frequency rule overridden by social worker. '.$frequency['message'];
             }
 
             return [
                 'assistance_type_id' => (int) $row['assistance_type_id'],
-                'assistance_subtype_id' => (int) $row['assistance_subtype_id'],
+                'assistance_subtype_id' => $isReferralService ? null : (int) $row['assistance_subtype_id'],
                 'assistance_detail_id' => $detailId,
-                'mode_of_assistance_id' => (int) $row['mode_of_assistance_id'],
+                'mode_of_assistance_id' => $requiresModeOfAssistance ? (int) $row['mode_of_assistance_id'] : null,
+                'referral_institution_id' => $isReferralService ? (int) $row['referral_institution_id'] : null,
                 'recommended_amount' => null,
-                'final_amount' => $row['final_amount'],
+                'final_amount' => $isNonMonetary ? 0 : $row['final_amount'],
                 'frequency_rule_id' => $frequency['rule']?->id,
                 'frequency_basis_application_id' => $frequency['basis_application_id'],
                 'frequency_status' => $frequency['status'],
@@ -944,22 +1061,66 @@ class SocialWorkerController extends Controller
 
     protected function recommendationSignature(array $row): string
     {
+        if (blank($row['assistance_subtype_id'] ?? null)) {
+            return 'type:'.(int) ($row['assistance_type_id'] ?? 0);
+        }
+
         return implode(':', [
             (int) ($row['assistance_subtype_id'] ?? 0),
             filled($row['assistance_detail_id'] ?? null) ? (int) $row['assistance_detail_id'] : 'none',
         ]);
     }
 
+    protected function isNonMonetaryAssistance(int $typeId, int $subtypeId): bool
+    {
+        return $this->isPsychosocialAssistance($typeId, $subtypeId)
+            || $this->isReferralAssistance($typeId, $subtypeId)
+            || $this->isMaterialAssistance($typeId, $subtypeId);
+    }
+
+    protected function isPsychosocialAssistance(int $typeId, int $subtypeId): bool
+    {
+        $typeName = strtolower((string) AssistanceType::whereKey($typeId)->value('name'));
+        $subtypeName = strtolower((string) AssistanceSubtype::whereKey($subtypeId)->value('name'));
+
+        return str_contains($typeName, 'psychosocial')
+            || str_contains($subtypeName, 'psychosocial');
+    }
+
+    protected function isReferralAssistance(int $typeId, int $subtypeId): bool
+    {
+        $typeName = strtolower((string) AssistanceType::whereKey($typeId)->value('name'));
+        $subtypeName = strtolower((string) AssistanceSubtype::whereKey($subtypeId)->value('name'));
+
+        return str_contains($typeName, 'referral')
+            || str_contains($subtypeName, 'referral');
+    }
+
+    protected function isMaterialAssistance(int $typeId, int $subtypeId): bool
+    {
+        $typeName = strtolower((string) AssistanceType::whereKey($typeId)->value('name'));
+        $subtypeName = strtolower((string) AssistanceSubtype::whereKey($subtypeId)->value('name'));
+
+        return str_contains($typeName, 'material')
+            || str_contains($subtypeName, 'material');
+    }
+
+    protected function requiresModeOfAssistance(int $typeId, int $subtypeId): bool
+    {
+        return ! $this->isNonMonetaryAssistance($typeId, $subtypeId);
+    }
+
     protected function extractIntakeFields(array $validated): array
     {
         return [
             'monthly_income' => $validated['monthly_income'],
-            'household_members' => $validated['household_members'],
+            'household_members' => $validated['household_members'] ?? null,
             'working_members' => $validated['working_members'],
+            'seasonal_worker_members' => $validated['seasonal_worker_members'],
             'monthly_expenses' => $validated['monthly_expenses'],
-            'savings' => $validated['savings'],
-            'crisis_type' => $validated['crisis_type'],
-            'urgency_level' => $validated['urgency_level'],
+            'savings' => $validated['savings'] ?? 0,
+            'crisis_type' => $validated['crisis_type'] ?? null,
+            'urgency_level' => $validated['urgency_level'] ?? null,
             'has_elderly' => ! empty($validated['has_elderly']),
             'has_child' => ! empty($validated['has_child']),
             'has_pwd' => ! empty($validated['has_pwd']),
@@ -967,6 +1128,40 @@ class SocialWorkerController extends Controller
             'earner_unable_to_work' => ! empty($validated['earner_unable_to_work']),
             'has_philhealth' => ! empty($validated['has_philhealth']),
             'has_family_support' => ! empty($validated['has_family_support']),
+            'has_vulnerable_household_member' => ! empty($validated['has_vulnerable_household_member']),
+            'has_unstable_employment' => ! empty($validated['has_unstable_employment']),
+            'has_insurance_coverage' => ! empty($validated['has_insurance_coverage']),
+            'has_savings' => ! empty($validated['has_savings']),
+            'amount_needed' => $validated['amount_needed'],
+            'gis_client_type' => $validated['gis_client_type'] ?? null,
+            'gis_visit_type' => $validated['gis_visit_type'] ?? null,
+            'diagnosis_or_cause_of_death' => $validated['diagnosis_or_cause_of_death'] ?? null,
+            'occupation_sources' => $validated['occupation_sources'] ?? null,
+            'insurance_coverage' => $validated['insurance_coverage'] ?? null,
+            'emergency_fund' => $validated['emergency_fund'] ?? null,
+            'disease_duration' => $validated['disease_duration'] ?? null,
+            'experienced_recent_crisis' => array_key_exists('experienced_recent_crisis', $validated)
+                ? (bool) $validated['experienced_recent_crisis']
+                : null,
+            'recent_crisis_types' => array_values($validated['recent_crisis_types'] ?? []),
+            'support_systems' => array_values($validated['support_systems'] ?? []),
+            'external_resources' => array_values($validated['external_resources'] ?? []),
+            'self_help_efforts' => array_values($validated['self_help_efforts'] ?? []),
+            'client_sector' => collect($validated['client_sectors'] ?? [])->first() ?? ($validated['client_sector'] ?? null),
+            'client_sectors' => array_values($validated['client_sectors'] ?? []),
+            'client_sub_category' => collect($validated['client_sub_categories'] ?? [])->first() ?? ($validated['client_sub_category'] ?? null),
+            'client_sub_categories' => array_values($validated['client_sub_categories'] ?? []),
+            'disability_type' => in_array('PWD', $validated['client_sectors'] ?? [], true)
+                ? (collect($validated['disability_types'] ?? [])->first() ?? ($validated['disability_type'] ?? null))
+                : null,
+            'disability_types' => in_array('PWD', $validated['client_sectors'] ?? [], true)
+                ? array_values($validated['disability_types'] ?? [])
+                : [],
+            'total_income_past_six_months' => $validated['total_income_past_six_months'] ?? null,
+            'income_sources' => collect($validated['income_sources'] ?? [])
+                ->filter(fn (array $row) => filled($row['source'] ?? null) || filled($row['amount'] ?? null))
+                ->values()
+                ->all(),
         ];
     }
 
@@ -988,7 +1183,7 @@ class SocialWorkerController extends Controller
             ->get();
     }
 
-    protected function validateAssistanceSelection(int $typeId, int $subtypeId, ?int $detailId): void
+    protected function validateAssistanceSelection(int $typeId, int $subtypeId, ?int $detailId, bool $requireDetail = true): void
     {
         $type = AssistanceType::find($typeId);
         $subtype = AssistanceSubtype::with('details')->find($subtypeId);
@@ -999,7 +1194,7 @@ class SocialWorkerController extends Controller
             ]);
         }
 
-        if ($subtype->details->isNotEmpty() && ! $detailId) {
+        if ($requireDetail && $subtype->details->isNotEmpty() && ! $detailId) {
             throw ValidationException::withMessages([
                 'assistance_detail_id' => 'Please select an assistance detail.',
             ]);

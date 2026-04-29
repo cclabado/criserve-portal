@@ -13,7 +13,7 @@ class ModeOfAssistanceSeeder extends Seeder
     {
         $modes = [];
 
-        foreach (['Cash', 'Guarantee Letter', 'Referral'] as $name) {
+        foreach (['Cash', 'Guarantee Letter'] as $name) {
             $mode = ModeOfAssistance::firstOrCreate(['name' => $name]);
             $modes[strtolower($name)] = $mode;
         }
@@ -24,7 +24,6 @@ class ModeOfAssistanceSeeder extends Seeder
             $normalized = match ($raw) {
                 'cash' => 'cash',
                 'gl', 'guarantee letter' => 'guarantee letter',
-                'referral' => 'referral',
                 default => null,
             };
 

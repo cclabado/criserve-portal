@@ -119,6 +119,7 @@ class ApprovingOfficerController extends Controller
             'assistanceRecommendations.assistanceSubtype',
             'assistanceRecommendations.assistanceDetail',
             'assistanceRecommendations.modeOfAssistance',
+            'assistanceRecommendations.referralInstitution',
             'assistanceType',
             'assistanceSubtype',
             'modeOfAssistance',

@@ -12,6 +12,7 @@ class ApplicationAssistanceRecommendation extends Model
         'assistance_subtype_id',
         'assistance_detail_id',
         'mode_of_assistance_id',
+        'referral_institution_id',
         'frequency_rule_id',
         'frequency_basis_application_id',
         'recommended_amount',
@@ -54,6 +55,11 @@ class ApplicationAssistanceRecommendation extends Model
     public function modeOfAssistance()
     {
         return $this->belongsTo(ModeOfAssistance::class);
+    }
+
+    public function referralInstitution()
+    {
+        return $this->belongsTo(ReferralInstitution::class);
     }
 
     public function frequencyRule()
