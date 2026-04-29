@@ -119,7 +119,7 @@ class ClientDashboardController extends Controller
             'Released' => (clone $baseQuery)->where('status', 'released')->count(),
         ];
 
-        $types = AssistanceType::all();
+        $types = AssistanceType::where('is_active', true)->get();
         return view('client.dashboard', compact(
             'applications',
             'latestApplication',
@@ -139,7 +139,7 @@ class ClientDashboardController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $types = AssistanceType::all();
+        $types = AssistanceType::where('is_active', true)->get();
 
         return view('client.applications', compact('applications', 'types'));
     }
@@ -156,6 +156,7 @@ class ClientDashboardController extends Controller
         ]);
 
         $relationships = Relationship::query()
+            ->where('is_active', true)
             ->where('name', '!=', 'Self')
             ->where('name', '!=', 'Other')
             ->orderBy('name')

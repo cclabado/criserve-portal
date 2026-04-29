@@ -79,7 +79,7 @@ Review and manage submitted applications efficiently.
 <p class="text-xs text-gray-500 mb-1">APPLICATION TYPE</p>
 <select name="type" class="input">
 <option value="all">All Types</option>
-@foreach(\App\Models\AssistanceType::all() as $type)
+@foreach(\App\Models\AssistanceType::where('is_active', true)->get() as $type)
 <option value="{{ $type->id }}" {{ request('type')==$type->id?'selected':'' }}>
 {{ $type->name }}
 </option>

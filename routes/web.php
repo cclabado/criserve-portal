@@ -75,6 +75,10 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.dashboard');
     Route::get('/admin/libraries', [AdminController::class, 'libraries'])
         ->name('admin.libraries');
+    Route::get('/admin/libraries/{library}', [AdminController::class, 'showLibrary'])
+        ->name('admin.libraries.show');
+    Route::get('/admin/frequency-rules', [AdminController::class, 'frequencyRules'])
+        ->name('admin.frequency-rules');
     Route::get('/admin/users', [AdminController::class, 'users'])
         ->name('admin.users');
     Route::get('/admin/support-tickets', [AdminController::class, 'supportTickets'])
@@ -97,6 +101,16 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.libraries.relationships.store');
     Route::post('/admin/libraries/referral-institutions', [AdminController::class, 'storeReferralInstitution'])
         ->name('admin.libraries.referral-institutions.store');
+    Route::patch('/admin/libraries/{library}/{item}', [AdminController::class, 'updateLibrary'])
+        ->name('admin.libraries.update');
+    Route::delete('/admin/libraries/{library}/{item}', [AdminController::class, 'archiveLibrary'])
+        ->name('admin.libraries.archive');
+    Route::post('/admin/frequency-rules', [AdminController::class, 'storeFrequencyRule'])
+        ->name('admin.frequency-rules.store');
+    Route::patch('/admin/frequency-rules/{frequencyRule}', [AdminController::class, 'updateFrequencyRule'])
+        ->name('admin.frequency-rules.update');
+    Route::delete('/admin/frequency-rules/{frequencyRule}', [AdminController::class, 'destroyFrequencyRule'])
+        ->name('admin.frequency-rules.destroy');
 
 });
 

@@ -298,10 +298,16 @@ class SocialWorkerController extends Controller
             }
         }
 
-        $relationships = Relationship::all();
-        $assistanceTypes = AssistanceType::all();
-        $assistanceSubtypes = AssistanceSubtype::with(['frequencyRule', 'details.frequencyRule'])->get();
-        $modesOfAssistance = ModeOfAssistance::orderBy('name')->get();
+        $relationships = Relationship::where('is_active', true)->orderBy('name')->get();
+        $assistanceTypes = AssistanceType::where('is_active', true)->orderBy('name')->get();
+        $assistanceSubtypes = AssistanceSubtype::with([
+                'frequencyRule',
+                'details' => fn ($query) => $query->where('is_active', true)->with('frequencyRule'),
+            ])
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+        $modesOfAssistance = ModeOfAssistance::where('is_active', true)->orderBy('name')->get();
         $householdMembers = $this->resolveHouseholdMembers($application);
 
         return view('social-worker.assess', compact(
@@ -612,10 +618,16 @@ class SocialWorkerController extends Controller
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
 
-        $assistanceTypes = AssistanceType::with(['subtypes.frequencyRule', 'subtypes.details.frequencyRule'])
+        $assistanceTypes = AssistanceType::with([
+                'subtypes' => fn ($query) => $query->where('is_active', true)->with([
+                    'frequencyRule',
+                    'details' => fn ($detailQuery) => $detailQuery->where('is_active', true)->with('frequencyRule'),
+                ]),
+            ])
+            ->where('is_active', true)
             ->orderBy('name')
             ->get();
-        $modesOfAssistance = ModeOfAssistance::orderBy('name')->get();
+        $modesOfAssistance = ModeOfAssistance::where('is_active', true)->orderBy('name')->get();
         $referralInstitutions = ReferralInstitution::where('is_active', true)->orderBy('name')->get();
 
         return view('social-worker.intake', compact(

@@ -5,10 +5,15 @@
 @php
     $user = auth()->user();
     $existingClient = $client;
-    $relationships = \App\Models\Relationship::where('name', '!=', 'Other')->get();
+    $relationships = \App\Models\Relationship::where('is_active', true)->where('name', '!=', 'Other')->get();
     $familyRelationships = $relationships->where('name', '!=', 'Self')->values();
-    $assistanceTypes = \App\Models\AssistanceType::with(['subtypes.frequencyRule', 'subtypes.details.frequencyRule'])->get();
-    $modesOfAssistance = \App\Models\ModeOfAssistance::orderBy('name')->get();
+    $assistanceTypes = \App\Models\AssistanceType::with([
+        'subtypes' => fn ($query) => $query->where('is_active', true)->with([
+            'frequencyRule',
+            'details' => fn ($detailQuery) => $detailQuery->where('is_active', true)->with('frequencyRule'),
+        ]),
+    ])->where('is_active', true)->get();
+    $modesOfAssistance = \App\Models\ModeOfAssistance::where('is_active', true)->orderBy('name')->get();
 
     $clientFamily = ($existingClient?->familyMembers ?? collect())
         ->whereNull('beneficiary_profile_id')

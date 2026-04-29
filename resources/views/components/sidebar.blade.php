@@ -147,15 +147,43 @@
             <span class="text-sm tracking-wide">Dashboard</span>
         </a>
 
-        <a href="/admin/libraries"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/libraries*') }}">
+        @php
+            $libraryLinks = [
+                ['label' => 'Assistance Types', 'path' => 'admin/libraries/assistance-types'],
+                ['label' => 'Assistance Subtypes', 'path' => 'admin/libraries/assistance-subtypes'],
+                ['label' => 'Assistance Details', 'path' => 'admin/libraries/assistance-details'],
+                ['label' => 'Modes of Assistance', 'path' => 'admin/libraries/modes-of-assistance'],
+                ['label' => 'Relationships', 'path' => 'admin/libraries/relationships'],
+                ['label' => 'Referral Institutions', 'path' => 'admin/libraries/referral-institutions'],
+                ['label' => 'Frequency Rules', 'path' => 'admin/frequency-rules'],
+            ];
+            $librariesOpen = request()->is('admin/libraries*') || request()->is('admin/frequency-rules*');
+        @endphp
 
-            <span class="material-symbols-outlined {{ $iconClass('admin/libraries*') }}">
-                library_books
-            </span>
+        <details class="group" @if($librariesOpen) open @endif>
+            <summary class="list-none group flex items-center justify-between gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 {{ $navClass(['admin/libraries*', 'admin/frequency-rules*']) }}">
+                <span class="flex items-center gap-3">
+                    <span class="material-symbols-outlined {{ $iconClass(['admin/libraries*', 'admin/frequency-rules*']) }}">
+                        library_books
+                    </span>
+                    <span class="text-sm tracking-wide">Libraries</span>
+                </span>
 
-            <span class="text-sm tracking-wide">Libraries</span>
-        </a>
+                <span class="material-symbols-outlined text-[18px] text-slate-400 transition-transform duration-200 group-open:rotate-180">
+                    expand_more
+                </span>
+            </summary>
+
+            <div class="ml-4 mt-1 space-y-1">
+                @foreach($libraryLinks as $libraryLink)
+                    <a href="/{{ $libraryLink['path'] }}"
+                       class="group flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-all duration-200 {{ $navClass($libraryLink['path']) }}">
+                        <span class="h-2 w-2 rounded-full {{ request()->is($libraryLink['path']) ? 'bg-sky-700' : 'bg-slate-300 group-hover:bg-sky-500' }}"></span>
+                        <span>{{ $libraryLink['label'] }}</span>
+                    </a>
+                @endforeach
+            </div>
+        </details>
 
         <a href="/admin/users"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/users*') }}">

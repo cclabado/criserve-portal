@@ -10,6 +10,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            Schema::table('application_assistance_recommendations', function (Blueprint $table) {
+                $table->foreignId('assistance_subtype_id')->nullable()->change();
+            });
+        } else {
         Schema::table('application_assistance_recommendations', function (Blueprint $table) {
             $table->dropForeign('aar_subtype_fk');
             $table->foreignId('assistance_subtype_id')->nullable()->change();
@@ -18,6 +23,7 @@ return new class extends Migration
                 ->on('assistance_subtypes')
                 ->nullOnDelete();
         });
+        }
 
         $referralType = AssistanceType::whereRaw('LOWER(name) = ?', ['referral to other services'])->first()
             ?? AssistanceType::whereRaw('LOWER(name) = ?', ['referral'])->first();

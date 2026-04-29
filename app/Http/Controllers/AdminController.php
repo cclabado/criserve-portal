@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Application;
 use App\Models\AssistanceDetail;
+use App\Models\AssistanceFrequencyRule;
 use App\Models\AssistanceSubtype;
 use App\Models\AssistanceType;
 use App\Models\ModeOfAssistance;
@@ -14,7 +15,9 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AdminController extends Controller
 {
@@ -90,19 +93,88 @@ class AdminController extends Controller
             ->with('success', 'Support ticket status updated successfully.');
     }
 
-    public function libraries(): View
+    public function libraries(): RedirectResponse
     {
-        $assistanceTypes = AssistanceType::with('subtypes.details')->orderBy('name')->get();
-        $modesOfAssistance = ModeOfAssistance::orderBy('name')->get();
-        $relationships = Relationship::orderBy('name')->get();
-        $referralInstitutions = ReferralInstitution::orderBy('name')->get();
+        return redirect()->route('admin.libraries.show', 'assistance-types');
+    }
 
-        return view('admin.libraries', compact(
-            'assistanceTypes',
-            'modesOfAssistance',
-            'relationships',
-            'referralInstitutions'
-        ));
+    public function showLibrary(Request $request, string $library): View
+    {
+        $definition = $this->resolveLibraryDefinition($library);
+        $status = (string) $request->input('status', 'active');
+        $search = trim((string) $request->input('search', ''));
+
+        $query = $definition['model']::query()
+            ->with($definition['with'] ?? [])
+            ->when($status === 'active', fn ($builder) => $builder->where('is_active', true))
+            ->when($status === 'archived', fn ($builder) => $builder->where('is_active', false))
+            ->when($search !== '', function ($builder) use ($search, $definition) {
+                $builder->where(function ($inner) use ($search, $definition) {
+                    foreach ($definition['search_columns'] as $column) {
+                        $inner->orWhere($column, 'like', "%{$search}%");
+                    }
+                });
+            })
+            ->orderBy($definition['order_by']);
+
+        $items = $query->paginate(12)->withQueryString();
+
+        return view('admin.libraries', [
+            'definition' => $definition,
+            'definitions' => $this->libraryDefinitions(),
+            'items' => $items,
+            'filters' => [
+                'search' => $search,
+                'status' => in_array($status, ['active', 'archived', 'all'], true) ? $status : 'active',
+            ],
+            'formOptions' => $this->libraryFormOptions(),
+        ]);
+    }
+
+    public function frequencyRules(Request $request): View
+    {
+        $search = trim((string) $request->input('search', ''));
+
+        $rules = AssistanceFrequencyRule::query()
+            ->with(['subtype.type', 'detail'])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($inner) use ($search) {
+                    $inner->where('rule_type', 'like', "%{$search}%")
+                        ->orWhere('notes', 'like', "%{$search}%")
+                        ->orWhereHas('subtype', function ($subtypeQuery) use ($search) {
+                            $subtypeQuery->where('name', 'like', "%{$search}%")
+                                ->orWhereHas('type', fn ($typeQuery) => $typeQuery->where('name', 'like', "%{$search}%"));
+                        })
+                        ->orWhereHas('detail', fn ($detailQuery) => $detailQuery->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->orderBy(
+                AssistanceType::select('assistance_types.name')
+                    ->join('assistance_subtypes', 'assistance_subtypes.assistance_type_id', '=', 'assistance_types.id')
+                    ->whereColumn('assistance_subtypes.id', 'assistance_frequency_rules.assistance_subtype_id')
+                    ->limit(1)
+            )
+            ->orderBy(
+                AssistanceSubtype::select('assistance_subtypes.name')
+                    ->whereColumn('assistance_subtypes.id', 'assistance_frequency_rules.assistance_subtype_id')
+                    ->limit(1)
+            )
+            ->orderBy(
+                AssistanceDetail::select('assistance_details.name')
+                    ->whereColumn('assistance_details.id', 'assistance_frequency_rules.assistance_detail_id')
+                    ->limit(1)
+            )
+            ->paginate(12)
+            ->withQueryString();
+
+        return view('admin.frequency-rules', [
+            'rules' => $rules,
+            'filters' => [
+                'search' => $search,
+            ],
+            'formOptions' => $this->frequencyRuleFormOptions(),
+            'ruleTypes' => $this->frequencyRuleTypes(),
+        ]);
     }
 
     public function users(Request $request): View
@@ -207,114 +279,368 @@ class AdminController extends Controller
 
     public function storeAssistanceType(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:assistance_types,name'],
-        ]);
-
-        AssistanceType::create($validated);
-
-        return redirect()
-            ->to(route('admin.libraries'))
-            ->with('success', 'Assistance type added successfully.');
+        return $this->storeLibraryRecord($request, 'assistance-types');
     }
 
     public function storeAssistanceSubtype(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'assistance-subtypes');
+    }
+
+    public function storeAssistanceDetail(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'assistance-details');
+    }
+
+    public function storeModeOfAssistance(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'modes-of-assistance');
+    }
+
+    public function storeRelationship(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'relationships');
+    }
+
+    public function storeReferralInstitution(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'referral-institutions');
+    }
+
+    public function storeFrequencyRule(Request $request): RedirectResponse
+    {
+        AssistanceFrequencyRule::create($this->validateFrequencyRulePayload($request));
+
+        return redirect()
+            ->route('admin.frequency-rules')
+            ->with('success', 'Frequency rule added successfully.');
+    }
+
+    public function updateFrequencyRule(Request $request, AssistanceFrequencyRule $frequencyRule): RedirectResponse
+    {
+        $frequencyRule->update($this->validateFrequencyRulePayload($request, $frequencyRule->id));
+
+        return redirect()
+            ->route('admin.frequency-rules')
+            ->with('success', 'Frequency rule updated successfully.');
+    }
+
+    public function destroyFrequencyRule(AssistanceFrequencyRule $frequencyRule): RedirectResponse
+    {
+        $frequencyRule->delete();
+
+        return redirect()
+            ->route('admin.frequency-rules')
+            ->with('success', 'Frequency rule removed successfully.');
+    }
+
+    public function updateLibrary(Request $request, string $library, int $item): RedirectResponse
+    {
+        $definition = $this->resolveLibraryDefinition($library);
+        $model = $definition['model']::query()->findOrFail($item);
+        $validated = $this->validateLibraryPayload($request, $library, $model->id);
+
+        $model->update($validated);
+
+        return redirect()
+            ->route('admin.libraries.show', $library)
+            ->with('success', $definition['singular'].' updated successfully.');
+    }
+
+    public function archiveLibrary(string $library, int $item): RedirectResponse
+    {
+        $definition = $this->resolveLibraryDefinition($library);
+        $model = $definition['model']::query()->findOrFail($item);
+
+        $model->update(['is_active' => false]);
+
+        return redirect()
+            ->route('admin.libraries.show', $library)
+            ->with('success', $definition['singular'].' archived successfully.');
+    }
+
+    protected function storeLibraryRecord(Request $request, string $library): RedirectResponse
+    {
+        $definition = $this->resolveLibraryDefinition($library);
+        $validated = $this->validateLibraryPayload($request, $library);
+        $definition['model']::create($validated + ['is_active' => true]);
+
+        return redirect()
+            ->route('admin.libraries.show', $library)
+            ->with('success', $definition['singular'].' added successfully.');
+    }
+
+    protected function validateLibraryPayload(Request $request, string $library, ?int $ignoreId = null): array
+    {
+        return match ($library) {
+            'assistance-types' => $request->validate([
+                'name' => ['required', 'string', 'max:255', Rule::unique('assistance_types', 'name')->ignore($ignoreId)],
+            ]),
+            'assistance-subtypes' => $this->validateAssistanceSubtypePayload($request, $ignoreId),
+            'assistance-details' => $this->validateAssistanceDetailPayload($request, $ignoreId),
+            'modes-of-assistance' => $this->validateModeOfAssistancePayload($request, $ignoreId),
+            'relationships' => $request->validate([
+                'name' => ['required', 'string', 'max:255', Rule::unique('relationships', 'name')->ignore($ignoreId)],
+            ]),
+            'referral-institutions' => $request->validate([
+                'name' => ['required', 'string', 'max:255', Rule::unique('referral_institutions', 'name')->ignore($ignoreId)],
+                'addressee' => ['nullable', 'string', 'max:255'],
+                'address' => ['nullable', 'string'],
+                'email' => ['nullable', 'email', 'max:255'],
+                'contact_number' => ['nullable', 'string', 'max:255'],
+            ]),
+            default => throw new NotFoundHttpException(),
+        };
+    }
+
+    protected function validateAssistanceSubtypePayload(Request $request, ?int $ignoreId = null): array
     {
         $validated = $request->validate([
             'assistance_type_id' => ['required', 'exists:assistance_types,id'],
             'name' => ['required', 'string', 'max:255'],
         ]);
 
-        $exists = AssistanceSubtype::where('assistance_type_id', $validated['assistance_type_id'])
-            ->whereRaw('LOWER(name) = ?', [strtolower($validated['name'])])
-            ->exists();
+        $query = AssistanceSubtype::query()
+            ->where('assistance_type_id', $validated['assistance_type_id'])
+            ->whereRaw('LOWER(name) = ?', [strtolower($validated['name'])]);
 
-        if ($exists) {
-            return back()
-                ->withInput()
-                ->withErrors(['subtype_name' => 'This subtype already exists for the selected assistance type.']);
+        if ($ignoreId) {
+            $query->whereKeyNot($ignoreId);
         }
 
-        AssistanceSubtype::create($validated);
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'name' => 'This subtype already exists for the selected assistance type.',
+            ]);
+        }
 
-        return redirect()
-            ->to(route('admin.libraries'))
-            ->with('success', 'Assistance subtype added successfully.');
+        return $validated;
     }
 
-    public function storeAssistanceDetail(Request $request): RedirectResponse
+    protected function validateAssistanceDetailPayload(Request $request, ?int $ignoreId = null): array
     {
         $validated = $request->validate([
             'assistance_subtype_id' => ['required', 'exists:assistance_subtypes,id'],
             'name' => ['required', 'string', 'max:255'],
         ]);
 
-        $exists = AssistanceDetail::where('assistance_subtype_id', $validated['assistance_subtype_id'])
-            ->whereRaw('LOWER(name) = ?', [strtolower($validated['name'])])
-            ->exists();
+        $query = AssistanceDetail::query()
+            ->where('assistance_subtype_id', $validated['assistance_subtype_id'])
+            ->whereRaw('LOWER(name) = ?', [strtolower($validated['name'])]);
 
-        if ($exists) {
-            return back()
-                ->withInput()
-                ->withErrors(['detail_name' => 'This assistance detail already exists for the selected subtype.']);
+        if ($ignoreId) {
+            $query->whereKeyNot($ignoreId);
         }
 
-        AssistanceDetail::create($validated);
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'name' => 'This assistance detail already exists for the selected subtype.',
+            ]);
+        }
 
-        return redirect()
-            ->to(route('admin.libraries'))
-            ->with('success', 'Assistance detail added successfully.');
+        return $validated;
     }
 
-    public function storeModeOfAssistance(Request $request): RedirectResponse
+    protected function validateModeOfAssistancePayload(Request $request, ?int $ignoreId = null): array
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:mode_of_assistances,name'],
+            'name' => ['required', 'string', 'max:255', Rule::unique('mode_of_assistances', 'name')->ignore($ignoreId)],
         ]);
 
         if (strtolower(trim($validated['name'])) === 'referral') {
-            return back()
-                ->withInput()
-                ->withErrors(['name' => 'Referral is managed through the Referral Institution library, not as a mode of assistance.']);
+            throw ValidationException::withMessages([
+                'name' => 'Referral is managed through the Referral Institution library, not as a mode of assistance.',
+            ]);
         }
 
-        ModeOfAssistance::create($validated);
-
-        return redirect()
-            ->to(route('admin.libraries'))
-            ->with('success', 'Mode of assistance added successfully.');
+        return $validated;
     }
 
-    public function storeRelationship(Request $request): RedirectResponse
+    protected function validateFrequencyRulePayload(Request $request, ?int $ignoreId = null): array
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:relationships,name'],
+            'assistance_type_id' => ['nullable', 'exists:assistance_types,id'],
+            'assistance_subtype_id' => ['required', 'exists:assistance_subtypes,id'],
+            'assistance_detail_id' => ['nullable', 'exists:assistance_details,id'],
+            'rule_type' => ['required', Rule::in(array_keys($this->frequencyRuleTypes()))],
+            'interval_months' => ['nullable', 'integer', 'min:1', 'max:120'],
+            'requires_reference_date' => ['nullable', 'boolean'],
+            'requires_case_key' => ['nullable', 'boolean'],
+            'allows_exception_request' => ['nullable', 'boolean'],
+            'notes' => ['nullable', 'string'],
         ]);
 
-        Relationship::create($validated);
+        $subtype = AssistanceSubtype::query()
+            ->with('type')
+            ->findOrFail((int) $validated['assistance_subtype_id']);
 
-        return redirect()
-            ->to(route('admin.libraries'))
-            ->with('success', 'Relationship library item added successfully.');
+        if (! empty($validated['assistance_type_id']) && (int) $validated['assistance_type_id'] !== (int) $subtype->assistance_type_id) {
+            throw ValidationException::withMessages([
+                'assistance_subtype_id' => 'The selected subtype does not belong to the selected assistance type.',
+            ]);
+        }
+
+        $detailId = ! empty($validated['assistance_detail_id']) ? (int) $validated['assistance_detail_id'] : null;
+
+        if ($detailId) {
+            $detail = AssistanceDetail::query()->findOrFail($detailId);
+
+            if ((int) $detail->assistance_subtype_id !== (int) $subtype->id) {
+                throw ValidationException::withMessages([
+                    'assistance_detail_id' => 'The selected detail does not belong to the selected subtype.',
+                ]);
+            }
+        }
+
+        if (! in_array($validated['rule_type'], ['every_n_months', 'every_n_months_review'], true)) {
+            $validated['interval_months'] = null;
+        }
+
+        if (in_array($validated['rule_type'], ['every_n_months', 'every_n_months_review'], true) && empty($validated['interval_months'])) {
+            throw ValidationException::withMessages([
+                'interval_months' => 'Interval months is required for month-based rules.',
+            ]);
+        }
+
+        $existingRuleQuery = AssistanceFrequencyRule::query()
+            ->where('assistance_subtype_id', $subtype->id)
+            ->when($detailId, fn ($query) => $query->where('assistance_detail_id', $detailId), fn ($query) => $query->whereNull('assistance_detail_id'));
+
+        if ($ignoreId) {
+            $existingRuleQuery->whereKeyNot($ignoreId);
+        }
+
+        if ($existingRuleQuery->exists()) {
+            throw ValidationException::withMessages([
+                'assistance_detail_id' => $detailId
+                    ? 'A frequency rule already exists for this assistance detail.'
+                    : 'A frequency rule already exists for this assistance subtype.',
+            ]);
+        }
+
+        return [
+            'assistance_subtype_id' => $subtype->id,
+            'assistance_detail_id' => $detailId,
+            'rule_type' => $validated['rule_type'],
+            'interval_months' => $validated['interval_months'] ?? null,
+            'requires_reference_date' => (bool) ($validated['requires_reference_date'] ?? false),
+            'requires_case_key' => (bool) ($validated['requires_case_key'] ?? false),
+            'allows_exception_request' => (bool) ($validated['allows_exception_request'] ?? false),
+            'notes' => filled($validated['notes'] ?? null) ? trim((string) $validated['notes']) : null,
+        ];
     }
 
-    public function storeReferralInstitution(Request $request): RedirectResponse
+    protected function libraryDefinitions(): array
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:referral_institutions,name'],
-            'addressee' => ['nullable', 'string', 'max:255'],
-            'address' => ['nullable', 'string'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'contact_number' => ['nullable', 'string', 'max:255'],
-        ]);
+        return [
+            'assistance-types' => [
+                'title' => 'Assistance Types',
+                'singular' => 'Assistance type',
+                'description' => 'Manage the top-level assistance categories used across intake, assessment, and approvals.',
+                'model' => AssistanceType::class,
+                'order_by' => 'name',
+                'search_columns' => ['name'],
+                'with' => [],
+                'icon' => 'category',
+            ],
+            'assistance-subtypes' => [
+                'title' => 'Assistance Subtypes',
+                'singular' => 'Assistance subtype',
+                'description' => 'Maintain the specific assistance records grouped under each assistance type.',
+                'model' => AssistanceSubtype::class,
+                'order_by' => 'name',
+                'search_columns' => ['name'],
+                'with' => ['type'],
+                'icon' => 'fork_right',
+            ],
+            'assistance-details' => [
+                'title' => 'Assistance Details',
+                'singular' => 'Assistance detail',
+                'description' => 'Define the detailed assistance options that sit under each assistance subtype.',
+                'model' => AssistanceDetail::class,
+                'order_by' => 'name',
+                'search_columns' => ['name'],
+                'with' => ['subtype.type'],
+                'icon' => 'list_alt',
+            ],
+            'modes-of-assistance' => [
+                'title' => 'Modes of Assistance',
+                'singular' => 'Mode of assistance',
+                'description' => 'Configure the delivery modes available during assessment and recommendation.',
+                'model' => ModeOfAssistance::class,
+                'order_by' => 'name',
+                'search_columns' => ['name'],
+                'with' => [],
+                'icon' => 'tactic',
+            ],
+            'relationships' => [
+                'title' => 'Relationships',
+                'singular' => 'Relationship',
+                'description' => 'Manage household and beneficiary relationship labels used in family records.',
+                'model' => Relationship::class,
+                'order_by' => 'name',
+                'search_columns' => ['name'],
+                'with' => [],
+                'icon' => 'family_restroom',
+            ],
+            'referral-institutions' => [
+                'title' => 'Referral Institutions',
+                'singular' => 'Referral institution',
+                'description' => 'Maintain active government agencies and partner institutions for referral-based assistance.',
+                'model' => ReferralInstitution::class,
+                'order_by' => 'name',
+                'search_columns' => ['name', 'addressee', 'email', 'contact_number', 'address'],
+                'with' => [],
+                'icon' => 'domain',
+            ],
+        ];
+    }
 
-        ReferralInstitution::create([
-            ...$validated,
-            'is_active' => true,
-        ]);
+    protected function resolveLibraryDefinition(string $library): array
+    {
+        $definitions = $this->libraryDefinitions();
 
-        return redirect()
-            ->to(route('admin.libraries'))
-            ->with('success', 'Referral institution added successfully.');
+        if (! isset($definitions[$library])) {
+            throw new NotFoundHttpException();
+        }
+
+        return ['key' => $library] + $definitions[$library];
+    }
+
+    protected function libraryFormOptions(): array
+    {
+        return [
+            'assistanceTypes' => AssistanceType::where('is_active', true)->orderBy('name')->get(),
+            'assistanceSubtypes' => AssistanceSubtype::with('type')
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(),
+        ];
+    }
+
+    protected function frequencyRuleFormOptions(): array
+    {
+        return [
+            'assistanceTypes' => AssistanceType::where('is_active', true)->orderBy('name')->get(),
+            'assistanceSubtypes' => AssistanceSubtype::with('type')
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(),
+            'assistanceDetails' => AssistanceDetail::with('subtype.type')
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(),
+        ];
+    }
+
+    protected function frequencyRuleTypes(): array
+    {
+        return [
+            'once_per_year' => 'Once Per Year',
+            'every_n_months' => 'Every N Months',
+            'every_n_months_review' => 'Every N Months With Review',
+            'per_incident' => 'Per Incident',
+            'per_admission' => 'Per Admission',
+        ];
     }
 }

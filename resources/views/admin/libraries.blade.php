@@ -2,21 +2,41 @@
 
 @section('content')
 
+@php
+    $statusPillClass = fn (bool $isActive) => $isActive
+        ? 'bg-emerald-100 text-emerald-700'
+        : 'bg-slate-200 text-slate-700';
+
+    $libraryStoreRoutes = [
+        'assistance-types' => route('admin.libraries.assistance-types.store'),
+        'assistance-subtypes' => route('admin.libraries.assistance-subtypes.store'),
+        'assistance-details' => route('admin.libraries.assistance-details.store'),
+        'modes-of-assistance' => route('admin.libraries.modes-of-assistance.store'),
+        'relationships' => route('admin.libraries.relationships.store'),
+        'referral-institutions' => route('admin.libraries.referral-institutions.store'),
+    ];
+@endphp
+
 <main class="space-y-6">
 
     <section class="libraries-hero">
         <div>
             <p class="libraries-kicker">Administrator</p>
-            <h1 class="libraries-title">Libraries</h1>
-            <p class="libraries-copy">
-                Maintain the shared assistance and relationship records used across the platform.
-            </p>
+            <h1 class="libraries-title">{{ $definition['title'] }}</h1>
+            <p class="libraries-copy">{{ $definition['description'] }}</p>
         </div>
 
-        <a href="{{ route('admin.dashboard') }}" class="libraries-back">
-            <span class="material-symbols-outlined text-[18px]">dashboard</span>
-            Dashboard
-        </a>
+        <div class="libraries-hero-actions">
+            <a href="{{ route('admin.dashboard') }}" class="libraries-hero-button libraries-hero-button--secondary">
+                <span class="material-symbols-outlined text-[18px]">dashboard</span>
+                Dashboard
+            </a>
+
+            <button type="button" id="openCreateLibraryModalBtn" class="libraries-hero-button libraries-hero-button--primary">
+                <span class="material-symbols-outlined text-[18px]">add</span>
+                Add {{ $definition['singular'] }}
+            </button>
+        </div>
     </section>
 
     @if(session('success'))
@@ -36,215 +56,189 @@
         </div>
     @endif
 
-    <section class="grid gap-6 xl:grid-cols-[1.1fr,.9fr]">
-        <div class="panel-card">
-            <div class="panel-head">
-                <div>
-                    <p class="panel-kicker">Libraries</p>
-                    <h2 class="panel-title">Add Library Records</h2>
-                </div>
-            </div>
+    <section class="panel-card">
+        <div class="library-toolbar">
+            <form method="GET" action="{{ route('admin.libraries.show', $definition['key']) }}" class="library-filter">
+                <input type="text"
+                       name="search"
+                       value="{{ $filters['search'] }}"
+                       class="input"
+                       placeholder="Search {{ strtolower($definition['title']) }}">
 
-            <div class="grid gap-4 mt-6 md:grid-cols-2">
-                <form method="POST"
-                      action="{{ route('admin.libraries.assistance-types.store') }}"
-                      class="library-form">
-                    @csrf
-                    <h3 class="library-form-title">Assistance Type</h3>
-                    <label class="label">Type Name</label>
-                    <input type="text" name="name" class="input" placeholder="Medical Assistance">
-                    <button type="submit" class="btn-primary w-full mt-4">Add Assistance Type</button>
-                </form>
+                <select name="status" class="input">
+                    <option value="active" @selected($filters['status'] === 'active')>Active</option>
+                    <option value="archived" @selected($filters['status'] === 'archived')>Archived</option>
+                    <option value="all" @selected($filters['status'] === 'all')>All</option>
+                </select>
 
-                <form method="POST"
-                      action="{{ route('admin.libraries.relationships.store') }}"
-                      class="library-form">
-                    @csrf
-                    <h3 class="library-form-title">Relationship</h3>
-                    <label class="label">Relationship Name</label>
-                    <input type="text" name="name" class="input" placeholder="Sibling">
-                    <button type="submit" class="btn-primary w-full mt-4">Add Relationship</button>
-                </form>
-            </div>
-
-            <form method="POST"
-                  action="{{ route('admin.libraries.modes-of-assistance.store') }}"
-                  class="library-form mt-4">
-                @csrf
-                <h3 class="library-form-title">Mode of Assistance</h3>
-                <label class="label">Mode Name</label>
-                <input type="text" name="name" class="input" placeholder="Guarantee Letter">
-                <button type="submit" class="btn-primary w-full mt-4">Add Mode of Assistance</button>
-            </form>
-
-            <form method="POST"
-                  action="{{ route('admin.libraries.assistance-subtypes.store') }}"
-                  class="library-form mt-4">
-                @csrf
-                <h3 class="library-form-title">Assistance Subtype</h3>
-
-                <div class="grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label class="label">Parent Assistance Type</label>
-                        <select name="assistance_type_id" class="input">
-                            <option value="">Select type</option>
-                            @foreach($assistanceTypes as $type)
-                                <option value="{{ $type->id }}">{{ $type->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="label">Subtype Name</label>
-                        <input type="text" name="name" class="input" placeholder="Hospital Bill">
-                    </div>
-                </div>
-
-                <button type="submit" class="btn-primary mt-4">Add Assistance Subtype</button>
-            </form>
-
-            <form method="POST"
-                  action="{{ route('admin.libraries.assistance-details.store') }}"
-                  class="library-form mt-4">
-                @csrf
-                <h3 class="library-form-title">Assistance Detail</h3>
-
-                <div class="grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label class="label">Parent Assistance Subtype</label>
-                        <select name="assistance_subtype_id" class="input">
-                            <option value="">Select subtype</option>
-                            @foreach($assistanceTypes as $type)
-                                @foreach($type->subtypes as $subtype)
-                                    <option value="{{ $subtype->id }}">{{ $type->name }} - {{ $subtype->name }}</option>
-                                @endforeach
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="label">Detail Name</label>
-                        <input type="text" name="name" class="input" placeholder="Payment for Hospital Bill">
-                    </div>
-                </div>
-
-                <button type="submit" class="btn-primary mt-4">Add Assistance Detail</button>
-            </form>
-
-            <form method="POST"
-                  action="{{ route('admin.libraries.referral-institutions.store') }}"
-                  class="library-form mt-4">
-                @csrf
-                <h3 class="library-form-title">Referral Institution / Government Agency</h3>
-
-                <div class="grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label class="label">Institution / Agency Name</label>
-                        <input type="text" name="name" class="input" placeholder="Department of Health">
-                    </div>
-
-                    <div>
-                        <label class="label">Addressee</label>
-                        <input type="text" name="addressee" class="input" placeholder="Regional Director">
-                    </div>
-
-                    <div>
-                        <label class="label">Email</label>
-                        <input type="email" name="email" class="input" placeholder="office@example.gov.ph">
-                    </div>
-
-                    <div>
-                        <label class="label">Contact Number</label>
-                        <input type="text" name="contact_number" class="input" placeholder="(02) 8123 4567">
-                    </div>
-                </div>
-
-                <div class="mt-4">
-                    <label class="label">Address</label>
-                    <textarea name="address" class="input min-h-[90px]" placeholder="Office address"></textarea>
-                </div>
-
-                <button type="submit" class="btn-primary mt-4">Add Referral Institution</button>
+                <button type="submit" class="btn-secondary">Filter</button>
             </form>
         </div>
 
-        <div class="panel-card">
-            <div class="panel-head">
-                <div>
-                    <p class="panel-kicker">Reference Data</p>
-                    <h2 class="panel-title">Current Library Records</h2>
-                </div>
-            </div>
-
-            <div class="space-y-4 mt-6">
-                @foreach($assistanceTypes as $type)
-                    <div class="soft-card">
-                        <p class="soft-card-title">{{ $type->name }}</p>
-                        <p class="soft-card-copy">
-                            @if($type->subtypes->isNotEmpty())
-                                @foreach($type->subtypes as $subtype)
-                                    <span class="font-semibold">{{ $subtype->name }}</span>{{ $subtype->details->isNotEmpty() ? ': '.$subtype->details->pluck('name')->implode(', ') : '' }}@if(!$loop->last); @endif
-                                @endforeach
+        <div class="table-shell mt-6">
+            <table class="library-table">
+                <thead>
+                    <tr>
+                        @if($definition['key'] === 'assistance-subtypes')
+                            <th>Subtype</th>
+                            <th>Parent Type</th>
+                        @elseif($definition['key'] === 'assistance-details')
+                            <th>Detail</th>
+                            <th>Subtype</th>
+                            <th>Type</th>
+                        @elseif($definition['key'] === 'referral-institutions')
+                            <th>Institution</th>
+                            <th>Addressee</th>
+                            <th>Contact</th>
+                            <th>Email</th>
+                        @else
+                            <th>Name</th>
+                        @endif
+                        <th>Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($items as $item)
+                        @php
+                            $editPayload = [
+                                'id' => $item->id,
+                                'name' => $item->name,
+                                'assistance_type_id' => $item->assistance_type_id ?? null,
+                                'assistance_subtype_id' => $item->assistance_subtype_id ?? null,
+                                'addressee' => $item->addressee ?? null,
+                                'address' => $item->address ?? null,
+                                'email' => $item->email ?? null,
+                                'contact_number' => $item->contact_number ?? null,
+                                'is_active' => (bool) $item->is_active,
+                            ];
+                        @endphp
+                        <tr>
+                            @if($definition['key'] === 'assistance-subtypes')
+                                <td>
+                                    <p class="table-primary">{{ $item->name }}</p>
+                                </td>
+                                <td>{{ $item->type?->name ?? '-' }}</td>
+                            @elseif($definition['key'] === 'assistance-details')
+                                <td><p class="table-primary">{{ $item->name }}</p></td>
+                                <td>{{ $item->subtype?->name ?? '-' }}</td>
+                                <td>{{ $item->subtype?->type?->name ?? '-' }}</td>
+                            @elseif($definition['key'] === 'referral-institutions')
+                                <td>
+                                    <p class="table-primary">{{ $item->name }}</p>
+                                    @if($item->address)
+                                        <p class="table-secondary">{{ $item->address }}</p>
+                                    @endif
+                                </td>
+                                <td>{{ $item->addressee ?: '-' }}</td>
+                                <td>{{ $item->contact_number ?: '-' }}</td>
+                                <td>{{ $item->email ?: '-' }}</td>
                             @else
-                                No subtypes added yet.
+                                <td><p class="table-primary">{{ $item->name }}</p></td>
                             @endif
-                        </p>
-                    </div>
-                @endforeach
-            </div>
 
-            <div class="mt-6">
-                <p class="panel-kicker">Modes of Assistance</p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                    @forelse($modesOfAssistance as $mode)
-                        <span class="tag-pill">{{ $mode->name }}</span>
-                    @empty
-                        <p class="text-sm text-slate-500">No mode records found.</p>
-                    @endforelse
-                </div>
-            </div>
+                            <td>
+                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-bold {{ $statusPillClass((bool) $item->is_active) }}">
+                                    {{ $item->is_active ? 'Active' : 'Archived' }}
+                                </span>
+                            </td>
+                            <td class="text-right">
+                                <div class="table-actions">
+                                    <button type="button"
+                                            class="table-action table-action--edit"
+                                            data-edit-button
+                                            data-id="{{ $item->id }}"
+                                            data-record='@json($editPayload)'
+                                            @disabled(! $item->is_active)>
+                                        Edit
+                                    </button>
 
-            <div class="mt-6">
-                <p class="panel-kicker">Relationships</p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                    @forelse($relationships as $relationship)
-                        <span class="tag-pill">{{ $relationship->name }}</span>
+                                    @if($item->is_active)
+                                        <form method="POST"
+                                              action="{{ route('admin.libraries.archive', ['library' => $definition['key'], 'item' => $item->id]) }}"
+                                              class="inline-flex"
+                                              onsubmit="return confirm('Archive this {{ strtolower($definition['singular']) }}?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="table-action table-action--archive">Archive</button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
                     @empty
-                        <p class="text-sm text-slate-500">No relationship records found.</p>
+                        <tr>
+                            <td colspan="6" class="empty-state">
+                                No {{ strtolower($definition['title']) }} found for the selected filters.
+                            </td>
+                        </tr>
                     @endforelse
-                </div>
-            </div>
+                </tbody>
+            </table>
+        </div>
 
-            <div class="mt-6">
-                <p class="panel-kicker">Referral Institutions / Government Agencies</p>
-                <div class="mt-3 space-y-3">
-                    @forelse($referralInstitutions as $institution)
-                        <div class="soft-card">
-                            <p class="soft-card-title">{{ $institution->name }}</p>
-                            <p class="soft-card-copy">
-                                @if($institution->addressee)
-                                    Addressee: {{ $institution->addressee }}<br>
-                                @endif
-                                @if($institution->address)
-                                    Address: {{ $institution->address }}<br>
-                                @endif
-                                @if($institution->email)
-                                    Email: {{ $institution->email }}<br>
-                                @endif
-                                @if($institution->contact_number)
-                                    Contact: {{ $institution->contact_number }}
-                                @endif
-                            </p>
-                        </div>
-                    @empty
-                        <p class="text-sm text-slate-500">No referral institutions added yet.</p>
-                    @endforelse
-                </div>
-            </div>
+        <div class="mt-5">
+            {{ $items->links() }}
         </div>
     </section>
-
 </main>
+
+<div id="createLibraryModal" class="modal-shell hidden">
+    <div class="modal-backdrop" data-close-create-modal></div>
+    <div class="modal-card">
+        <div class="modal-head">
+            <div>
+                <p class="panel-kicker">Create</p>
+                <h2 class="panel-title">Add {{ $definition['singular'] }}</h2>
+            </div>
+            <button type="button" class="modal-close" data-close-create-modal>Close</button>
+        </div>
+
+        <form method="POST" action="{{ $libraryStoreRoutes[$definition['key']] }}" class="modal-form">
+            @csrf
+            @include('admin.partials.library-form-fields', [
+                'definition' => $definition,
+                'formOptions' => $formOptions,
+                'prefix' => 'create',
+                'item' => null,
+            ])
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" data-close-create-modal>Cancel</button>
+                <button type="submit" class="btn-primary">Save {{ $definition['singular'] }}</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="editLibraryModal" class="modal-shell hidden">
+    <div class="modal-backdrop" data-close-edit-modal></div>
+    <div class="modal-card">
+        <div class="modal-head">
+            <div>
+                <p class="panel-kicker">Update</p>
+                <h2 class="panel-title">Edit {{ $definition['singular'] }}</h2>
+            </div>
+            <button type="button" class="modal-close" data-close-edit-modal>Close</button>
+        </div>
+
+        <form method="POST" id="editLibraryForm" action="{{ route('admin.libraries.update', ['library' => $definition['key'], 'item' => 0]) }}" class="modal-form">
+            @csrf
+            @method('PATCH')
+            @include('admin.partials.library-form-fields', [
+                'definition' => $definition,
+                'formOptions' => $formOptions,
+                'prefix' => 'edit',
+                'item' => null,
+            ])
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" data-close-edit-modal>Cancel</button>
+                <button type="submit" class="btn-primary">Update {{ $definition['singular'] }}</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <style>
 .libraries-hero{
@@ -258,6 +252,12 @@
         radial-gradient(circle at top right, rgba(149, 204, 170, .32), transparent 30%),
         linear-gradient(135deg, #ffffff 0%, #edf7f2 100%);
     border:1px solid #dcece3;
+}
+.libraries-hero-actions{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
 }
 .libraries-kicker,
 .panel-kicker{
@@ -278,15 +278,24 @@
     color:#64748b;
     max-width:760px;
 }
-.libraries-back{
+.libraries-hero-button{
     display:inline-flex;
     align-items:center;
     gap:8px;
-    padding:11px 16px;
+    justify-content:center;
+    min-height:58px;
+    padding:0 22px;
     border-radius:14px;
+    font-weight:700;
+    white-space:nowrap;
+}
+.libraries-hero-button--secondary{
     background:#234E70;
     color:#fff;
-    font-weight:700;
+}
+.libraries-hero-button--primary{
+    background:#2d5b84;
+    color:#fff;
 }
 .libraries-alert{
     border-radius:16px;
@@ -310,46 +319,192 @@
     padding:22px;
     box-shadow:0 14px 28px rgba(15, 23, 42, .04);
 }
-.panel-head{
+.library-toolbar{
     display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
+    flex-direction:column;
+    gap:16px;
+}
+.library-filter{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 180px auto;
     gap:12px;
 }
-.panel-title{
-    font-size:22px;
-    font-weight:900;
-    color:#163750;
-    margin-top:6px;
-}
-.soft-card,
-.library-form{
-    border:1px solid #e2e8f0;
-    background:#f8fafc;
+.table-shell{
+    overflow:hidden;
     border-radius:18px;
-    padding:18px;
+    border:1px solid #e2e8f0;
 }
-.soft-card-title,
-.library-form-title{
+.library-table{
+    width:100%;
+    border-collapse:collapse;
+}
+.library-table thead{
+    background:#f8fafc;
+}
+.library-table th,
+.library-table td{
+    padding:16px 18px;
+    text-align:left;
+    border-bottom:1px solid #e2e8f0;
+    vertical-align:top;
+}
+.library-table th{
+    font-size:11px;
     font-weight:800;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:#64748b;
+}
+.table-primary{
+    font-weight:700;
     color:#0f172a;
 }
-.soft-card-copy{
-    margin-top:8px;
+.table-secondary{
+    margin-top:6px;
+    color:#64748b;
+    font-size:13px;
+}
+.table-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    flex-wrap:wrap;
+}
+.table-action{
+    border-radius:12px;
+    padding:8px 12px;
+    font-size:13px;
+    font-weight:700;
+}
+.table-action--edit{
+    background:#e0f2fe;
+    color:#075985;
+}
+.table-action--archive{
+    background:#fef2f2;
+    color:#b91c1c;
+}
+.empty-state{
+    text-align:center;
     color:#64748b;
     font-size:14px;
-    line-height:1.5;
 }
-.tag-pill{
-    display:inline-flex;
-    align-items:center;
+.modal-shell{
+    position:fixed;
+    inset:0;
+    z-index:60;
+}
+.modal-backdrop{
+    position:absolute;
+    inset:0;
+    background:rgba(15, 23, 42, .52);
+}
+.modal-card{
+    position:relative;
+    margin:40px auto;
+    width:min(720px, calc(100% - 32px));
+    max-height:calc(100vh - 80px);
+    overflow:auto;
+    border-radius:24px;
+    background:#fff;
+    box-shadow:0 30px 70px rgba(15, 23, 42, .28);
+}
+.modal-head{
+    display:flex;
+    justify-content:space-between;
+    gap:16px;
+    padding:24px 24px 18px;
+    border-bottom:1px solid #e2e8f0;
+}
+.modal-close{
     border-radius:999px;
-    padding:6px 10px;
-    font-size:12px;
-    font-weight:700;
     background:#f1f5f9;
-    color:#334155;
+    padding:10px 14px;
+    font-weight:700;
+    color:#475569;
+}
+.modal-form{
+    padding:24px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+}
+.modal-grid{
+    display:grid;
+    gap:16px;
+}
+.modal-grid.two{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+}
+.modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top:8px;
+}
+@media (max-width: 900px){
+    .library-filter{
+        grid-template-columns:1fr;
+    }
 }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const createModal = document.getElementById('createLibraryModal');
+    const editModal = document.getElementById('editLibraryModal');
+    const openCreateBtn = document.getElementById('openCreateLibraryModalBtn');
+    const editButtons = document.querySelectorAll('[data-edit-button]');
+    const editForm = document.getElementById('editLibraryForm');
+
+    const toggleModal = (modal, open) => {
+        if (!modal) return;
+        modal.classList.toggle('hidden', !open);
+        document.body.classList.toggle('overflow-hidden', open);
+    };
+
+    openCreateBtn?.addEventListener('click', () => toggleModal(createModal, true));
+    document.querySelectorAll('[data-close-create-modal]').forEach((element) => {
+        element.addEventListener('click', () => toggleModal(createModal, false));
+    });
+    document.querySelectorAll('[data-close-edit-modal]').forEach((element) => {
+        element.addEventListener('click', () => toggleModal(editModal, false));
+    });
+
+    editButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const record = JSON.parse(button.dataset.record || '{}');
+            const id = button.dataset.id;
+
+            if (!editForm || !id) {
+                return;
+            }
+
+            editForm.action = @json(route('admin.libraries.update', ['library' => $definition['key'], 'item' => '__ITEM__'])).replace('__ITEM__', id);
+
+            Object.entries(record).forEach(([key, value]) => {
+                const field = editForm.querySelector(`[name="${key}"]`);
+                if (!field) return;
+
+                if (field.tagName === 'TEXTAREA') {
+                    field.value = value ?? '';
+                    return;
+                }
+
+                field.value = value ?? '';
+            });
+
+            toggleModal(editModal, true);
+        });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            toggleModal(createModal, false);
+            toggleModal(editModal, false);
+        }
+    });
+});
+</script>
 
 @endsection

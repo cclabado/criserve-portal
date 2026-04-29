@@ -1,21 +1,55 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('ALTER TABLE family_members DROP FOREIGN KEY family_members_application_id_foreign');
-        DB::statement('ALTER TABLE family_members MODIFY application_id BIGINT UNSIGNED NULL');
-        DB::statement('ALTER TABLE family_members ADD CONSTRAINT family_members_application_id_foreign FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE');
+        if (DB::getDriverName() === 'sqlite') {
+            Schema::table('family_members', function (Blueprint $table) {
+                $table->foreignId('application_id')->nullable()->change();
+            });
+
+            return;
+        }
+
+        Schema::table('family_members', function (Blueprint $table) {
+            $table->dropForeign(['application_id']);
+        });
+
+        Schema::table('family_members', function (Blueprint $table) {
+            $table->unsignedBigInteger('application_id')->nullable()->change();
+        });
+
+        Schema::table('family_members', function (Blueprint $table) {
+            $table->foreign('application_id')->references('id')->on('applications')->cascadeOnDelete();
+        });
     }
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE family_members DROP FOREIGN KEY family_members_application_id_foreign');
-        DB::statement('ALTER TABLE family_members MODIFY application_id BIGINT UNSIGNED NOT NULL');
-        DB::statement('ALTER TABLE family_members ADD CONSTRAINT family_members_application_id_foreign FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE');
+        if (DB::getDriverName() === 'sqlite') {
+            Schema::table('family_members', function (Blueprint $table) {
+                $table->foreignId('application_id')->nullable(false)->change();
+            });
+
+            return;
+        }
+
+        Schema::table('family_members', function (Blueprint $table) {
+            $table->dropForeign(['application_id']);
+        });
+
+        Schema::table('family_members', function (Blueprint $table) {
+            $table->unsignedBigInteger('application_id')->nullable(false)->change();
+        });
+
+        Schema::table('family_members', function (Blueprint $table) {
+            $table->foreign('application_id')->references('id')->on('applications')->cascadeOnDelete();
+        });
     }
 };

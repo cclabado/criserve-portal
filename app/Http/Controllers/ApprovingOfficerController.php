@@ -5,9 +5,15 @@ namespace App\Http\Controllers;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Models\Application;
+use App\Services\FamilyNetworkService;
 
 class ApprovingOfficerController extends Controller
 {
+    public function __construct(
+        protected FamilyNetworkService $familyNetwork
+    ) {
+    }
+
     public function dashboard()
     {
         $pending = Application::where('status', 'for_approval')->count();
@@ -112,9 +118,12 @@ class ApprovingOfficerController extends Controller
         $readOnly = request()->boolean('readonly');
         $application = Application::with([
             'client',
-            'beneficiary',
-            'familyMembers',
+            'beneficiary.relationshipData',
+            'beneficiaryProfile',
             'documents',
+            'assistanceDetail',
+            'frequencyRule',
+            'frequencyBasisApplication',
             'assistanceRecommendations.assistanceType',
             'assistanceRecommendations.assistanceSubtype',
             'assistanceRecommendations.assistanceDetail',
@@ -130,7 +139,10 @@ class ApprovingOfficerController extends Controller
             $application->save();
         }
 
-        return view('approving-officer.show', compact('application', 'readOnly'));
+        $householdMembers = $this->resolveHouseholdMembers($application);
+        $familyNetwork = $this->familyNetwork->buildApplicationNetwork($application);
+
+        return view('approving-officer.show', compact('application', 'readOnly', 'householdMembers', 'familyNetwork'));
     }
 
     public function approve(Request $request, $id)
@@ -160,5 +172,23 @@ class ApprovingOfficerController extends Controller
         return redirect()
             ->route('approving.applications')
             ->with('success', 'Application denied successfully.');
+    }
+
+    protected function resolveHouseholdMembers(Application $application)
+    {
+        if ($application->usesBeneficiaryHousehold() && $application->beneficiaryProfile) {
+            return $application->beneficiaryProfile
+                ->familyMembers()
+                ->with('relationshipData')
+                ->orderBy('id')
+                ->get();
+        }
+
+        return $application->client
+            ->familyMembers()
+            ->whereNull('beneficiary_profile_id')
+            ->with('relationshipData')
+            ->orderBy('id')
+            ->get();
     }
 }

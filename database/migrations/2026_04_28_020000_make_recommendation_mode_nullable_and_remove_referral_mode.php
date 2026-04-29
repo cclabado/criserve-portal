@@ -10,6 +10,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            Schema::table('application_assistance_recommendations', function (Blueprint $table) {
+                $table->foreignId('mode_of_assistance_id')->nullable()->change();
+            });
+        } else {
         Schema::table('application_assistance_recommendations', function (Blueprint $table) {
             $table->dropForeign('aar_mode_fk');
             $table->foreignId('mode_of_assistance_id')->nullable()->change();
@@ -18,6 +23,7 @@ return new class extends Migration
                 ->on('mode_of_assistances')
                 ->nullOnDelete();
         });
+        }
 
         $referralModeId = ModeOfAssistance::whereRaw('LOWER(name) = ?', ['referral'])->value('id');
 
