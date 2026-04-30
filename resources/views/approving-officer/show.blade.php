@@ -233,6 +233,18 @@
                 </div>
 
                 <div class="mt-4 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                        <span class="muted">Service Provider</span><br>{{ $application->serviceProvider->name ?? '-' }}
+                        @if($application->serviceProvider?->addressee)
+                            <div class="mt-1 text-xs text-slate-500">Addressee: {{ $application->serviceProvider->addressee }}</div>
+                        @endif
+                        @if($application->serviceProvider?->contact_number)
+                            <div class="text-xs text-slate-500">Contact: {{ $application->serviceProvider->contact_number }}</div>
+                        @endif
+                        @if($application->serviceProvider?->address)
+                            <div class="text-xs text-slate-500">{{ $application->serviceProvider->address }}</div>
+                        @endif
+                    </div>
                     <div><span class="muted">Current Status</span><br>{{ strtoupper(str_replace('_', ' ', $application->status ?? '-')) }}</div>
                     <div><span class="muted">Recommended Amount</span><br>PHP {{ number_format((float) ($application->recommended_amount ?? 0), 2) }}</div>
                     <div><span class="muted">Final Amount</span><br>PHP {{ number_format((float) ($application->final_amount ?? $totalRecommendedAmount), 2) }}</div>
@@ -284,7 +296,7 @@
 
                 <div class="grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
                     <div><span class="muted">Client Type</span><br>{{ $application->gis_client_type ?? '-' }}</div>
-                    <div><span class="muted">GIS Service Point</span><br>{{ $application->gis_visit_type ?? '-' }}</div>
+                    <div><span class="muted">Service Point</span><br>{{ $application->gis_visit_type ?? '-' }}</div>
                     <div><span class="muted">Diagnosis / Cause of Death</span><br>{{ $application->diagnosis_or_cause_of_death ?? '-' }}</div>
                     <div><span class="muted">Amount Needed</span><br>PHP {{ number_format((float) ($application->amount_needed ?? 0), 2) }}</div>
                 </div>
@@ -554,6 +566,9 @@
                                        name="final_amount"
                                        class="input w-full"
                                        value="{{ $totalRecommendedAmount }}">
+                                <p class="mt-2 text-xs text-emerald-800">
+                                    Amount limits follow the selected mode of assistance setting.
+                                </p>
                             </div>
 
                             <button type="submit"

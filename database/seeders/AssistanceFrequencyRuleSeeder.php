@@ -62,20 +62,15 @@ class AssistanceFrequencyRuleSeeder extends Seeder
                 'interval_months' => 3,
                 'notes' => 'Allowed once every three months.',
             ],
-            'Funeral Expenses' => [
+            'Funeral Bill Payment' => [
                 'rule_type' => 'per_incident',
                 'requires_case_key' => true,
                 'notes' => 'General rule: per beneficiary or incident of death.',
             ],
-            'Transfer of Cadaver' => [
+            'Transfer of Remains (Cadaver Transfer Assistance)' => [
                 'rule_type' => 'per_incident',
                 'requires_case_key' => true,
                 'notes' => 'Allowed per incident of death.',
-            ],
-            'Casualties during Disaster / Calamity' => [
-                'rule_type' => 'per_incident',
-                'requires_case_key' => true,
-                'notes' => 'Allowed per disaster or calamity incident.',
             ],
         ];
 

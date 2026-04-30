@@ -46,7 +46,7 @@ class ClientDashboardController extends Controller
     {
         $userId = auth()->id();
 
-        return Application::with(['assistanceType', 'assistanceSubtype', 'assistanceDetail', 'frequencyRule'])
+        return Application::with(['assistanceType', 'assistanceSubtype', 'assistanceDetail', 'frequencyRule', 'serviceProvider'])
             ->where(function ($query) use ($userId) {
                 $query->where('user_id', $userId)
                     ->orWhereHas('beneficiaryProfile', function ($beneficiaryProfileQuery) use ($userId) {
@@ -259,6 +259,7 @@ class ClientDashboardController extends Controller
             'frequencyRule',
             'frequencyBasisApplication',
             'modeOfAssistance',
+            'serviceProvider',
         ])->findOrFail($id);
 
         return view('client.application-details', compact('application'));

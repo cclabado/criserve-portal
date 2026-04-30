@@ -57,14 +57,17 @@ class AssistanceSeeder extends Seeder
                     'Chemotherapy and Other Special Treatment',
                 ],
                 'Funeral Assistance' => [
-                    'Funeral Expenses',
-                    'Transfer of Cadaver',
-                    'Casualties during Disaster / Calamity',
+                    'Funeral Bill Payment',
+                    'Transfer of Remains (Cadaver Transfer Assistance)',
                 ],
-                'Transportation Assistance' => [
-                    'Land Travel',
-                    'Sea Travel',
-                    'Air Travel',
+                'Cash Relief Assistance' => [
+                    'Fire Victims',
+                    'Rescued Clients',
+                    'Victims of Online Sexual Exploitation (Children)',
+                    'Locally Stranded Individuals (LSI)',
+                    'Food Assistance',
+                    'Educational Assistance',
+                    'Other Incidents',
                 ],
             ];
 

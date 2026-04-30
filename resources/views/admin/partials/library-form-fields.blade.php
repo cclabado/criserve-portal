@@ -42,10 +42,118 @@
             <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Payment for Hospital Bill">
         </div>
     </div>
-@elseif($definition['key'] === 'modes-of-assistance')
+@elseif($definition['key'] === 'document-requirements')
+    <div class="modal-grid two">
+        <div>
+            <label class="label">Assistance Subtype</label>
+            <select name="assistance_subtype_id" class="input">
+                <option value="">Select subtype</option>
+                @foreach($formOptions['assistanceSubtypes'] as $subtype)
+                    <option value="{{ $subtype->id }}" @selected(old('assistance_subtype_id', $item->assistance_subtype_id ?? null) == $subtype->id)>
+                        {{ $subtype->type?->name }} - {{ $subtype->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label class="label">Assistance Detail</label>
+            <select name="assistance_detail_id" class="input">
+                <option value="">Subtype-wide requirement</option>
+                @foreach($formOptions['assistanceDetails'] as $detail)
+                    <option value="{{ $detail->id }}" @selected(old('assistance_detail_id', $item->assistance_detail_id ?? null) == $detail->id)>
+                        {{ $detail->subtype?->type?->name }} - {{ $detail->subtype?->name }} - {{ $detail->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label class="label">Requirement Name</label>
+            <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Medical Certificate">
+        </div>
+        <div>
+            <label class="label">Sort Order</label>
+            <input type="number" min="0" name="sort_order" class="input" value="{{ old('sort_order', $item->sort_order ?? 0) }}">
+        </div>
+        <div>
+            <label class="label">Applies When Amount Exceeds</label>
+            <input type="number" min="0" step="0.01" name="applies_when_amount_exceeds" class="input" value="{{ old('applies_when_amount_exceeds', $item->applies_when_amount_exceeds ?? '') }}" placeholder="10000">
+        </div>
+        <div>
+            <label class="label">Requirement Mode</label>
+            <select name="is_required" class="input">
+                <option value="1" @selected((string) old('is_required', isset($item) ? (int) ($item->is_required ?? false) : 1) === '1')>Required</option>
+                <option value="0" @selected((string) old('is_required', isset($item) ? (int) ($item->is_required ?? false) : 1) === '0')>Optional</option>
+            </select>
+        </div>
+    </div>
+
     <div>
-        <label class="label">Mode Name</label>
-        <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Guarantee Letter">
+        <label class="label">Description / Upload Guidance</label>
+        <textarea name="description" class="input min-h-[110px]" placeholder="Explain what the client should upload and any date/signature requirements.">{{ old('description', $item->description ?? '') }}</textarea>
+    </div>
+@elseif($definition['key'] === 'modes-of-assistance')
+    <div class="modal-grid two">
+        <div>
+            <label class="label">Mode Name</label>
+            <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Guarantee Letter">
+        </div>
+        <div>
+            <label class="label">Minimum Amount</label>
+            <input type="number" min="0" step="0.01" name="minimum_amount" class="input" value="{{ old('minimum_amount', $item->minimum_amount ?? '') }}" placeholder="1.00">
+        </div>
+        <div>
+            <label class="label">Maximum Amount</label>
+            <input type="number" min="0" step="0.01" name="maximum_amount" class="input" value="{{ old('maximum_amount', $item->maximum_amount ?? '') }}" placeholder="10000.00">
+        </div>
+    </div>
+@elseif($definition['key'] === 'service-points')
+    <div>
+        <label class="label">Service Point Name</label>
+        <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Online">
+    </div>
+@elseif($definition['key'] === 'service-providers')
+    <div class="modal-grid two">
+        <div>
+            <label class="label">Provider Name</label>
+            <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="ABC Hospital">
+        </div>
+        <div>
+            <label class="label">Addressee</label>
+            <input type="text" name="addressee" class="input" value="{{ old('addressee', $item->addressee ?? '') }}" placeholder="Billing Manager / Administrator">
+        </div>
+        <div>
+            <label class="label">Contact Number</label>
+            <input type="text" name="contact_number" class="input" value="{{ old('contact_number', $item->contact_number ?? '') }}" placeholder="0917 000 0000">
+        </div>
+        <div>
+            <label class="label">Office Email</label>
+            <input type="email" name="email" class="input" value="{{ old('email', $item->user?->email ?? $item->email ?? '') }}" placeholder="provider@example.com">
+        </div>
+    </div>
+
+    <div>
+        <label class="label">Provider Categories</label>
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            @foreach(\App\Models\ServiceProvider::CATEGORY_OPTIONS as $categoryOption)
+                @php
+                    $selectedCategories = old('categories', $item?->categories ?? []);
+                @endphp
+                <label class="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                    <input type="checkbox"
+                           name="categories[]"
+                           value="{{ $categoryOption }}"
+                           class="h-4 w-4 rounded border-slate-300 text-sky-700 focus:ring-sky-500"
+                           @checked(in_array($categoryOption, $selectedCategories, true))>
+                    <span>{{ $categoryOption }}</span>
+                </label>
+            @endforeach
+        </div>
+        <p class="mt-2 text-xs text-slate-500">These categories control which providers appear for matching assistance subtype or detail selections.</p>
+    </div>
+
+    <div>
+        <label class="label">Address</label>
+        <textarea name="address" class="input min-h-[110px]" placeholder="Provider address">{{ old('address', $item->address ?? '') }}</textarea>
     </div>
 @elseif($definition['key'] === 'relationships')
     <div>

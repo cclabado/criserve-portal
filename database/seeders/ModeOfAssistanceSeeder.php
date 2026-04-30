@@ -15,7 +15,20 @@ class ModeOfAssistanceSeeder extends Seeder
 
         foreach (['Cash', 'Guarantee Letter'] as $name) {
             $mode = ModeOfAssistance::firstOrCreate(['name' => $name]);
-            $modes[strtolower($name)] = $mode;
+            $normalized = strtolower($name);
+            $mode->fill(match ($normalized) {
+                'cash' => [
+                    'minimum_amount' => 0,
+                    'maximum_amount' => 10000,
+                ],
+                'guarantee letter' => [
+                    'minimum_amount' => 1,
+                    'maximum_amount' => null,
+                ],
+                default => [],
+            });
+            $mode->save();
+            $modes[$normalized] = $mode;
         }
 
         foreach (Application::query()->get(['id', 'mode_of_assistance', 'mode_of_assistance_id']) as $application) {

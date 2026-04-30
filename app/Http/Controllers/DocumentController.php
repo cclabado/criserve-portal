@@ -60,6 +60,15 @@ class DocumentController extends Controller
             return;
         }
 
+        if ($user->role === 'service_provider') {
+            abort_unless(
+                $user->serviceProvider && (int) $document->application->service_provider_id === (int) $user->serviceProvider->id,
+                403
+            );
+
+            return;
+        }
+
         abort_unless(
             $user->role === 'client' && (int) $document->application->user_id === (int) $user->id,
             403

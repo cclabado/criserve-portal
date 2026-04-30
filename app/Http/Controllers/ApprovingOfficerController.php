@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Models\Application;
+use App\Notifications\GuaranteeLetterApprovedNotification;
 use App\Services\FamilyNetworkService;
+use Illuminate\Validation\ValidationException;
 
 class ApprovingOfficerController extends Controller
 {
@@ -122,6 +124,7 @@ class ApprovingOfficerController extends Controller
             'beneficiaryProfile',
             'documents',
             'assistanceDetail',
+            'serviceProvider',
             'frequencyRule',
             'frequencyBasisApplication',
             'assistanceRecommendations.assistanceType',
@@ -147,13 +150,25 @@ class ApprovingOfficerController extends Controller
 
     public function approve(Request $request, $id)
     {
-        $app = Application::findOrFail($id);
+        $app = Application::with(['modeOfAssistance', 'serviceProvider.accounts', 'client'])->findOrFail($id);
+        $finalAmount = (float) $request->input('final_amount', 0);
 
-        $app->final_amount = $request->final_amount;
+        $this->validateModeAmountRule($app, $finalAmount, 'final_amount');
+
+        $app->final_amount = $finalAmount;
         $app->approving_officer_id = auth()->id();
         $app->status = 'approved';
         $app->denial_reason = null;
         $app->save();
+
+        if (
+            strtolower((string) ($app->modeOfAssistance?->name ?? $app->mode_of_assistance)) === 'guarantee letter'
+            && $app->serviceProvider?->accounts?->isNotEmpty()
+        ) {
+            foreach ($app->serviceProvider->accounts as $account) {
+                $account->notify(new GuaranteeLetterApprovedNotification($app));
+            }
+        }
 
         return redirect()
             ->route('approving.applications')
@@ -174,11 +189,43 @@ class ApprovingOfficerController extends Controller
             ->with('success', 'Application denied successfully.');
     }
 
+    protected function validateModeAmountRule(Application $application, float $amount, string $field): void
+    {
+        $minimumAmount = $application->modeOfAssistance?->minimum_amount !== null
+            ? (float) $application->modeOfAssistance->minimum_amount
+            : null;
+        $maximumAmount = $application->modeOfAssistance?->maximum_amount !== null
+            ? (float) $application->modeOfAssistance->maximum_amount
+            : null;
+
+        if ($minimumAmount !== null && $amount < $minimumAmount) {
+            throw ValidationException::withMessages([
+                $field => 'This mode of assistance requires at least PHP '.number_format($minimumAmount, 2).'.',
+            ]);
+        }
+
+        if ($maximumAmount !== null && $amount > $maximumAmount) {
+            throw ValidationException::withMessages([
+                $field => 'This mode of assistance only allows amounts up to PHP '.number_format($maximumAmount, 2).'.',
+            ]);
+        }
+    }
+
     protected function resolveHouseholdMembers(Application $application)
     {
+        $snapshotMembers = $application->applicationFamilyMembers()
+            ->with('relationshipData')
+            ->orderBy('id')
+            ->get();
+
+        if ($snapshotMembers->isNotEmpty()) {
+            return $snapshotMembers;
+        }
+
         if ($application->usesBeneficiaryHousehold() && $application->beneficiaryProfile) {
             return $application->beneficiaryProfile
                 ->familyMembers()
+                ->whereNull('application_id')
                 ->with('relationshipData')
                 ->orderBy('id')
                 ->get();
@@ -187,6 +234,7 @@ class ApprovingOfficerController extends Controller
         return $application->client
             ->familyMembers()
             ->whereNull('beneficiary_profile_id')
+            ->whereNull('application_id')
             ->with('relationshipData')
             ->orderBy('id')
             ->get();

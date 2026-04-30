@@ -42,6 +42,10 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('approving.dashboard');
         }
 
+        if ($user->role === 'service_provider') {
+            return redirect()->route('service-provider.dashboard');
+        }
+
         return redirect()->route('client.dashboard');
     }
 

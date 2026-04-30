@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Client;
 use App\Models\Application;
 use App\Models\AssistanceDetail;
+use App\Models\AssistanceDocumentRequirement;
 use App\Models\AssistanceSubtype;
 use App\Models\AssistanceType;
 use App\Models\Beneficiary;
@@ -14,6 +15,7 @@ use App\Models\FamilyMember;
 use App\Models\Document;
 use Illuminate\Http\JsonResponse;
 use App\Models\ModeOfAssistance;
+use App\Models\ServiceProvider;
 use App\Services\FamilyNetworkService;
 use App\Services\FrequencyEligibilityService;
 use App\Services\IdentityMappingService;
@@ -125,10 +127,15 @@ class ApplicationController extends Controller
             'assistance_subtype_id' => ['required', 'exists:assistance_subtypes,id'],
             'assistance_detail_id' => ['nullable', 'exists:assistance_details,id'],
             'mode_of_assistance_id' => ['required', 'exists:mode_of_assistances,id'],
+            'service_provider_id' => ['nullable', 'exists:service_providers,id'],
+            'amount_needed' => ['required', 'numeric', 'min:0'],
             'frequency_case_key' => ['nullable', 'string', 'max:255'],
             'frequency_exception_reason' => ['nullable', 'string'],
-            'documents' => ['required', 'array', 'min:1'],
+            'documents' => ['nullable', 'array'],
             'documents.*' => ['file', 'max:10240'],
+            'required_documents' => ['nullable', 'array'],
+            'required_documents.*' => ['nullable', 'array'],
+            'required_documents.*.*' => ['file', 'max:10240'],
         ]);
 
         $this->validateAssistanceSelection(
@@ -136,7 +143,19 @@ class ApplicationController extends Controller
             (int) $validated['assistance_subtype_id'],
             isset($validated['assistance_detail_id']) ? (int) $validated['assistance_detail_id'] : null
         );
+        $documentRequirements = $this->applicableDocumentRequirements(
+            (int) $validated['assistance_subtype_id'],
+            isset($validated['assistance_detail_id']) ? (int) $validated['assistance_detail_id'] : null
+        );
+        $this->validateDocumentUploads($request, $documentRequirements, (float) $validated['amount_needed']);
         $mode = ModeOfAssistance::findOrFail((int) $validated['mode_of_assistance_id']);
+        $this->validateModeAmountRule($mode, (float) $validated['amount_needed'], 'amount_needed');
+        $serviceProviderId = $this->resolveServiceProviderSelection(
+            $request,
+            $mode,
+            (int) $validated['assistance_subtype_id'],
+            isset($validated['assistance_detail_id']) ? (int) $validated['assistance_detail_id'] : null
+        );
 
         if ((int) $request->relationship_id !== 1) {
             $request->validate([
@@ -231,6 +250,8 @@ class ApplicationController extends Controller
             'assistance_subtype_id' => $request->assistance_subtype_id,
             'assistance_detail_id' => $request->assistance_detail_id,
             'mode_of_assistance_id' => $mode->id,
+            'service_provider_id' => $serviceProviderId,
+            'amount_needed' => $validated['amount_needed'],
             'frequency_rule_id' => $frequencyEvaluation['rule']?->id,
             'frequency_basis_application_id' => $frequencyEvaluation['basis_application_id'],
             'frequency_status' => $frequencyEvaluation['status'],
@@ -292,24 +313,7 @@ class ApplicationController extends Controller
 
         
         // ================= DOCUMENTS =================
-        if ($request->hasFile('documents')) {
-
-            foreach ($request->file('documents') as $file) {
-
-                // generate unique filename
-                $filename = time().'_'.$file->getClientOriginalName();
-
-                // store file
-                $path = $file->storeAs('documents', $filename, 'public');
-
-                // save to database
-                Document::create([
-                    'application_id' => $application->id,
-                    'file_name' => $filename,
-                    'file_path' => $path
-                ]);
-            }
-        }
+        $this->storeApplicationDocuments($application, $request, $documentRequirements);
 
         return redirect('/client/dashboard')
             ->with('success', 'Application submitted successfully!')
@@ -346,12 +350,15 @@ class ApplicationController extends Controller
         ?BeneficiaryProfile $beneficiaryProfile = null
     ): void
     {
-        $relation = $beneficiaryProfile
-            ? $beneficiaryProfile->familyMembers()
-            : $client->familyMembers()->whereNull('beneficiary_profile_id');
+        $masterRelation = $beneficiaryProfile
+            ? $beneficiaryProfile->familyMembers()->whereNull('application_id')
+            : $client->familyMembers()
+                ->whereNull('beneficiary_profile_id')
+                ->whereNull('application_id');
 
-        $existingIds = $relation->pluck('id')->all();
+        $existingIds = $masterRelation->pluck('id')->all();
         $submittedIds = [];
+        $snapshotRows = [];
         $count = count($request->input('family_last_name', []));
 
         for ($index = 0; $index < $count; $index++) {
@@ -364,7 +371,7 @@ class ApplicationController extends Controller
             }
 
             $payload = [
-                'application_id' => $application->id,
+                'application_id' => null,
                 'client_id' => $client->id,
                 'beneficiary_profile_id' => $beneficiaryProfile?->id,
                 'last_name' => $lastName,
@@ -378,26 +385,56 @@ class ApplicationController extends Controller
             $memberId = $request->input("family_id.$index");
 
             if ($memberId) {
-                $member = $relation->whereKey($memberId)->first();
+                $member = $masterRelation->whereKey($memberId)->first();
 
                 if ($member) {
                     $member->update($payload);
                     $this->identityMapping->syncFamilyMember($member);
                     $submittedIds[] = $member->id;
+                    $snapshotRows[] = $member->only([
+                        'client_id',
+                        'linked_user_id',
+                        'person_id',
+                        'beneficiary_profile_id',
+                        'last_name',
+                        'first_name',
+                        'middle_name',
+                        'extension_name',
+                        'relationship',
+                        'birthdate',
+                    ]);
                 }
 
                 continue;
             }
 
-            $member = $relation->create($payload);
+            $member = $masterRelation->create($payload);
             $this->identityMapping->syncFamilyMember($member);
             $submittedIds[] = $member->id;
+            $snapshotRows[] = $member->only([
+                'client_id',
+                'linked_user_id',
+                'person_id',
+                'beneficiary_profile_id',
+                'last_name',
+                'first_name',
+                'middle_name',
+                'extension_name',
+                'relationship',
+                'birthdate',
+            ]);
         }
 
         $toDelete = array_diff($existingIds, $submittedIds);
 
         if (! empty($toDelete)) {
-            $relation->whereIn('id', $toDelete)->delete();
+            $masterRelation->whereIn('id', $toDelete)->delete();
+        }
+
+        $application->applicationFamilyMembers()->delete();
+
+        foreach ($snapshotRows as $snapshotRow) {
+            $application->applicationFamilyMembers()->create($snapshotRow);
         }
     }
 
@@ -468,6 +505,81 @@ class ApplicationController extends Controller
         }
     }
 
+    protected function applicableDocumentRequirements(int $subtypeId, ?int $detailId = null)
+    {
+        return AssistanceDocumentRequirement::query()
+            ->active()
+            ->forSelection($subtypeId, $detailId)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    protected function validateDocumentUploads(Request $request, $requirements, float $amountNeeded): void
+    {
+        $requiredRequirements = $requirements->filter(
+            fn (AssistanceDocumentRequirement $requirement) => $requirement->isRequiredForAmount($amountNeeded)
+        );
+
+        $messages = [];
+
+        foreach ($requiredRequirements as $requirement) {
+            if (! $request->hasFile("required_documents.{$requirement->id}")) {
+                $messages["required_documents.{$requirement->id}"] = "Upload the required document for {$requirement->name}.";
+            }
+        }
+
+        if ($requiredRequirements->isEmpty()) {
+            $genericDocuments = $request->file('documents', []);
+
+            if (count($genericDocuments) === 0) {
+                $messages['documents'] = 'Upload at least one supporting document before submitting.';
+            }
+        }
+
+        if (! empty($messages)) {
+            throw ValidationException::withMessages($messages);
+        }
+    }
+
+    protected function storeApplicationDocuments(Application $application, Request $request, $requirements): void
+    {
+        foreach ($requirements as $requirement) {
+            if (! $request->hasFile("required_documents.{$requirement->id}")) {
+                continue;
+            }
+
+            foreach ($request->file("required_documents.{$requirement->id}") as $file) {
+                $filename = time().'_'.$file->getClientOriginalName();
+                $path = $file->storeAs('documents', $filename, 'public');
+
+                Document::create([
+                    'application_id' => $application->id,
+                    'document_requirement_id' => $requirement->id,
+                    'document_type' => $requirement->name,
+                    'file_name' => $filename,
+                    'file_path' => $path,
+                ]);
+            }
+        }
+
+        if (! $request->hasFile('documents')) {
+            return;
+        }
+
+        foreach ($request->file('documents') as $file) {
+            $filename = time().'_'.$file->getClientOriginalName();
+            $path = $file->storeAs('documents', $filename, 'public');
+
+            Document::create([
+                'application_id' => $application->id,
+                'document_type' => 'Additional Supporting Document',
+                'file_name' => $filename,
+                'file_path' => $path,
+            ]);
+        }
+    }
+
     protected function enforceSubmissionCooldown(Request $request): void
     {
         $key = 'client-application-submit:'.$request->user()->id;
@@ -521,5 +633,81 @@ class ApplicationController extends Controller
                 .$existingApplication->reference_no
                 .'. Please wait for that application to be completed before submitting another one.',
         ]);
+    }
+
+    protected function resolveServiceProviderSelection(Request $request, ModeOfAssistance $mode, ?int $subtypeId = null, ?int $detailId = null): ?int
+    {
+        $serviceProviderId = $request->filled('service_provider_id')
+            ? (int) $request->input('service_provider_id')
+            : null;
+
+        if (strtolower(trim((string) $mode->name)) !== 'guarantee letter') {
+            return null;
+        }
+
+        if (! $serviceProviderId) {
+            throw ValidationException::withMessages([
+                'service_provider_id' => 'Please select a service provider when the mode of assistance is Guarantee Letter.',
+            ]);
+        }
+
+        $provider = ServiceProvider::query()
+            ->whereKey($serviceProviderId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $provider) {
+            throw ValidationException::withMessages([
+                'service_provider_id' => 'The selected service provider is unavailable.',
+            ]);
+        }
+
+        $this->validateServiceProviderCategoryMatch($provider, $subtypeId, $detailId);
+
+        return $provider->id;
+    }
+
+    protected function validateModeAmountRule(ModeOfAssistance $mode, float $amount, string $field): void
+    {
+        $minimumAmount = $mode->minimum_amount !== null ? (float) $mode->minimum_amount : null;
+        $maximumAmount = $mode->maximum_amount !== null ? (float) $mode->maximum_amount : null;
+
+        if ($minimumAmount !== null && $amount < $minimumAmount) {
+            throw ValidationException::withMessages([
+                $field => 'This mode of assistance requires at least PHP '.number_format($minimumAmount, 2).'.',
+            ]);
+        }
+
+        if ($maximumAmount !== null && $amount > $maximumAmount) {
+            throw ValidationException::withMessages([
+                $field => 'This mode of assistance only allows amounts up to PHP '.number_format($maximumAmount, 2).'.',
+            ]);
+        }
+    }
+
+    protected function validateServiceProviderCategoryMatch(ServiceProvider $provider, ?int $subtypeId, ?int $detailId): void
+    {
+        $subtype = $subtypeId ? AssistanceSubtype::find($subtypeId) : null;
+        $detail = $detailId ? AssistanceDetail::find($detailId) : null;
+        $relevantCategories = ServiceProvider::inferRelevantCategories($subtype?->name, $detail?->name);
+
+        if ($relevantCategories === []) {
+            return;
+        }
+
+        $hasAnyMatchingProvider = ServiceProvider::query()
+            ->where('is_active', true)
+            ->get()
+            ->contains(fn (ServiceProvider $serviceProvider) => collect($serviceProvider->categories ?? [])->intersect($relevantCategories)->isNotEmpty());
+
+        if (! $hasAnyMatchingProvider) {
+            return;
+        }
+
+        if (! collect($provider->categories ?? [])->intersect($relevantCategories)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'service_provider_id' => 'The selected service provider does not match the required category for this assistance.',
+            ]);
+        }
     }
 }

@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Application;
 use App\Models\AssistanceDetail;
+use App\Models\AssistanceDocumentRequirement;
 use App\Models\AssistanceFrequencyRule;
 use App\Models\AssistanceSubtype;
 use App\Models\AssistanceType;
 use App\Models\ModeOfAssistance;
 use App\Models\Relationship;
 use App\Models\ReferralInstitution;
+use App\Models\ServicePoint;
+use App\Models\ServiceProvider;
 use App\Models\SupportTicket;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +29,7 @@ class AdminController extends Controller
         'client',
         'social_worker',
         'approving_officer',
+        'service_provider',
     ];
 
     public function dashboard(): View
@@ -201,6 +205,7 @@ class AdminController extends Controller
         return view('admin.users', [
             'users' => $users,
             'roles' => $roles,
+            'serviceProviders' => ServiceProvider::where('is_active', true)->orderBy('name')->get(),
             'filters' => [
                 'search' => (string) $request->input('search', ''),
                 'role' => (string) $request->input('role', 'all'),
@@ -216,6 +221,12 @@ class AdminController extends Controller
 
         if ($redirect = $this->guardRoleChange($request->user(), $user, $validated['role'])) {
             return $redirect;
+        }
+
+        if ($validated['role'] === 'service_provider' && empty($validated['service_provider_id'])) {
+            throw ValidationException::withMessages([
+                'service_provider_id' => 'Select the linked service provider for this account.',
+            ]);
         }
 
         $user->update([
@@ -239,6 +250,7 @@ class AdminController extends Controller
             'sex' => ['nullable', 'string', 'max:255'],
             'civil_status' => ['nullable', 'string', 'max:255'],
             'role' => ['required', 'in:'.implode(',', $this->roles)],
+            'service_provider_id' => ['nullable', 'exists:service_providers,id'],
         ]);
 
         if ($redirect = $this->guardRoleChange($request->user(), $user, $validated['role'])) {
@@ -247,6 +259,9 @@ class AdminController extends Controller
 
         $user->update([
             ...$validated,
+            'service_provider_id' => $validated['role'] === 'service_provider'
+                ? ($validated['service_provider_id'] ?? null)
+                : null,
             'name' => trim(implode(' ', array_filter([
                 $validated['first_name'],
                 $validated['middle_name'] ?? null,
@@ -307,6 +322,21 @@ class AdminController extends Controller
         return $this->storeLibraryRecord($request, 'referral-institutions');
     }
 
+    public function storeDocumentRequirement(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'document-requirements');
+    }
+
+    public function storeServicePoint(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'service-points');
+    }
+
+    public function storeServiceProvider(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'service-providers');
+    }
+
     public function storeFrequencyRule(Request $request): RedirectResponse
     {
         AssistanceFrequencyRule::create($this->validateFrequencyRulePayload($request));
@@ -340,7 +370,7 @@ class AdminController extends Controller
         $model = $definition['model']::query()->findOrFail($item);
         $validated = $this->validateLibraryPayload($request, $library, $model->id);
 
-        $model->update($validated);
+        $model->update($validated + ['is_active' => $request->boolean('is_active', true)]);
 
         return redirect()
             ->route('admin.libraries.show', $library)
@@ -359,11 +389,23 @@ class AdminController extends Controller
             ->with('success', $definition['singular'].' archived successfully.');
     }
 
+    public function restoreLibrary(string $library, int $item): RedirectResponse
+    {
+        $definition = $this->resolveLibraryDefinition($library);
+        $model = $definition['model']::query()->findOrFail($item);
+
+        $model->update(['is_active' => true]);
+
+        return redirect()
+            ->route('admin.libraries.show', $library)
+            ->with('success', $definition['singular'].' reactivated successfully.');
+    }
+
     protected function storeLibraryRecord(Request $request, string $library): RedirectResponse
     {
         $definition = $this->resolveLibraryDefinition($library);
         $validated = $this->validateLibraryPayload($request, $library);
-        $definition['model']::create($validated + ['is_active' => true]);
+        $definition['model']::create($validated + ['is_active' => $request->boolean('is_active', true)]);
 
         return redirect()
             ->route('admin.libraries.show', $library)
@@ -378,7 +420,12 @@ class AdminController extends Controller
             ]),
             'assistance-subtypes' => $this->validateAssistanceSubtypePayload($request, $ignoreId),
             'assistance-details' => $this->validateAssistanceDetailPayload($request, $ignoreId),
+            'document-requirements' => $this->validateDocumentRequirementPayload($request, $ignoreId),
             'modes-of-assistance' => $this->validateModeOfAssistancePayload($request, $ignoreId),
+            'service-points' => $request->validate([
+                'name' => ['required', 'string', 'max:255', Rule::unique('service_points', 'name')->ignore($ignoreId)],
+            ]),
+            'service-providers' => $this->validateServiceProviderPayload($request, $ignoreId),
             'relationships' => $request->validate([
                 'name' => ['required', 'string', 'max:255', Rule::unique('relationships', 'name')->ignore($ignoreId)],
             ]),
@@ -445,6 +492,8 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('mode_of_assistances', 'name')->ignore($ignoreId)],
+            'minimum_amount' => ['nullable', 'numeric', 'min:0'],
+            'maximum_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         if (strtolower(trim($validated['name'])) === 'referral') {
@@ -453,7 +502,125 @@ class AdminController extends Controller
             ]);
         }
 
-        return $validated;
+        $minimumAmount = filled($validated['minimum_amount'] ?? null)
+            ? round((float) $validated['minimum_amount'], 2)
+            : null;
+        $maximumAmount = filled($validated['maximum_amount'] ?? null)
+            ? round((float) $validated['maximum_amount'], 2)
+            : null;
+
+        if ($minimumAmount !== null && $maximumAmount !== null && $maximumAmount < $minimumAmount) {
+            throw ValidationException::withMessages([
+                'maximum_amount' => 'Maximum amount must be greater than or equal to the minimum amount.',
+            ]);
+        }
+
+        return [
+            'name' => trim((string) $validated['name']),
+            'minimum_amount' => $minimumAmount,
+            'maximum_amount' => $maximumAmount,
+        ];
+    }
+
+    protected function validateDocumentRequirementPayload(Request $request, ?int $ignoreId = null): array
+    {
+        $validated = $request->validate([
+            'assistance_subtype_id' => ['required', 'exists:assistance_subtypes,id'],
+            'assistance_detail_id' => ['nullable', 'exists:assistance_details,id'],
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'is_required' => ['nullable', 'boolean'],
+            'applies_when_amount_exceeds' => ['nullable', 'numeric', 'min:0'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
+        ]);
+
+        $subtype = AssistanceSubtype::query()
+            ->with('type')
+            ->findOrFail((int) $validated['assistance_subtype_id']);
+
+        $detailId = ! empty($validated['assistance_detail_id']) ? (int) $validated['assistance_detail_id'] : null;
+
+        if ($detailId) {
+            $detail = AssistanceDetail::query()->findOrFail($detailId);
+
+            if ((int) $detail->assistance_subtype_id !== (int) $subtype->id) {
+                throw ValidationException::withMessages([
+                    'assistance_detail_id' => 'The selected detail does not belong to the selected subtype.',
+                ]);
+            }
+        }
+
+        $query = AssistanceDocumentRequirement::query()
+            ->where('assistance_subtype_id', $subtype->id)
+            ->whereRaw('LOWER(name) = ?', [strtolower(trim((string) $validated['name']))])
+            ->when(
+                $detailId,
+                fn ($builder) => $builder->where('assistance_detail_id', $detailId),
+                fn ($builder) => $builder->whereNull('assistance_detail_id')
+            );
+
+        if ($ignoreId) {
+            $query->whereKeyNot($ignoreId);
+        }
+
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'name' => $detailId
+                    ? 'This document requirement already exists for the selected assistance detail.'
+                    : 'This document requirement already exists for the selected assistance subtype.',
+            ]);
+        }
+
+        return [
+            'assistance_subtype_id' => $subtype->id,
+            'assistance_detail_id' => $detailId,
+            'name' => trim((string) $validated['name']),
+            'description' => filled($validated['description'] ?? null) ? trim((string) $validated['description']) : null,
+            'is_required' => (bool) ($validated['is_required'] ?? false),
+            'applies_when_amount_exceeds' => filled($validated['applies_when_amount_exceeds'] ?? null)
+                ? round((float) $validated['applies_when_amount_exceeds'], 2)
+                : null,
+            'sort_order' => (int) ($validated['sort_order'] ?? 0),
+        ];
+    }
+
+    protected function validateServiceProviderPayload(Request $request, ?int $ignoreId = null): array
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'addressee' => ['nullable', 'string', 'max:255'],
+            'categories' => ['nullable', 'array'],
+            'categories.*' => ['string', Rule::in(ServiceProvider::CATEGORY_OPTIONS)],
+            'contact_number' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string'],
+            'email' => ['nullable', 'email', 'max:255'],
+        ]);
+
+        $query = ServiceProvider::query()
+            ->whereRaw('LOWER(name) = ?', [strtolower(trim((string) $validated['name']))]);
+
+        if ($ignoreId) {
+            $query->whereKeyNot($ignoreId);
+        }
+
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'name' => 'This service provider already exists.',
+            ]);
+        }
+
+        return [
+            'name' => trim((string) $validated['name']),
+            'addressee' => filled($validated['addressee'] ?? null) ? trim((string) $validated['addressee']) : null,
+            'categories' => collect($validated['categories'] ?? [])
+                ->filter(fn ($category) => in_array($category, ServiceProvider::CATEGORY_OPTIONS, true))
+                ->unique()
+                ->values()
+                ->all(),
+            'contact_number' => filled($validated['contact_number'] ?? null) ? trim((string) $validated['contact_number']) : null,
+            'address' => filled($validated['address'] ?? null) ? trim((string) $validated['address']) : null,
+            'email' => filled($validated['email'] ?? null) ? trim((string) $validated['email']) : null,
+        ];
     }
 
     protected function validateFrequencyRulePayload(Request $request, ?int $ignoreId = null): array
@@ -563,6 +730,16 @@ class AdminController extends Controller
                 'with' => ['subtype.type'],
                 'icon' => 'list_alt',
             ],
+            'document-requirements' => [
+                'title' => 'Document Requirements',
+                'singular' => 'Document requirement',
+                'description' => 'Set the client-upload document checklist required for each assistance subtype or detail.',
+                'model' => AssistanceDocumentRequirement::class,
+                'order_by' => 'sort_order',
+                'search_columns' => ['name', 'description'],
+                'with' => ['subtype.type', 'detail'],
+                'icon' => 'task_alt',
+            ],
             'modes-of-assistance' => [
                 'title' => 'Modes of Assistance',
                 'singular' => 'Mode of assistance',
@@ -572,6 +749,26 @@ class AdminController extends Controller
                 'search_columns' => ['name'],
                 'with' => [],
                 'icon' => 'tactic',
+            ],
+            'service-points' => [
+                'title' => 'Service Points',
+                'singular' => 'Service point',
+                'description' => 'Manage the intake service point options used in the General Intake Sheet and assessment flow.',
+                'model' => ServicePoint::class,
+                'order_by' => 'name',
+                'search_columns' => ['name'],
+                'with' => [],
+                'icon' => 'location_on',
+            ],
+            'service-providers' => [
+                'title' => 'Service Providers',
+                'singular' => 'Service provider',
+                'description' => 'Manage hospitals, pharmacies, funeral parlors, and other providers that receive approved guarantee letters.',
+                'model' => ServiceProvider::class,
+                'order_by' => 'name',
+                'search_columns' => ['name', 'addressee', 'email', 'contact_number', 'address'],
+                'with' => ['accounts'],
+                'icon' => 'local_hospital',
             ],
             'relationships' => [
                 'title' => 'Relationships',
@@ -612,6 +809,10 @@ class AdminController extends Controller
         return [
             'assistanceTypes' => AssistanceType::where('is_active', true)->orderBy('name')->get(),
             'assistanceSubtypes' => AssistanceSubtype::with('type')
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(),
+            'assistanceDetails' => AssistanceDetail::with('subtype.type')
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(),

@@ -27,7 +27,7 @@
 <!-- HEADER -->
 <div class="mb-6">
     <a href="/client/dashboard" class="text-sm text-gray-600 mb-2 inline-block">
-        ← BACK TO DASHBOARD
+        &larr; BACK TO DASHBOARD
     </a>
 
     <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -290,14 +290,35 @@
 </p>
 </div>
 
+<div class="mb-6">
+<p class="text-xs text-gray-500">Service Provider</p>
+<p class="font-semibold text-gray-800">
+    {{ $application->serviceProvider->name ?? '-' }}
+</p>
+@if($application->serviceProvider?->addressee)
+<p class="mt-1 text-sm text-slate-500">Addressee: {{ $application->serviceProvider->addressee }}</p>
+@endif
+@if($application->serviceProvider?->contact_number)
+<p class="text-sm text-slate-500">Contact: {{ $application->serviceProvider->contact_number }}</p>
+@endif
+@if($application->serviceProvider?->address)
+<p class="text-sm text-slate-500">{{ $application->serviceProvider->address }}</p>
+@endif
+</div>
+
 <div>
 <p class="text-xs text-gray-500 mb-2">Documents</p>
 
 @forelse($application->documents as $doc)
-<a href="{{ route('documents.show', $doc->id) }}"
-   class="block text-blue-600 hover:underline text-sm">
-    {{ $doc->file_name }}
-</a>
+<div class="mb-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+        {{ $doc->document_type ?: 'Supporting Document' }}
+    </p>
+    <a href="{{ route('documents.show', $doc->id) }}"
+       class="mt-2 block text-sm font-semibold text-blue-600 hover:underline">
+        {{ $doc->file_name }}
+    </a>
+</div>
 @empty
 <p class="text-gray-500">No documents uploaded</p>
 @endforelse

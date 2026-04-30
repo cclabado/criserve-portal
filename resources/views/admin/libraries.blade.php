@@ -6,12 +6,21 @@
     $statusPillClass = fn (bool $isActive) => $isActive
         ? 'bg-emerald-100 text-emerald-700'
         : 'bg-slate-200 text-slate-700';
+    $activeCount = method_exists($items, 'getCollection')
+        ? $items->getCollection()->where('is_active', true)->count()
+        : collect($items)->where('is_active', true)->count();
+    $archivedCount = method_exists($items, 'getCollection')
+        ? $items->getCollection()->where('is_active', false)->count()
+        : collect($items)->where('is_active', false)->count();
 
     $libraryStoreRoutes = [
         'assistance-types' => route('admin.libraries.assistance-types.store'),
         'assistance-subtypes' => route('admin.libraries.assistance-subtypes.store'),
         'assistance-details' => route('admin.libraries.assistance-details.store'),
+        'document-requirements' => route('admin.libraries.document-requirements.store'),
         'modes-of-assistance' => route('admin.libraries.modes-of-assistance.store'),
+        'service-points' => route('admin.libraries.service-points.store'),
+        'service-providers' => route('admin.libraries.service-providers.store'),
         'relationships' => route('admin.libraries.relationships.store'),
         'referral-institutions' => route('admin.libraries.referral-institutions.store'),
     ];
@@ -73,6 +82,24 @@
 
                 <button type="submit" class="btn-secondary">Filter</button>
             </form>
+
+            <div class="library-status-strip">
+                <span class="library-status-chip library-status-chip--active">
+                    {{ $activeCount }} active
+                </span>
+                <span class="library-status-chip library-status-chip--archived">
+                    {{ $archivedCount }} archived
+                </span>
+                @if($filters['status'] === 'archived')
+                    <span class="library-status-note">
+                        Archived items are read-only and kept for historical alignment.
+                    </span>
+                @elseif($filters['status'] === 'all' && $archivedCount > 0)
+                    <span class="library-status-note">
+                        Archived rows are shaded so retired values stay easy to spot.
+                    </span>
+                @endif
+            </div>
         </div>
 
         <div class="table-shell mt-6">
@@ -86,6 +113,19 @@
                             <th>Detail</th>
                             <th>Subtype</th>
                             <th>Type</th>
+                        @elseif($definition['key'] === 'document-requirements')
+                            <th>Requirement</th>
+                            <th>Applies To</th>
+                            <th>Rule</th>
+                        @elseif($definition['key'] === 'modes-of-assistance')
+                            <th>Mode</th>
+                            <th>Amount Rule</th>
+                        @elseif($definition['key'] === 'service-providers')
+                            <th>Provider</th>
+                            <th>Categories</th>
+                            <th>Addressee</th>
+                            <th>Contact</th>
+                            <th>Accounts</th>
                         @elseif($definition['key'] === 'referral-institutions')
                             <th>Institution</th>
                             <th>Addressee</th>
@@ -106,35 +146,115 @@
                                 'name' => $item->name,
                                 'assistance_type_id' => $item->assistance_type_id ?? null,
                                 'assistance_subtype_id' => $item->assistance_subtype_id ?? null,
+                                'assistance_detail_id' => $item->assistance_detail_id ?? null,
                                 'addressee' => $item->addressee ?? null,
+                                'categories' => $item->categories ?? [],
                                 'address' => $item->address ?? null,
                                 'email' => $item->email ?? null,
                                 'contact_number' => $item->contact_number ?? null,
+                                'description' => $item->description ?? null,
+                                'is_required' => (bool) ($item->is_required ?? false),
+                                'applies_when_amount_exceeds' => $item->applies_when_amount_exceeds ?? null,
+                                'minimum_amount' => $item->minimum_amount ?? null,
+                                'maximum_amount' => $item->maximum_amount ?? null,
+                                'sort_order' => $item->sort_order ?? 0,
                                 'is_active' => (bool) $item->is_active,
+                                'password' => null,
                             ];
                         @endphp
-                        <tr>
+                        <tr class="{{ $item->is_active ? '' : 'library-row--archived' }}">
                             @if($definition['key'] === 'assistance-subtypes')
                                 <td>
                                     <p class="table-primary">{{ $item->name }}</p>
+                                    @unless($item->is_active)
+                                        <p class="table-secondary table-secondary--archived">Archived library value</p>
+                                    @endunless
                                 </td>
                                 <td>{{ $item->type?->name ?? '-' }}</td>
                             @elseif($definition['key'] === 'assistance-details')
-                                <td><p class="table-primary">{{ $item->name }}</p></td>
+                                <td>
+                                    <p class="table-primary">{{ $item->name }}</p>
+                                    @unless($item->is_active)
+                                        <p class="table-secondary table-secondary--archived">Archived detail kept for historical records</p>
+                                    @endunless
+                                </td>
                                 <td>{{ $item->subtype?->name ?? '-' }}</td>
                                 <td>{{ $item->subtype?->type?->name ?? '-' }}</td>
+                            @elseif($definition['key'] === 'document-requirements')
+                                <td>
+                                    <p class="table-primary">{{ $item->name }}</p>
+                                    @if($item->description)
+                                        <p class="table-secondary">{{ $item->description }}</p>
+                                    @endif
+                                    @unless($item->is_active)
+                                        <p class="table-secondary table-secondary--archived">Archived requirement</p>
+                                    @endunless
+                                </td>
+                                <td>
+                                    <p>{{ $item->subtype?->type?->name ?? '-' }} - {{ $item->subtype?->name ?? '-' }}</p>
+                                    <p class="table-secondary">{{ $item->detail?->name ? 'Detail: '.$item->detail->name : 'Subtype-wide requirement' }}</p>
+                                </td>
+                                <td>
+                                    <p>{{ $item->is_required ? 'Required' : 'Optional' }}</p>
+                                    <p class="table-secondary">
+                                        {{ $item->applies_when_amount_exceeds !== null ? 'When amount exceeds P'.number_format((float) $item->applies_when_amount_exceeds, 2) : 'Always applies' }}
+                                    </p>
+                                </td>
+                            @elseif($definition['key'] === 'modes-of-assistance')
+                                <td>
+                                    <p class="table-primary">{{ $item->name }}</p>
+                                    @unless($item->is_active)
+                                        <p class="table-secondary table-secondary--archived">Archived library value</p>
+                                    @endunless
+                                </td>
+                                <td>
+                                    <p>
+                                        {{ $item->minimum_amount !== null ? 'Min: PHP '.number_format((float) $item->minimum_amount, 2) : 'No minimum' }}
+                                    </p>
+                                    <p class="table-secondary">
+                                        {{ $item->maximum_amount !== null ? 'Max: PHP '.number_format((float) $item->maximum_amount, 2) : 'No maximum' }}
+                                    </p>
+                                </td>
+                            @elseif($definition['key'] === 'service-providers')
+                                <td>
+                                    <p class="table-primary">{{ $item->name }}</p>
+                                    @if($item->address)
+                                        <p class="table-secondary">{{ $item->address }}</p>
+                                    @endif
+                                    @unless($item->is_active)
+                                        <p class="table-secondary table-secondary--archived">Archived provider</p>
+                                    @endunless
+                                </td>
+                                <td>
+                                    @if(!empty($item->categories))
+                                        <p>{{ implode(', ', $item->categories) }}</p>
+                                    @else
+                                        <p class="table-secondary">No categories assigned</p>
+                                    @endif
+                                </td>
+                                <td>{{ $item->addressee ?: '-' }}</td>
+                                <td>{{ $item->contact_number ?: '-' }}</td>
+                                <td>{{ $item->accounts?->count() ?? 0 }} linked account(s)</td>
                             @elseif($definition['key'] === 'referral-institutions')
                                 <td>
                                     <p class="table-primary">{{ $item->name }}</p>
                                     @if($item->address)
                                         <p class="table-secondary">{{ $item->address }}</p>
                                     @endif
+                                    @unless($item->is_active)
+                                        <p class="table-secondary table-secondary--archived">Archived institution</p>
+                                    @endunless
                                 </td>
                                 <td>{{ $item->addressee ?: '-' }}</td>
                                 <td>{{ $item->contact_number ?: '-' }}</td>
                                 <td>{{ $item->email ?: '-' }}</td>
                             @else
-                                <td><p class="table-primary">{{ $item->name }}</p></td>
+                                <td>
+                                    <p class="table-primary">{{ $item->name }}</p>
+                                    @unless($item->is_active)
+                                        <p class="table-secondary table-secondary--archived">Archived library value</p>
+                                    @endunless
+                                </td>
                             @endif
 
                             <td>
@@ -161,6 +281,15 @@
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="table-action table-action--archive">Archive</button>
+                                        </form>
+                                    @else
+                                        <form method="POST"
+                                              action="{{ route('admin.libraries.restore', ['library' => $definition['key'], 'item' => $item->id]) }}"
+                                              class="inline-flex"
+                                              onsubmit="return confirm('Reactivate this {{ strtolower($definition['singular']) }}?')">
+                                            @csrf
+                                            @method('PATCH')
+                                            <button type="submit" class="table-action table-action--restore">Reactivate</button>
                                         </form>
                                     @endif
                                 </div>
@@ -203,6 +332,14 @@
                 'item' => null,
             ])
 
+            <div>
+                <label class="label">Status</label>
+                <select name="is_active" class="input">
+                    <option value="1" @selected(old('is_active', '1') === '1')>Active</option>
+                    <option value="0" @selected(old('is_active') === '0')>Inactive</option>
+                </select>
+            </div>
+
             <div class="modal-actions">
                 <button type="button" class="btn-secondary" data-close-create-modal>Cancel</button>
                 <button type="submit" class="btn-primary">Save {{ $definition['singular'] }}</button>
@@ -231,6 +368,14 @@
                 'prefix' => 'edit',
                 'item' => null,
             ])
+
+            <div>
+                <label class="label">Status</label>
+                <select name="is_active" id="editLibraryStatus" class="input">
+                    <option value="1">Active</option>
+                    <option value="0">Inactive</option>
+                </select>
+            </div>
 
             <div class="modal-actions">
                 <button type="button" class="btn-secondary" data-close-edit-modal>Cancel</button>
@@ -329,6 +474,35 @@
     grid-template-columns:minmax(0,1fr) 180px auto;
     gap:12px;
 }
+.library-status-strip{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+}
+.library-status-chip{
+    display:inline-flex;
+    align-items:center;
+    border-radius:999px;
+    padding:7px 12px;
+    font-size:12px;
+    font-weight:800;
+    letter-spacing:.04em;
+}
+.library-status-chip--active{
+    background:#ecfdf5;
+    color:#166534;
+    border:1px solid #bbf7d0;
+}
+.library-status-chip--archived{
+    background:#f1f5f9;
+    color:#475569;
+    border:1px solid #cbd5e1;
+}
+.library-status-note{
+    font-size:13px;
+    color:#64748b;
+}
 .table-shell{
     overflow:hidden;
     border-radius:18px;
@@ -364,6 +538,19 @@
     color:#64748b;
     font-size:13px;
 }
+.table-secondary--archived{
+    color:#8b5e3c;
+    font-weight:600;
+}
+.library-row--archived{
+    background:linear-gradient(180deg, #fcfcfd 0%, #f8fafc 100%);
+}
+.library-row--archived .table-primary{
+    color:#475569;
+}
+.library-row--archived td{
+    border-bottom-color:#e5e7eb;
+}
 .table-actions{
     display:flex;
     justify-content:flex-end;
@@ -383,6 +570,10 @@
 .table-action--archive{
     background:#fef2f2;
     color:#b91c1c;
+}
+.table-action--restore{
+    background:#ecfdf5;
+    color:#166534;
 }
 .empty-state{
     text-align:center;
@@ -483,11 +674,23 @@ document.addEventListener('DOMContentLoaded', () => {
             editForm.action = @json(route('admin.libraries.update', ['library' => $definition['key'], 'item' => '__ITEM__'])).replace('__ITEM__', id);
 
             Object.entries(record).forEach(([key, value]) => {
+                if (key === 'categories') {
+                    editForm.querySelectorAll('input[name="categories[]"]').forEach((checkbox) => {
+                        checkbox.checked = Array.isArray(value) && value.includes(checkbox.value);
+                    });
+                    return;
+                }
+
                 const field = editForm.querySelector(`[name="${key}"]`);
                 if (!field) return;
 
                 if (field.tagName === 'TEXTAREA') {
                     field.value = value ?? '';
+                    return;
+                }
+
+                if (key === 'is_active') {
+                    field.value = value ? '1' : '0';
                     return;
                 }
 

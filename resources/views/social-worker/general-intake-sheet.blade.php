@@ -80,7 +80,17 @@
     $amountNeeded = (float) ($application->amount_needed ?? 0);
     $purpose = $application->problem_statement ?: $application->crisis_type ?: ($application->assistanceSubtype?->name ?? '');
     $modeName = $application->modeOfAssistance?->name ?? $application->mode_of_assistance;
-    $visitOptions = ['AICS Onsite', 'AKAP', 'Malasakit Center', 'Offsite', 'Others'];
+    $visitOptions = \App\Models\ServicePoint::where('is_active', true)
+        ->orderByRaw("CASE name
+            WHEN 'Online' THEN 1
+            WHEN 'Onsite' THEN 2
+            WHEN 'Offsite' THEN 3
+            WHEN 'Malasakit Center' THEN 4
+            ELSE 99
+        END")
+        ->orderBy('name')
+        ->pluck('name')
+        ->all();
     $modeOptions = ['Outright Cash', 'Guarantee Letter', 'Material Assistance', 'Psychosocial Support', 'Referral Service'];
     $primaryAssistance = trim(implode(' - ', array_filter([
         $application->assistanceType?->name,

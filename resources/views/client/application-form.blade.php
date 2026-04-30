@@ -10,10 +10,44 @@
     $assistanceTypes = \App\Models\AssistanceType::with([
         'subtypes' => fn ($query) => $query->where('is_active', true)->with([
             'frequencyRule',
-            'details' => fn ($detailQuery) => $detailQuery->where('is_active', true)->with('frequencyRule'),
+            'documentRequirements',
+            'details' => fn ($detailQuery) => $detailQuery->where('is_active', true)->with([
+                'frequencyRule',
+                'documentRequirements',
+            ]),
         ]),
     ])->where('is_active', true)->get();
     $modesOfAssistance = \App\Models\ModeOfAssistance::where('is_active', true)->orderBy('name')->get();
+    $serviceProviders = \App\Models\ServiceProvider::where('is_active', true)->orderBy('name')->get();
+    $assistanceDetailsBySubtype = [];
+    $serviceProviderDirectory = $serviceProviders->map(fn ($provider) => [
+        'id' => (string) $provider->id,
+        'name' => $provider->name,
+        'categories' => $provider->categories ?? [],
+    ])->values();
+
+    foreach ($assistanceTypes as $type) {
+        foreach ($type->subtypes as $subtype) {
+            $assistanceDetailsBySubtype[(string) $subtype->id] = $subtype->details->map(fn ($detail) => [
+                'id' => (string) $detail->id,
+                'name' => $detail->name,
+                'documentRequirements' => $detail->documentRequirements->map(fn ($requirement) => [
+                    'id' => (string) $requirement->id,
+                    'name' => $requirement->name,
+                    'description' => $requirement->description,
+                    'is_required' => (bool) $requirement->is_required,
+                    'applies_when_amount_exceeds' => $requirement->applies_when_amount_exceeds !== null ? (float) $requirement->applies_when_amount_exceeds : null,
+                ])->values()->all(),
+                'frequencyRule' => $detail->frequencyRule ? [
+                    'id' => (string) $detail->frequencyRule->id,
+                    'requires_reference_date' => (bool) $detail->frequencyRule->requires_reference_date,
+                    'requires_case_key' => (bool) $detail->frequencyRule->requires_case_key,
+                    'allows_exception_request' => (bool) $detail->frequencyRule->allows_exception_request,
+                    'notes' => $detail->frequencyRule->notes,
+                ] : null,
+            ])->values()->all();
+        }
+    }
 
     $clientFamily = ($existingClient?->familyMembers ?? collect())
         ->whereNull('beneficiary_profile_id')
@@ -332,22 +366,34 @@ Continue &rarr;
         </div>
     </div>
 
-    <div>
+    <div x-show="selectedSubtype" x-cloak>
         <label class="text-xs font-semibold tracking-wide text-slate-500">Assistance Detail</label>
-        <div class="select-shell mt-1">
-            <select name="assistance_detail_id" x-model="selectedDetail" class="form-select" :disabled="!selectedSubtypeHasDetails()">
-                <option value="" x-text="selectedSubtypeHasDetails() ? 'Select assistance detail' : 'No detail required for this assistance'"></option>
-                <template x-for="detail in currentDetails()" :key="detail.id">
-                    <option :value="detail.id" x-text="detail.name"></option>
-                </template>
-            </select>
-        </div>
+        <template x-if="selectedSubtypeHasDetails()">
+            <div>
+                <div class="select-shell mt-1">
+                    <select name="assistance_detail_id" x-model="selectedDetail" @change="syncSelectedServiceProvider()" class="form-select">
+                        <option value="">Select assistance detail</option>
+                        <template x-for="detail in currentDetails()" :key="detail.id">
+                            <option :value="detail.id" x-text="detail.name"></option>
+                        </template>
+                    </select>
+                </div>
+                <p class="mt-2 text-xs text-slate-500" x-show="currentDetails().length > 0">
+                    Select the category that best matches the request before uploading documents.
+                </p>
+            </div>
+        </template>
+        <template x-if="!selectedSubtypeHasDetails()">
+            <div class="mt-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                No assistance detail is required for this assistance.
+            </div>
+        </template>
     </div>
 
     <div>
         <label class="text-xs font-semibold tracking-wide text-slate-500">Mode of Assistance</label>
         <div class="select-shell mt-1">
-            <select name="mode_of_assistance_id" class="form-select">
+            <select name="mode_of_assistance_id" x-model="selectedMode" class="form-select">
                 <option value="">Select mode of assistance</option>
                 @foreach($modesOfAssistance as $mode)
                 <option value="{{ $mode->id }}" {{ old('mode_of_assistance_id') == $mode->id ? 'selected' : '' }}>{{ $mode->name }}</option>
@@ -355,10 +401,78 @@ Continue &rarr;
             </select>
         </div>
     </div>
+
+    <div x-show="isGuaranteeLetterSelection()" x-cloak>
+        <label class="text-xs font-semibold tracking-wide text-slate-500">Service Provider</label>
+        <div class="select-shell mt-1">
+            <select name="service_provider_id" x-model="selectedServiceProvider" class="form-select">
+                <option value="">Select service provider</option>
+                <template x-for="serviceProvider in filteredServiceProviders()" :key="serviceProvider.id">
+                    <option :value="serviceProvider.id" x-text="serviceProvider.name"></option>
+                </template>
+            </select>
+        </div>
+        <p class="mt-2 text-xs text-slate-500" x-text="serviceProviderHelperText()"></p>
+    </div>
 </div>
 
-<label class="text-xs text-gray-500">Upload Documents</label>
-<input type="file" name="documents[]" multiple class="border p-2 rounded-lg w-full">
+<div class="mt-5" x-show="isMedicalAssistanceSelection()">
+    <label class="text-xs font-semibold tracking-wide text-slate-500">Amount Needed / Requested</label>
+    <input x-ref="amount_needed" x-model="amountNeeded" type="number" min="0" step="0.01" name="amount_needed" value="{{ old('amount_needed') }}" class="mt-1 border p-2 rounded-lg w-full" placeholder="0.00">
+    <p class="mt-2 text-xs text-slate-500">This amount is used for medical document rules that only apply when the request exceeds P10,000.00.</p>
+</div>
+
+<div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5" x-show="hasSpecificRequirements()">
+    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+            <h3 class="font-semibold text-slate-900">Required Documents</h3>
+            <p class="text-sm text-slate-600">Upload the matching files for the assistance you selected.</p>
+        </div>
+        <span class="inline-flex w-fit rounded-full border border-sky-200 bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800" x-text="currentDocumentRequirements().length + ' checklist item(s)'"></span>
+    </div>
+
+    <div class="mt-4 space-y-4">
+        <template x-for="requirement in currentDocumentRequirements()" :key="requirement.id">
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <p class="font-semibold text-slate-900" x-text="requirement.name"></p>
+                        <p class="mt-1 text-sm text-slate-600" x-text="requirement.description || 'Upload the file that satisfies this requirement.'"></p>
+                    </div>
+                    <span class="inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold"
+                          :class="requirementBadgeClass(requirement)"
+                          x-text="requirementStatusLabel(requirement)"></span>
+                </div>
+
+                <div class="mt-4">
+                    <label class="text-xs font-semibold tracking-wide text-slate-500">Upload File(s)</label>
+                    <input :name="'required_documents[' + requirement.id + '][]'" type="file" multiple class="mt-1 border p-2 rounded-lg w-full">
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+
+<div class="mt-6 rounded-2xl border border-slate-200 bg-white p-5" x-show="!hasSpecificRequirements()">
+    <label class="text-xs font-semibold tracking-wide text-slate-500">Upload Supporting Documents</label>
+    <input x-ref="generic_documents" type="file" name="documents[]" multiple class="mt-1 border p-2 rounded-lg w-full">
+    <p class="mt-2 text-xs text-slate-500">At least one supporting document is required when no specific checklist is configured yet.</p>
+</div>
+
+<div class="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5">
+    <label class="text-xs font-semibold tracking-wide text-slate-500" x-text="hasSpecificRequirements() ? 'Additional Supporting Documents (Optional)' : 'Additional Supporting Documents'"></label>
+    <input type="file" name="documents[]" multiple class="mt-1 border p-2 rounded-lg w-full">
+    <p class="mt-2 text-xs text-slate-500">Upload any extra files that can help support the application.</p>
+</div>
+
+<div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900" x-show="showsCrisisInterventionReminders()">
+    <h3 class="font-semibold">Important Reminders</h3>
+    <ul class="mt-3 list-disc space-y-2 pl-5">
+        <li>All financial assistance from DSWD Crisis Intervention Division is fully received by beneficiaries.</li>
+        <li>No fixer policy: No employee or non-employee is authorized to collect any fee.</li>
+        <li>Submission of fake or falsified documents is punishable and will be subject to proper legal action.</li>
+    </ul>
+</div>
 
 <div class="flex justify-between mt-6">
 <button type="button" @click="step = 3" class="bg-gray-200 px-6 py-3 rounded-xl">&larr; Back</button>
@@ -375,6 +489,9 @@ Continue &rarr;
 </div>
 
 <style>
+[x-cloak]{
+    display:none !important;
+}
 .select-shell{
     position:relative;
 }
@@ -424,6 +541,13 @@ function applicationForm() {
             'subtypes' => $type->subtypes->map(fn ($subtype) => [
                 'id' => (string) $subtype->id,
                 'name' => $subtype->name,
+                'documentRequirements' => $subtype->documentRequirements->map(fn ($requirement) => [
+                    'id' => (string) $requirement->id,
+                    'name' => $requirement->name,
+                    'description' => $requirement->description,
+                    'is_required' => (bool) $requirement->is_required,
+                    'applies_when_amount_exceeds' => $requirement->applies_when_amount_exceeds !== null ? (float) $requirement->applies_when_amount_exceeds : null,
+                ])->values()->all(),
                 'frequencyRule' => $subtype->frequencyRule ? [
                     'id' => (string) $subtype->frequencyRule->id,
                     'requires_reference_date' => (bool) $subtype->frequencyRule->requires_reference_date,
@@ -434,6 +558,13 @@ function applicationForm() {
                 'details' => $subtype->details->map(fn ($detail) => [
                     'id' => (string) $detail->id,
                     'name' => $detail->name,
+                    'documentRequirements' => $detail->documentRequirements->map(fn ($requirement) => [
+                        'id' => (string) $requirement->id,
+                        'name' => $requirement->name,
+                        'description' => $requirement->description,
+                        'is_required' => (bool) $requirement->is_required,
+                        'applies_when_amount_exceeds' => $requirement->applies_when_amount_exceeds !== null ? (float) $requirement->applies_when_amount_exceeds : null,
+                    ])->values()->all(),
                     'frequencyRule' => $detail->frequencyRule ? [
                         'id' => (string) $detail->frequencyRule->id,
                         'requires_reference_date' => (bool) $detail->frequencyRule->requires_reference_date,
@@ -444,9 +575,14 @@ function applicationForm() {
                 ])->values()->all(),
             ])->values()->all(),
         ])->values()->all()),
+        detailOptionsBySubtype: @js($assistanceDetailsBySubtype),
         selectedType: @js((string) old('assistance_type_id', '')),
         selectedSubtype: @js((string) old('assistance_subtype_id', '')),
         selectedDetail: @js((string) old('assistance_detail_id', '')),
+        selectedMode: @js((string) old('mode_of_assistance_id', '')),
+        selectedServiceProvider: @js((string) old('service_provider_id', '')),
+        amountNeeded: @js((string) old('amount_needed', '')),
+        serviceProviders: @js($serviceProviderDirectory),
         relationship: @js((string) old('relationship_id', '')),
         clientFamily: @js($clientFamily),
         familyRows: @js($oldFamily ?? $clientFamily->values()),
@@ -474,6 +610,8 @@ function applicationForm() {
                 this.selectedSubtype = '';
                 this.selectedDetail = '';
             }
+
+            this.syncSelectedServiceProvider();
         },
 
         handleSubtypeChange(resetDetail = true) {
@@ -484,6 +622,8 @@ function applicationForm() {
             if (!this.selectedSubtypeHasDetails()) {
                 this.selectedDetail = '';
             }
+
+            this.syncSelectedServiceProvider();
         },
 
         currentSubtype() {
@@ -497,13 +637,172 @@ function applicationForm() {
             return null;
         },
 
+        currentDetail() {
+            return this.currentDetails().find((item) => item.id === this.selectedDetail) || null;
+        },
+
         filteredSubtypes() {
             const type = this.assistanceTypesData.find((item) => item.id === this.selectedType);
             return type?.subtypes || [];
         },
 
         currentDetails() {
+            const mappedDetails = this.detailOptionsBySubtype?.[this.selectedSubtype];
+
+            if (Array.isArray(mappedDetails) && mappedDetails.length > 0) {
+                return mappedDetails;
+            }
+
             return this.currentSubtype()?.details || [];
+        },
+
+        currentSubtypeName() {
+            return this.currentSubtype()?.name || '';
+        },
+
+        currentDetailName() {
+            return this.currentDetail()?.name || '';
+        },
+
+        normalizedCategoryText(value) {
+            return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        },
+
+        categoryMatchers() {
+            return {
+                'Chemo': ['chemo', 'chemotherapy'],
+                'Device': ['device', 'assistive device'],
+                'Diagnostic Center': ['diagnostic center', 'diagnostic', 'laboratory', 'laboratory request', 'lab'],
+                'Dialysis': ['dialysis'],
+                'Dialysis Center': ['dialysis center'],
+                'Funeral': ['funeral', 'cadaver', 'remains'],
+                'Hearing': ['hearing'],
+                'Hospital': ['hospital', 'admitted', 'admission'],
+                'Implant': ['implant'],
+                'Medical Devices': ['medical device', 'assistive device'],
+                'Optha': ['optha', 'ophtha', 'eye', 'vision'],
+                'Pharmacy': ['pharmacy', 'medicine', 'medicines', 'prescription', 'drug'],
+                'Procedure': ['procedure', 'operation', 'surgery'],
+                'Prosthesis': ['prosthesis'],
+                'Prosthesis/Orthotics': ['prosthesis', 'orthotic', 'orthotics'],
+                'Theraphy': ['therapy', 'theraphy', 'rehab', 'rehabilitation'],
+            };
+        },
+
+        inferredServiceProviderCategories() {
+            const sources = [this.currentDetailName(), this.currentSubtypeName()]
+                .map((value) => this.normalizedCategoryText(value))
+                .filter(Boolean);
+
+            for (const source of sources) {
+                const matched = Object.entries(this.categoryMatchers())
+                    .filter(([, keywords]) => keywords.some((keyword) => source.includes(keyword)))
+                    .map(([category]) => category);
+
+                if (matched.length) {
+                    return [...new Set(matched)];
+                }
+            }
+
+            return [];
+        },
+
+        filteredServiceProviders() {
+            const inferredCategories = this.inferredServiceProviderCategories();
+
+            if (!inferredCategories.length) {
+                return this.serviceProviders;
+            }
+
+            const matchedProviders = this.serviceProviders.filter((provider) =>
+                (provider.categories || []).some((category) => inferredCategories.includes(category))
+            );
+
+            return matchedProviders.length ? matchedProviders : this.serviceProviders;
+        },
+
+        currentDocumentRequirements() {
+            const subtypeRequirements = this.currentSubtype()?.documentRequirements || [];
+            const detailRequirements = this.currentDetail()?.documentRequirements || [];
+
+            return [...subtypeRequirements, ...detailRequirements].filter((requirement) => this.requirementIsActive(requirement));
+        },
+
+        hasSpecificRequirements() {
+            return this.currentDocumentRequirements().length > 0;
+        },
+
+        requirementIsActive(requirement) {
+            if (requirement.applies_when_amount_exceeds === null) {
+                return true;
+            }
+
+            return Number(this.amountNeeded || 0) > Number(requirement.applies_when_amount_exceeds);
+        },
+
+        requirementStatusLabel(requirement) {
+            if (requirement.applies_when_amount_exceeds !== null) {
+                return 'Required above P' + Number(requirement.applies_when_amount_exceeds).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                });
+            }
+
+            return requirement.is_required ? 'Required' : 'Optional';
+        },
+
+        requirementBadgeClass(requirement) {
+            if (requirement.applies_when_amount_exceeds !== null) {
+                return 'bg-amber-100 text-amber-800';
+            }
+
+            return requirement.is_required ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700';
+        },
+
+        showsCrisisInterventionReminders() {
+            const subtypeName = (this.currentSubtype()?.name || '').toLowerCase();
+
+            return subtypeName.includes('medical assistance')
+                || subtypeName.includes('funeral assistance')
+                || subtypeName.includes('transportation assistance')
+                || subtypeName.includes('cash relief assistance');
+        },
+
+        isMedicalAssistanceSelection() {
+            return (this.currentSubtype()?.name || '').toLowerCase().includes('medical assistance');
+        },
+
+        isGuaranteeLetterSelection() {
+            const selectedOption = this.selectedMode
+                ? Array.from(document.querySelectorAll('select[name="mode_of_assistance_id"] option'))
+                    .find((option) => option.value === this.selectedMode)
+                : null;
+
+            return (selectedOption?.textContent || '').trim().toLowerCase() === 'guarantee letter';
+        },
+
+        serviceProviderHelperText() {
+            const inferredCategories = this.inferredServiceProviderCategories();
+
+            if (!inferredCategories.length) {
+                return 'Required when the mode of assistance is Guarantee Letter.';
+            }
+
+            const matchedProviders = this.serviceProviders.filter((provider) =>
+                (provider.categories || []).some((category) => inferredCategories.includes(category))
+            );
+
+            if (!matchedProviders.length) {
+                return `Required when the mode of assistance is Guarantee Letter. No provider is tagged under ${inferredCategories.join(', ')} yet, so all active providers are shown.`;
+            }
+
+            return `Required when the mode of assistance is Guarantee Letter. Showing providers under: ${inferredCategories.join(', ')}.`;
+        },
+
+        syncSelectedServiceProvider() {
+            if (this.selectedServiceProvider && !this.filteredServiceProviders().some((provider) => provider.id === this.selectedServiceProvider)) {
+                this.selectedServiceProvider = '';
+            }
         },
 
         selectedSubtypeHasDetails() {
@@ -747,16 +1046,38 @@ function applicationForm() {
                 const assistanceSubtype = this.selectedSubtype;
                 const assistanceDetail = this.selectedDetail;
                 const mode = document.querySelector('select[name="mode_of_assistance_id"]')?.value;
-                const documents = document.querySelector('input[name="documents[]"]')?.files?.length ?? 0;
-                const frequencyRule = this.currentFrequencyRule();
-                const frequencyDate = document.querySelector('input[name="frequency_reference_date"]')?.value;
-                const frequencyCaseKey = document.querySelector('input[name="frequency_case_key"]')?.value;
+                const serviceProvider = this.selectedServiceProvider;
+                const amountNeeded = this.$refs.amount_needed?.value;
+                const documents = Array.from(document.querySelectorAll('input[name="documents[]"]'))
+                    .reduce((count, input) => count + (input.files?.length ?? 0), 0);
 
                 const needsDetail = this.selectedSubtypeHasDetails();
+                const requiresAmount = this.isMedicalAssistanceSelection();
+                const requiresServiceProvider = this.isGuaranteeLetterSelection();
+                const requirementInputsValid = this.hasSpecificRequirements()
+                    ? this.currentDocumentRequirements().every((requirement) => {
+                        if (!requirement.is_required) {
+                            return true;
+                        }
+
+                        const input = document.querySelector('input[name="required_documents[' + requirement.id + '][]"]');
+                        return (input?.files?.length ?? 0) > 0;
+                    })
+                    : documents > 0;
                 const valid = [assistanceType, assistanceSubtype, mode].every((value) => String(value || '').trim() !== '')
+                    && (!requiresAmount || String(amountNeeded || '').trim() !== '')
+                    && (!requiresServiceProvider || String(serviceProvider || '').trim() !== '')
                     && (!needsDetail || String(assistanceDetail || '').trim() !== '')
-                    && documents > 0;
-                this.errors.step4 = valid ? '' : 'Select the assistance details and upload at least one document before submitting.';
+                    && requirementInputsValid;
+
+                if (valid && requiresServiceProvider && !this.filteredServiceProviders().some((provider) => provider.id === serviceProvider)) {
+                    this.errors.step4 = 'The selected service provider does not match the current assistance category.';
+                    return false;
+                }
+
+                this.errors.step4 = valid ? '' : (requiresAmount
+                    ? 'Complete the assistance fields, enter the amount needed, and upload the required document checklist before submitting.'
+                    : 'Complete the assistance fields and upload the required document checklist before submitting.');
                 return valid;
             }
 

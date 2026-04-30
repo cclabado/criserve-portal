@@ -17,6 +17,7 @@ class Application extends Model
         'assistance_subtype_id',
         'assistance_detail_id',
         'mode_of_assistance_id',
+        'service_provider_id',
         'frequency_rule_id',
         'frequency_basis_application_id',
         'mode_of_assistance',
@@ -142,6 +143,11 @@ class Application extends Model
         return $this->belongsTo(AssistanceFrequencyRule::class, 'frequency_rule_id');
     }
 
+    public function serviceProvider()
+    {
+        return $this->belongsTo(ServiceProvider::class, 'service_provider_id');
+    }
+
     public function frequencyBasisApplication()
     {
         return $this->belongsTo(self::class, 'frequency_basis_application_id');
@@ -210,13 +216,7 @@ class Application extends Model
 
     public function familyMembers()
     {
-        if ($this->beneficiary_profile_id) {
-            return $this->hasMany(FamilyMember::class, 'beneficiary_profile_id', 'beneficiary_profile_id')->orderBy('id');
-        }
-
-        return $this->hasMany(FamilyMember::class, 'client_id', 'client_id')
-            ->whereNull('beneficiary_profile_id')
-            ->orderBy('id');
+        return $this->hasMany(FamilyMember::class)->orderBy('id');
     }
 
     public function documents()

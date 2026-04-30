@@ -320,9 +320,19 @@ class FamilyNetworkService
 
     protected function resolveHouseholdMembers(Application $application): Collection
     {
+        $snapshotMembers = $application->applicationFamilyMembers()
+            ->with(['person.users', 'relationshipData'])
+            ->orderBy('id')
+            ->get();
+
+        if ($snapshotMembers->isNotEmpty()) {
+            return $this->deduplicateHouseholdMembers($snapshotMembers);
+        }
+
         if ($application->usesBeneficiaryHousehold() && $application->beneficiaryProfile) {
             return $this->deduplicateHouseholdMembers($application->beneficiaryProfile
                 ->familyMembers()
+                ->whereNull('application_id')
                 ->with(['person.users', 'relationshipData'])
                 ->orderBy('id')
                 ->get());
@@ -331,6 +341,7 @@ class FamilyNetworkService
         return $application->client
             ? $application->client->familyMembers()
                 ->whereNull('beneficiary_profile_id')
+                ->whereNull('application_id')
                 ->with(['person.users', 'relationshipData'])
                 ->orderBy('id')
                 ->get()

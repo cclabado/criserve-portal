@@ -8,6 +8,7 @@
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role,
+            'service_provider_id' => $user->service_provider_id,
             'first_name' => $user->first_name,
             'middle_name' => $user->middle_name,
             'last_name' => $user->last_name,
@@ -17,6 +18,10 @@
             'civil_status' => $user->civil_status,
         ])->values()),
         updateBaseUrl: @js(url('/admin/users')),
+        serviceProviders: @js($serviceProviders->map(fn ($provider) => [
+            'id' => $provider->id,
+            'name' => $provider->name,
+        ])->values()),
     })"
     class="space-y-6">
 
@@ -223,6 +228,16 @@
                         </select>
                     </div>
 
+                    <div x-show="form.role === 'service_provider'" x-cloak class="md:col-span-2">
+                        <label class="label">Linked Service Provider</label>
+                        <select name="service_provider_id" class="input" x-model="form.service_provider_id">
+                            <option value="">Select service provider</option>
+                            @foreach($serviceProviders as $provider)
+                                <option value="{{ $provider->id }}">{{ $provider->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
                     <div>
                         <label class="label">Sex</label>
                         <select name="sex" class="input" x-model="form.sex">
@@ -258,6 +273,7 @@ function userManagement(config) {
     return {
         users: config.users,
         updateBaseUrl: config.updateBaseUrl,
+        serviceProviders: config.serviceProviders,
         showModal: false,
         formAction: '',
         form: {
@@ -272,6 +288,7 @@ function userManagement(config) {
             sex: '',
             civil_status: '',
             role: 'client',
+            service_provider_id: '',
         },
         openEdit(userId) {
             const user = this.users.find((item) => item.id === userId);
@@ -288,6 +305,7 @@ function userManagement(config) {
                 sex: user.sex ?? '',
                 civil_status: user.civil_status ?? '',
                 role: user.role ?? 'client',
+                service_provider_id: user.service_provider_id ? String(user.service_provider_id) : '',
             };
             this.formAction = `${this.updateBaseUrl}/${user.id}`;
             this.showModal = true;

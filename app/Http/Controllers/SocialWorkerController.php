@@ -13,6 +13,8 @@ use App\Models\FamilyMember;
 use App\Models\ModeOfAssistance;
 use App\Models\Relationship;
 use App\Models\ReferralInstitution;
+use App\Models\ServicePoint;
+use App\Models\ServiceProvider;
 use App\Notifications\InitialAssessmentScheduledNotification;
 use App\Services\AiRecommendationService;
 use App\Services\FamilyNetworkService;
@@ -21,6 +23,7 @@ use App\Services\GoogleCalendarService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class SocialWorkerController extends Controller
@@ -239,6 +242,7 @@ class SocialWorkerController extends Controller
             'assistanceSubtype',
             'assistanceDetail',
             'modeOfAssistance',
+            'serviceProvider',
             'frequencyRule',
             'frequencyBasisApplication',
             'assistanceRecommendations.assistanceType',
@@ -249,7 +253,7 @@ class SocialWorkerController extends Controller
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
 
-        $householdMembers = $this->resolveHouseholdMembers($application);
+        $householdMembers = $this->resolveEditableHouseholdMembers($application);
         $familyNetwork = $this->familyNetwork->buildApplicationNetwork($application);
 
         return view('social-worker.show', compact('application', 'householdMembers', 'familyNetwork'));
@@ -265,6 +269,7 @@ class SocialWorkerController extends Controller
             'assistanceSubtype',
             'assistanceDetail',
             'modeOfAssistance',
+            'serviceProvider',
             'frequencyRule',
             'frequencyBasisApplication.client',
             'frequencyBasisApplication.assistanceType',
@@ -308,7 +313,9 @@ class SocialWorkerController extends Controller
             ->orderBy('name')
             ->get();
         $modesOfAssistance = ModeOfAssistance::where('is_active', true)->orderBy('name')->get();
-        $householdMembers = $this->resolveHouseholdMembers($application);
+        $servicePoints = ServicePoint::where('is_active', true)->orderBy('name')->get();
+        $serviceProviders = ServiceProvider::where('is_active', true)->orderBy('name')->get();
+        $householdMembers = $this->resolveEditableHouseholdMembers($application);
 
         return view('social-worker.assess', compact(
             'application',
@@ -317,6 +324,8 @@ class SocialWorkerController extends Controller
             'relationships',
             'assistanceTypes',
             'assistanceSubtypes',
+            'servicePoints',
+            'serviceProviders',
             'modesOfAssistance'
         ));
     }
@@ -327,10 +336,17 @@ class SocialWorkerController extends Controller
             'schedule_date' => ['nullable', 'date'],
             'meeting_link' => ['nullable', 'string', 'max:2048'],
             'notes' => ['nullable', 'string'],
+            'gis_visit_type' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::exists('service_points', 'name')->where(fn ($query) => $query->where('is_active', true)),
+            ],
             'assistance_type_id' => ['required', 'exists:assistance_types,id'],
             'assistance_subtype_id' => ['required', 'exists:assistance_subtypes,id'],
             'assistance_detail_id' => ['nullable', 'exists:assistance_details,id'],
             'mode_of_assistance_id' => ['required', 'exists:mode_of_assistances,id'],
+            'service_provider_id' => ['nullable', 'exists:service_providers,id'],
             'frequency_case_key' => ['nullable', 'string', 'max:255'],
             'frequency_override_reason' => ['nullable', 'string'],
             'assessment_action' => ['nullable', 'in:save,cancel_due_to_frequency'],
@@ -343,6 +359,13 @@ class SocialWorkerController extends Controller
             $request->filled('assistance_detail_id') ? (int) $request->assistance_detail_id : null
         );
         $mode = ModeOfAssistance::findOrFail((int) $request->mode_of_assistance_id);
+        $serviceProviderId = $this->resolveServiceProviderSelection(
+            $request,
+            $mode,
+            (int) $request->assistance_subtype_id,
+            $request->filled('assistance_detail_id') ? (int) $request->assistance_detail_id : null
+        );
+        $this->validateAssessmentScheduling($request);
 
         DB::beginTransaction();
 
@@ -357,6 +380,7 @@ class SocialWorkerController extends Controller
                 'assistanceSubtype',
                 'assistanceDetail',
                 'modeOfAssistance',
+                'serviceProvider',
             ])->findOrFail($id);
             $this->claimOrEnsureOwnership($application);
 
@@ -484,6 +508,8 @@ class SocialWorkerController extends Controller
                 'assistance_subtype_id' => $request->assistance_subtype_id,
                 'assistance_detail_id' => $request->assistance_detail_id,
                 'mode_of_assistance_id' => $mode->id,
+                'gis_visit_type' => $request->gis_visit_type,
+                'service_provider_id' => $serviceProviderId,
                 'frequency_rule_id' => $frequencyEvaluation['rule']?->id,
                 'frequency_basis_application_id' => $frequencyEvaluation['basis_application_id'],
                 'frequency_status' => $frequencyStatus,
@@ -550,20 +576,24 @@ class SocialWorkerController extends Controller
                 'notes' => $request->notes,
                 'schedule_date' => $request->schedule_date,
                 'meeting_link' => $request->meeting_link,
+                'google_calendar_event_id' => null,
+                'google_calendar_event_link' => null,
                 'status' => 'under_review',
             ];
 
-            $googleEvent = $this->googleCalendar->syncAssessmentSchedule(
-                $request->user(),
-                $application,
-                $request->schedule_date,
-                $request->notes
-            );
+            if (filled($request->schedule_date)) {
+                $googleEvent = $this->googleCalendar->syncAssessmentSchedule(
+                    $request->user(),
+                    $application,
+                    $request->schedule_date,
+                    $request->notes
+                );
 
-            if (is_array($googleEvent)) {
-                $scheduleData['meeting_link'] = $googleEvent['meeting_link'] ?? null;
-                $scheduleData['google_calendar_event_id'] = $googleEvent['google_calendar_event_id'] ?? null;
-                $scheduleData['google_calendar_event_link'] = $googleEvent['google_calendar_event_link'] ?? null;
+                if (is_array($googleEvent)) {
+                    $scheduleData['meeting_link'] = $googleEvent['meeting_link'] ?? null;
+                    $scheduleData['google_calendar_event_id'] = $googleEvent['google_calendar_event_id'] ?? null;
+                    $scheduleData['google_calendar_event_link'] = $googleEvent['google_calendar_event_link'] ?? null;
+                }
             }
 
             $application->update($scheduleData);
@@ -575,7 +605,7 @@ class SocialWorkerController extends Controller
 
             $clientUser = $application->client?->user;
 
-            if ($clientUser) {
+            if ($clientUser && filled($application->schedule_date)) {
                 $clientUser->notify(new InitialAssessmentScheduledNotification($application));
             }
 
@@ -612,6 +642,7 @@ class SocialWorkerController extends Controller
             'assistanceSubtype',
             'assistanceDetail',
             'modeOfAssistance',
+            'serviceProvider',
             'frequencyRule',
             'frequencyBasisApplication',
             'documents',
@@ -628,12 +659,26 @@ class SocialWorkerController extends Controller
             ->orderBy('name')
             ->get();
         $modesOfAssistance = ModeOfAssistance::where('is_active', true)->orderBy('name')->get();
+        $servicePoints = ServicePoint::where('is_active', true)
+            ->orderByRaw("CASE name
+                WHEN 'Online' THEN 1
+                WHEN 'Onsite' THEN 2
+                WHEN 'Offsite' THEN 3
+                WHEN 'Malasakit Center' THEN 4
+                ELSE 99
+            END")
+            ->orderBy('name')
+            ->get();
         $referralInstitutions = ReferralInstitution::where('is_active', true)->orderBy('name')->get();
+
+        $serviceProviders = ServiceProvider::where('is_active', true)->orderBy('name')->get();
 
         return view('social-worker.intake', compact(
             'application',
             'assistanceTypes',
             'modesOfAssistance',
+            'serviceProviders',
+            'servicePoints',
             'referralInstitutions'
         ));
     }
@@ -655,6 +700,9 @@ class SocialWorkerController extends Controller
             'frequencyBasisApplication',
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
+        if ($application->modeOfAssistance) {
+            $this->validateModeAmountRule($application->modeOfAssistance, (float) $validated['amount_needed'], 'amount_needed');
+        }
 
         $recommendations = $this->validateAdditionalRecommendations($request, $application);
 
@@ -697,6 +745,9 @@ class SocialWorkerController extends Controller
             'socialWorker',
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
+        if ($application->modeOfAssistance) {
+            $this->validateModeAmountRule($application->modeOfAssistance, (float) $validated['amount_needed'], 'amount_needed');
+        }
 
         return response()->json(
             app(AiRecommendationService::class)->generate($application, $validated)
@@ -734,6 +785,7 @@ class SocialWorkerController extends Controller
             'assistanceSubtype',
             'assistanceDetail',
             'modeOfAssistance',
+            'serviceProvider',
             'frequencyRule',
             'frequencyBasisApplication',
             'documents',
@@ -762,6 +814,7 @@ class SocialWorkerController extends Controller
             'assistanceSubtype',
             'assistanceDetail',
             'modeOfAssistance',
+            'serviceProvider',
             'documents',
             'assistanceRecommendations.assistanceType',
             'assistanceRecommendations.assistanceSubtype',
@@ -773,6 +826,38 @@ class SocialWorkerController extends Controller
         $this->claimOrEnsureOwnership($application);
 
         return view('social-worker.general-intake-sheet', compact('application'));
+    }
+
+    public function guaranteeLetter($id)
+    {
+        $application = Application::with([
+            'client',
+            'beneficiary.relationshipData',
+            'assistanceType',
+            'assistanceSubtype',
+            'assistanceDetail',
+            'modeOfAssistance',
+            'serviceProvider',
+            'documents',
+            'assistanceRecommendations.assistanceType',
+            'assistanceRecommendations.assistanceSubtype',
+            'assistanceRecommendations.assistanceDetail',
+            'assistanceRecommendations.modeOfAssistance',
+            'assistanceRecommendations.referralInstitution',
+            'socialWorker',
+            'approvingOfficer',
+        ])->findOrFail($id);
+        $this->claimOrEnsureOwnership($application);
+
+        if (! in_array($application->status, ['approved', 'released'], true)) {
+            abort(403, 'Guarantee Letter is available only for approved or released applications.');
+        }
+
+        if (strtolower((string) ($application->modeOfAssistance?->name ?? $application->mode_of_assistance)) !== 'guarantee letter') {
+            abort(403, 'Guarantee Letter printing is only available when the mode of assistance is Guarantee Letter.');
+        }
+
+        return view('social-worker.guarantee-letter', compact('application'));
     }
 
     public function release($id)
@@ -874,7 +959,12 @@ class SocialWorkerController extends Controller
             'has_savings' => ['nullable', 'boolean'],
             'amount_needed' => ['required', 'numeric', 'min:0'],
             'gis_client_type' => ['nullable', 'in:New,Returning,Referral'],
-            'gis_visit_type' => ['nullable', 'string', 'max:255'],
+            'gis_visit_type' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::exists('service_points', 'name')->where(fn ($query) => $query->where('is_active', true)),
+            ],
             'diagnosis_or_cause_of_death' => ['nullable', 'string', 'max:255'],
             'occupation_sources' => ['nullable', 'string', 'max:255'],
             'insurance_coverage' => ['nullable', 'string', 'max:255'],
@@ -982,6 +1072,11 @@ class SocialWorkerController extends Controller
             }
 
             validator($row, $rowRules)->validate();
+
+            if ($requiresModeOfAssistance && ! $isNonMonetary) {
+                $mode = ModeOfAssistance::findOrFail((int) $row['mode_of_assistance_id']);
+                $this->validateModeAmountRule($mode, (float) $row['final_amount'], "recommendations.{$index}.final_amount");
+            }
 
             if (! $isReferralService) {
                 $this->validateAssistanceSelection(
@@ -1146,7 +1241,7 @@ class SocialWorkerController extends Controller
             'has_savings' => ! empty($validated['has_savings']),
             'amount_needed' => $validated['amount_needed'],
             'gis_client_type' => $validated['gis_client_type'] ?? null,
-            'gis_visit_type' => $validated['gis_visit_type'] ?? null,
+            'gis_visit_type' => $validated['gis_visit_type'] ?? 'Online',
             'diagnosis_or_cause_of_death' => $validated['diagnosis_or_cause_of_death'] ?? null,
             'occupation_sources' => $validated['occupation_sources'] ?? null,
             'insurance_coverage' => $validated['insurance_coverage'] ?? null,
@@ -1177,11 +1272,108 @@ class SocialWorkerController extends Controller
         ];
     }
 
+    protected function resolveServiceProviderSelection(Request $request, ModeOfAssistance $mode, ?int $subtypeId = null, ?int $detailId = null): ?int
+    {
+        $serviceProviderId = $request->filled('service_provider_id')
+            ? (int) $request->input('service_provider_id')
+            : null;
+
+        if (strtolower(trim((string) $mode->name)) !== 'guarantee letter') {
+            return null;
+        }
+
+        if (! $serviceProviderId) {
+            throw ValidationException::withMessages([
+                'service_provider_id' => 'Please select a service provider when the mode of assistance is Guarantee Letter.',
+            ]);
+        }
+
+        $provider = ServiceProvider::query()
+            ->whereKey($serviceProviderId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $provider) {
+            throw ValidationException::withMessages([
+                'service_provider_id' => 'The selected service provider is unavailable.',
+            ]);
+        }
+
+        $this->validateServiceProviderCategoryMatch($provider, $subtypeId, $detailId);
+
+        return $provider->id;
+    }
+
+    protected function validateModeAmountRule(ModeOfAssistance $mode, float $amount, string $field): void
+    {
+        $minimumAmount = $mode->minimum_amount !== null ? (float) $mode->minimum_amount : null;
+        $maximumAmount = $mode->maximum_amount !== null ? (float) $mode->maximum_amount : null;
+
+        if ($minimumAmount !== null && $amount < $minimumAmount) {
+            throw ValidationException::withMessages([
+                $field => 'This mode of assistance requires at least PHP '.number_format($minimumAmount, 2).'.',
+            ]);
+        }
+
+        if ($maximumAmount !== null && $amount > $maximumAmount) {
+            throw ValidationException::withMessages([
+                $field => 'This mode of assistance only allows amounts up to PHP '.number_format($maximumAmount, 2).'.',
+            ]);
+        }
+    }
+
+    protected function validateAssessmentScheduling(Request $request): void
+    {
+        $servicePoint = strtolower(trim((string) $request->input('gis_visit_type')));
+
+        if ($servicePoint === 'online' && ! $request->filled('schedule_date')) {
+            throw ValidationException::withMessages([
+                'schedule_date' => 'Schedule date is required when the service point is Online.',
+            ]);
+        }
+    }
+
+    protected function validateServiceProviderCategoryMatch(ServiceProvider $provider, ?int $subtypeId, ?int $detailId): void
+    {
+        $subtype = $subtypeId ? AssistanceSubtype::find($subtypeId) : null;
+        $detail = $detailId ? AssistanceDetail::find($detailId) : null;
+        $relevantCategories = ServiceProvider::inferRelevantCategories($subtype?->name, $detail?->name);
+
+        if ($relevantCategories === []) {
+            return;
+        }
+
+        $hasAnyMatchingProvider = ServiceProvider::query()
+            ->where('is_active', true)
+            ->get()
+            ->contains(fn (ServiceProvider $serviceProvider) => collect($serviceProvider->categories ?? [])->intersect($relevantCategories)->isNotEmpty());
+
+        if (! $hasAnyMatchingProvider) {
+            return;
+        }
+
+        if (! collect($provider->categories ?? [])->intersect($relevantCategories)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'service_provider_id' => 'The selected service provider does not match the required category for this assistance.',
+            ]);
+        }
+    }
+
     protected function resolveHouseholdMembers(Application $application)
     {
+        $snapshotMembers = $application->applicationFamilyMembers()
+            ->with('relationshipData')
+            ->orderBy('id')
+            ->get();
+
+        if ($snapshotMembers->isNotEmpty()) {
+            return $snapshotMembers;
+        }
+
         if ($application->usesBeneficiaryHousehold() && $application->beneficiaryProfile) {
             return $application->beneficiaryProfile
                 ->familyMembers()
+                ->whereNull('application_id')
                 ->with('relationshipData')
                 ->orderBy('id')
                 ->get();
@@ -1190,9 +1382,42 @@ class SocialWorkerController extends Controller
         return $application->client
             ->familyMembers()
             ->whereNull('beneficiary_profile_id')
+            ->whereNull('application_id')
             ->with('relationshipData')
             ->orderBy('id')
             ->get();
+    }
+
+    protected function resolveEditableHouseholdMembers(Application $application)
+    {
+        if ($application->usesBeneficiaryHousehold() && $application->beneficiaryProfile) {
+            $savedMembers = $application->beneficiaryProfile
+                ->familyMembers()
+                ->whereNull('application_id')
+                ->with('relationshipData')
+                ->orderBy('id')
+                ->get();
+
+            if ($savedMembers->isNotEmpty()) {
+                return $savedMembers;
+            }
+        }
+
+        if ($application->client) {
+            $savedMembers = $application->client
+                ->familyMembers()
+                ->whereNull('beneficiary_profile_id')
+                ->whereNull('application_id')
+                ->with('relationshipData')
+                ->orderBy('id')
+                ->get();
+
+            if ($savedMembers->isNotEmpty()) {
+                return $savedMembers;
+            }
+        }
+
+        return $this->resolveHouseholdMembers($application);
     }
 
     protected function validateAssistanceSelection(int $typeId, int $subtypeId, ?int $detailId, bool $requireDetail = true): void

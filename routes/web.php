@@ -9,6 +9,7 @@ use App\Http\Controllers\SocialWorkerGoogleController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\SupportTicketController;
+use App\Http\Controllers\ServiceProviderController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -52,6 +53,10 @@ Route::middleware(['auth', 'role:client'])->group(function () {
         ->name('client.dashboard');
     Route::get('/client/applications', [ClientDashboardController::class, 'applications'])
         ->name('client.applications');
+    Route::get('/client/family', [ClientDashboardController::class, 'family'])
+        ->name('client.family');
+    Route::post('/client/family', [ClientDashboardController::class, 'updateFamily'])
+        ->name('client.family.update');
 
     Route::get('/client/application', [ApplicationController::class, 'create']);
     Route::post('/client/beneficiary-profile/lookup', [ApplicationController::class, 'lookupBeneficiaryProfile'])
@@ -95,8 +100,14 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.libraries.assistance-subtypes.store');
     Route::post('/admin/libraries/assistance-details', [AdminController::class, 'storeAssistanceDetail'])
         ->name('admin.libraries.assistance-details.store');
+    Route::post('/admin/libraries/document-requirements', [AdminController::class, 'storeDocumentRequirement'])
+        ->name('admin.libraries.document-requirements.store');
     Route::post('/admin/libraries/modes-of-assistance', [AdminController::class, 'storeModeOfAssistance'])
         ->name('admin.libraries.modes-of-assistance.store');
+    Route::post('/admin/libraries/service-points', [AdminController::class, 'storeServicePoint'])
+        ->name('admin.libraries.service-points.store');
+    Route::post('/admin/libraries/service-providers', [AdminController::class, 'storeServiceProvider'])
+        ->name('admin.libraries.service-providers.store');
     Route::post('/admin/libraries/relationships', [AdminController::class, 'storeRelationship'])
         ->name('admin.libraries.relationships.store');
     Route::post('/admin/libraries/referral-institutions', [AdminController::class, 'storeReferralInstitution'])
@@ -105,6 +116,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.libraries.update');
     Route::delete('/admin/libraries/{library}/{item}', [AdminController::class, 'archiveLibrary'])
         ->name('admin.libraries.archive');
+    Route::patch('/admin/libraries/{library}/{item}/restore', [AdminController::class, 'restoreLibrary'])
+        ->name('admin.libraries.restore');
     Route::post('/admin/frequency-rules', [AdminController::class, 'storeFrequencyRule'])
         ->name('admin.frequency-rules.store');
     Route::patch('/admin/frequency-rules/{frequencyRule}', [AdminController::class, 'updateFrequencyRule'])
@@ -157,9 +170,19 @@ Route::middleware(['auth', 'role:social_worker'])->group(function () {
     Route::get('/social-worker/application/{id}/general-intake-sheet',
     [SocialWorkerController::class, 'generalIntakeSheet'])
     ->name('socialworker.general-intake-sheet');
+    Route::get('/social-worker/application/{id}/guarantee-letter',
+    [SocialWorkerController::class, 'guaranteeLetter'])
+    ->name('socialworker.guarantee-letter');
      Route::post('/social-worker/application/{id}/release',
     [SocialWorkerController::class, 'release'])
     ->name('socialworker.release');
+});
+
+Route::middleware(['auth', 'role:service_provider'])->group(function () {
+    Route::get('/service-provider/dashboard', [ServiceProviderController::class, 'dashboard'])
+        ->name('service-provider.dashboard');
+    Route::post('/service-provider/guarantee-letters/{application}/statement', [ServiceProviderController::class, 'uploadUpdatedStatement'])
+        ->name('service-provider.statement.upload');
 });
 /*
 |--------------------------------------------------------------------------

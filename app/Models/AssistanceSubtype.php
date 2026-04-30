@@ -26,4 +26,12 @@ class AssistanceSubtype extends Model
     {
         return $this->hasOne(AssistanceFrequencyRule::class)->whereNull('assistance_detail_id');
     }
+
+    public function documentRequirements()
+    {
+        return $this->hasMany(AssistanceDocumentRequirement::class)
+            ->whereNull('assistance_detail_id')
+            ->orderBy('sort_order')
+            ->orderBy('name');
+    }
 }

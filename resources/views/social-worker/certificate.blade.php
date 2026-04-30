@@ -254,23 +254,37 @@
 
     $client = $application->client;
     $beneficiary = $application->beneficiary;
-    $assistanceLabel = trim(implode(' - ', array_filter([
+    $typeOfAssistanceLabel = trim(implode(' - ', array_filter([
         $application->assistanceType?->name,
         $application->assistanceSubtype?->name,
+    ])));
+    $purposeLabel = trim(implode(' - ', array_filter([
         $application->assistanceDetail?->name,
     ])));
-    $additionalAssistanceLabels = $application->assistanceRecommendations->map(function ($recommendation) {
+    $additionalTypeLabels = $application->assistanceRecommendations->map(function ($recommendation) {
         return trim(implode(' - ', array_filter([
             $recommendation->assistanceType?->name,
             $recommendation->assistanceSubtype?->name,
+        ])));
+    })->filter();
+    $additionalPurposeLabels = $application->assistanceRecommendations->map(function ($recommendation) {
+        return trim(implode(' - ', array_filter([
             $recommendation->assistanceDetail?->name,
         ])));
     })->filter();
-    $assistanceLabel = collect([$assistanceLabel])
-        ->merge($additionalAssistanceLabels)
+    $typeOfAssistanceLabel = collect([$typeOfAssistanceLabel])
+        ->merge($additionalTypeLabels)
         ->filter()
+        ->unique()
+        ->values()
         ->implode('; ');
-    $purpose = $application->problem_statement ?: $application->crisis_type ?: ($assistanceLabel ?: 'financial assistance');
+    $purposeLabel = collect([$purposeLabel])
+        ->merge($additionalPurposeLabels)
+        ->filter()
+        ->unique()
+        ->values()
+        ->implode('; ');
+    $purpose = $purposeLabel ?: ($application->problem_statement ?: ($application->crisis_type ?: 'financial assistance'));
     $recommendationTotal = $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount);
     $amount = $application->assistanceRecommendations->isNotEmpty()
         ? $recommendationTotal
@@ -295,7 +309,9 @@
         $beneficiary?->last_name,
         $beneficiary?->extension_name,
     ])));
-    $servedName = $beneficiaryName !== '' ? $beneficiaryName : $clientName;
+    $servedName = $isGuaranteeLetter
+        ? ($application->serviceProvider?->name ?: ($beneficiaryName !== '' ? $beneficiaryName : $clientName))
+        : ($beneficiaryName !== '' ? $beneficiaryName : $clientName);
     $relationship = $beneficiary?->relationshipData?->name ?: 'Self';
     $clientBirthdate = $client?->birthdate ? Carbon::parse($client->birthdate) : null;
     $age = $clientBirthdate?->age;
@@ -378,7 +394,7 @@
         </div>
         <div class="meta-item">
             <span class="label">Type of assistance:</span>
-            <span class="fill">{{ $assistanceLabel !== '' ? $assistanceLabel : 'AICS Assistance' }}</span>
+            <span class="fill">{{ $typeOfAssistanceLabel !== '' ? $typeOfAssistanceLabel : 'AICS Assistance' }}</span>
         </div>
     </div>
 
@@ -439,7 +455,7 @@
             <div class="box-title">If Outright Cash</div>
             <div class="row">
                 Type of assistance:
-                <span class="inline-fill">{{ $isOutrightCash && $assistanceLabel !== '' ? $assistanceLabel : '' }}</span>
+                <span class="inline-fill">{{ $isOutrightCash && $typeOfAssistanceLabel !== '' ? $typeOfAssistanceLabel : '' }}</span>
             </div>
             <div class="row">
                 Amount in words:
@@ -459,7 +475,7 @@
             <div class="box-title">If Guarantee Letter</div>
             <div class="row">
                 Type of assistance:
-                <span class="inline-fill">{{ $isGuaranteeLetter && $assistanceLabel !== '' ? $assistanceLabel : '' }}</span>
+                <span class="inline-fill">{{ $isGuaranteeLetter && $typeOfAssistanceLabel !== '' ? $typeOfAssistanceLabel : '' }}</span>
             </div>
             <div class="row">
                 Amount in words:

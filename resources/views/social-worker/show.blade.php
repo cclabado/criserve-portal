@@ -122,6 +122,16 @@
                 Print GIS
             </a>
 
+            @if(in_array($application->status, ['approved', 'released'], true)
+                && strtolower((string) ($application->modeOfAssistance?->name ?? $application->mode_of_assistance)) === 'guarantee letter')
+                <a href="{{ route('socialworker.guarantee-letter', $application->id) }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700">
+                    Print Guarantee Letter
+                </a>
+            @endif
+
             @if(in_array($application->status, ['approved', 'released'], true))
                 <a href="{{ route('socialworker.certificate', $application->id) }}"
                    target="_blank"
@@ -240,6 +250,18 @@
                 </div>
 
                 <div class="mt-4 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                        <span class="muted">Service Provider</span><br>{{ $application->serviceProvider->name ?? '-' }}
+                        @if($application->serviceProvider?->addressee)
+                            <div class="mt-1 text-xs text-slate-500">Addressee: {{ $application->serviceProvider->addressee }}</div>
+                        @endif
+                        @if($application->serviceProvider?->contact_number)
+                            <div class="text-xs text-slate-500">Contact: {{ $application->serviceProvider->contact_number }}</div>
+                        @endif
+                        @if($application->serviceProvider?->address)
+                            <div class="text-xs text-slate-500">{{ $application->serviceProvider->address }}</div>
+                        @endif
+                    </div>
                     <div><span class="muted">Current Status</span><br>{{ strtoupper(str_replace('_', ' ', $application->status ?? '-')) }}</div>
                     <div><span class="muted">Recommended Amount</span><br>PHP {{ number_format((float) ($application->recommended_amount ?? 0), 2) }}</div>
                     <div><span class="muted">Final Amount</span><br>PHP {{ number_format((float) ($application->final_amount ?? $totalRecommendedAmount), 2) }}</div>
@@ -264,6 +286,7 @@
                     @forelse($application->documents as $doc)
                         <div class="flex items-center justify-between rounded-xl bg-gray-50 px-5 py-3">
                             <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">{{ $doc->document_type ?: 'Supporting Document' }}</p>
                                 <p class="text-sm font-semibold">{{ $doc->file_name ?? $doc->filename }}</p>
                                 <p class="text-xs text-gray-500">{{ $doc->remarks }}</p>
                             </div>
@@ -286,7 +309,7 @@
 
                 <div class="grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
                     <div><span class="muted">Client Type</span><br>{{ $application->gis_client_type ?? '-' }}</div>
-                    <div><span class="muted">GIS Service Point</span><br>{{ $application->gis_visit_type ?? '-' }}</div>
+                    <div><span class="muted">Service Point</span><br>{{ $application->gis_visit_type ?? '-' }}</div>
                     <div><span class="muted">Diagnosis / Cause of Death</span><br>{{ $application->diagnosis_or_cause_of_death ?? '-' }}</div>
                     <div><span class="muted">Amount Needed</span><br>PHP {{ number_format((float) ($application->amount_needed ?? 0), 2) }}</div>
                 </div>

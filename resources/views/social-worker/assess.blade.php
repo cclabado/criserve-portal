@@ -91,7 +91,7 @@
             <div>
                 <h2 class="text-lg font-bold text-[#234E70] mb-4">Client Information</h2>
 
-                <div class="grid grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
 
                     <div>
                         <label class="label">Last Name</label>
@@ -402,7 +402,7 @@
                     <div>
                         <label class="label">Mode of Assistance</label>
                         <div class="select-shell">
-                        <select name="mode_of_assistance_id" class="input input-select w-full">
+                        <select name="mode_of_assistance_id" id="modeOfAssistanceSelect" class="input input-select w-full">
                             <option value="">Select mode</option>
                             @foreach($modesOfAssistance as $mode)
                             <option value="{{ $mode->id }}"
@@ -411,6 +411,34 @@
                             </option>
                             @endforeach
                         </select>
+                        </div>
+                    </div>
+
+                    <div id="serviceProviderWrap" class="md:col-span-2 xl:col-span-4">
+                        <div class="rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-4">
+                            <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                                <div class="min-w-0 xl:max-w-sm">
+                                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-sky-700">Guarantee Letter Setup</p>
+                                    <label class="mt-2 block text-base font-semibold text-slate-900">Service Provider</label>
+                                    <p class="mt-1 text-sm text-slate-600">Choose who will receive the approved guarantee letter for this case.</p>
+                                </div>
+
+                                <div class="w-full xl:max-w-xl">
+                                    <div class="select-shell">
+                                    <select name="service_provider_id" id="serviceProviderSelect" class="input input-select w-full bg-white">
+                                        <option value="">Select service provider</option>
+                                        @foreach($serviceProviders as $serviceProvider)
+                                        <option value="{{ $serviceProvider->id }}"
+                                            data-categories='@json($serviceProvider->categories ?? [])'
+                                            {{ $application->service_provider_id == $serviceProvider->id ? 'selected' : '' }}>
+                                            {{ $serviceProvider->name }}
+                                        </option>
+                                        @endforeach
+                                    </select>
+                                    </div>
+                                    <p id="serviceProviderCategoryHint" class="mt-2 text-xs font-medium text-sky-700">Required when the mode of assistance is Guarantee Letter.</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -499,29 +527,47 @@
 
                 @forelse($application->documents ?? [] as $file)
 
-                <div class="bg-gray-50 p-4 rounded-lg flex items-center justify-between mb-3">
+                <div class="mb-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-white p-4 shadow-sm">
+                    <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
+                                <button type="button"
+                                    class="document-preview-btn inline-flex w-fit items-center rounded-xl bg-[#234E70] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#18384f]"
+                                    data-document-title="{{ $file->document_type ?: 'Supporting Document' }}"
+                                    data-document-name="{{ $file->file_name ?? $file->filename }}"
+                                    data-document-stream-url="{{ route('documents.stream', $file->id) }}"
+                                    data-document-open-url="{{ route('documents.show', $file->id) }}"
+                                    data-document-download-url="{{ route('documents.download', $file->id) }}">
+                                    View
+                                </button>
 
-                    <div class="flex items-center gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <div class="inline-flex max-w-full items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold tracking-[0.12em] text-sky-800">
+                                        {{ $file->document_type ?: 'Supporting Document' }}
+                                    </div>
 
-                        <a href="{{ route('documents.show', $file->id) }}"
-                            class="px-3 py-2 bg-gray-200 rounded-lg text-sm hover:bg-gray-300">
-                            Open
-                        </a>
+                                    <p class="mt-3 break-words text-base font-semibold leading-snug text-slate-900">
+                                        {{ $file->file_name ?? $file->filename }}
+                                    </p>
 
-                        <p class="font-medium text-gray-700">
-                            {{ $file->file_name ?? $file->filename }}
-                        </p>
+                                    <p class="mt-2 text-xs text-slate-500">
+                                        Review this upload against the required document label above.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
 
+                        <div class="w-full xl:w-80">
+                            <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                                Review Remarks
+                            </label>
+                            <input type="text"
+                                name="remarks[{{ $file->id }}]"
+                                value="{{ $file->remarks ?? '' }}"
+                                class="input w-full rounded-xl border-slate-200 bg-white"
+                                placeholder="Add remarks for this document">
+                        </div>
                     </div>
-
-                    <div class="w-72">
-                        <input type="text"
-                            name="remarks[{{ $file->id }}]"
-                            value="{{ $file->remarks ?? '' }}"
-                            class="input w-full"
-                            placeholder="Add remarks...">
-                    </div>
-
                 </div>
 
                 @empty
@@ -559,20 +605,39 @@
                     class="input w-full h-32">{{ $application->notes }}</textarea>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 
                 <div>
-                    <label class="label">Schedule Date</label>
+                    <label class="label">Service Point</label>
+                    <div class="select-shell">
+                        <select name="gis_visit_type" id="servicePointSelect" class="input input-select w-full">
+                            <option value="">Select service point</option>
+                            @foreach($servicePoints as $servicePoint)
+                                <option value="{{ $servicePoint->name }}" @selected(old('gis_visit_type', $application->gis_visit_type ?: 'Online') === $servicePoint->name)>
+                                    {{ $servicePoint->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <p id="servicePointScheduleHint" class="mt-2 text-xs text-slate-500">
+                        Online requires a schedule. Onsite, Offsite, and Malasakit Center do not require one.
+                    </p>
+                </div>
+
+                <div id="scheduleDateWrap">
+                    <label class="label">Schedule Date <span id="scheduleRequiredTag" class="text-rose-600">*</span></label>
                     <input type="datetime-local"
+                        id="scheduleDateInput"
                         name="schedule_date"
                         class="input w-full"
                         value="{{ $application->schedule_date ? \Carbon\Carbon::parse($application->schedule_date)->format('Y-m-d\TH:i') : '' }}">
                 </div>
 
-                <div>
+                <div id="meetingLinkWrap" class="md:col-span-2">
                     <label class="label">Meeting Link</label>
                     <input type="text"
                         name="meeting_link"
+                        id="meetingLinkInput"
                         class="input w-full"
                         value="{{ $application->meeting_link }}"
                         placeholder="{{ $googleConnected ? 'Generated automatically after saving the schedule' : 'Paste a manual meeting link if Google is not connected' }}"
@@ -609,6 +674,52 @@
         </div>
 
     </form>
+
+    <div id="documentPreviewModal" class="fixed inset-0 z-50 hidden">
+        <div id="documentPreviewBackdrop" class="absolute inset-0 bg-slate-900/60"></div>
+
+        <div class="relative flex min-h-full items-end justify-center overflow-y-auto p-2 sm:items-center sm:p-4">
+            <div class="my-2 flex max-h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[1.5rem] bg-white shadow-2xl sm:my-4 sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl">
+                <div class="flex shrink-0 flex-col gap-4 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="min-w-0">
+                        <p id="documentPreviewType" class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 sm:text-xs">Supporting Document</p>
+                        <h2 id="documentPreviewName" class="mt-2 break-words text-lg font-bold text-[#234E70] sm:text-2xl">Document Preview</h2>
+                        <p class="mt-2 text-sm text-slate-500">Review the uploaded file without leaving the assessment page.</p>
+                    </div>
+
+                    <div class="grid w-full shrink-0 grid-cols-1 gap-2 sm:w-auto sm:grid-cols-3 sm:gap-3">
+                        <a id="documentPreviewOpenLink"
+                           href="#"
+                           target="_blank"
+                           class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                            Open in New Tab
+                        </a>
+
+                        <a id="documentPreviewDownloadLink"
+                           href="#"
+                           class="inline-flex items-center justify-center rounded-xl bg-sky-900 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800">
+                            Download
+                        </a>
+
+                        <button type="button"
+                            id="closeDocumentPreviewModalBtn"
+                            class="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                            Close
+                        </button>
+                    </div>
+                </div>
+
+                <div class="min-h-0 flex-1 overflow-hidden bg-slate-100 p-2 sm:p-4">
+                    <iframe
+                        id="documentPreviewFrame"
+                        src=""
+                        class="h-[calc(100dvh-15rem)] w-full rounded-2xl border border-slate-200 bg-white sm:h-[calc(100dvh-16rem)] lg:h-[calc(100dvh-18rem)]"
+                        title="Document Preview">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+    </div>
 
     @if($basisApplication)
     <div id="previousAssistanceModal" class="fixed inset-0 z-50 hidden">
@@ -739,10 +850,28 @@ const previousAssistanceModal = document.getElementById('previousAssistanceModal
 const openPreviousAssistanceModalBtn = document.getElementById('openPreviousAssistanceModalBtn');
 const closePreviousAssistanceModalBtn = document.getElementById('closePreviousAssistanceModalBtn');
 const previousAssistanceModalBackdrop = document.getElementById('previousAssistanceModalBackdrop');
+const documentPreviewModal = document.getElementById('documentPreviewModal');
+const documentPreviewBackdrop = document.getElementById('documentPreviewBackdrop');
+const closeDocumentPreviewModalBtn = document.getElementById('closeDocumentPreviewModalBtn');
+const documentPreviewType = document.getElementById('documentPreviewType');
+const documentPreviewName = document.getElementById('documentPreviewName');
+const documentPreviewFrame = document.getElementById('documentPreviewFrame');
+const documentPreviewOpenLink = document.getElementById('documentPreviewOpenLink');
+const documentPreviewDownloadLink = document.getElementById('documentPreviewDownloadLink');
 
 const assistanceTypeSelect = document.getElementById('assistanceTypeSelect');
 const assistanceSubtypeSelect = document.getElementById('assistanceSubtypeSelect');
 const assistanceDetailSelect = document.getElementById('assistanceDetailSelect');
+const modeOfAssistanceSelect = document.getElementById('modeOfAssistanceSelect');
+const serviceProviderWrap = document.getElementById('serviceProviderWrap');
+const serviceProviderSelect = document.getElementById('serviceProviderSelect');
+const serviceProviderCategoryHint = document.getElementById('serviceProviderCategoryHint');
+const servicePointSelect = document.getElementById('servicePointSelect');
+const scheduleDateWrap = document.getElementById('scheduleDateWrap');
+const scheduleDateInput = document.getElementById('scheduleDateInput');
+const meetingLinkWrap = document.getElementById('meetingLinkWrap');
+const scheduleRequiredTag = document.getElementById('scheduleRequiredTag');
+const servicePointScheduleHint = document.getElementById('servicePointScheduleHint');
 const frequencyRuleNotes = document.getElementById('frequencyRuleNotes');
 const frequencyCaseKeyWrap = document.getElementById('frequencyCaseKeyWrap');
 const frequencyOverrideWrap = document.getElementById('frequencyOverrideWrap');
@@ -826,12 +955,152 @@ function updateDetailOptions() {
 
     assistanceDetailSelect.disabled = !hasVisibleDetails;
     updateFrequencyRuleUI();
+    filterServiceProviderOptions();
+}
+
+function updateServiceProviderUI() {
+    const modeLabel = modeOfAssistanceSelect?.selectedOptions?.[0]?.textContent?.trim()?.toLowerCase() || '';
+    const requiresServiceProvider = modeLabel === 'guarantee letter';
+
+    if (serviceProviderWrap) {
+        serviceProviderWrap.style.display = requiresServiceProvider ? 'block' : 'none';
+    }
+
+    if (serviceProviderSelect) {
+        serviceProviderSelect.disabled = !requiresServiceProvider;
+
+        if (!requiresServiceProvider) {
+            serviceProviderSelect.value = '';
+        }
+    }
+
+    filterServiceProviderOptions();
+}
+
+function normalizeCategoryText(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function inferServiceProviderCategories() {
+    const detailLabel = assistanceDetailSelect?.selectedOptions?.[0]?.textContent || '';
+    const subtypeLabel = assistanceSubtypeSelect?.selectedOptions?.[0]?.textContent || '';
+    const sources = [detailLabel, subtypeLabel]
+        .map((value) => normalizeCategoryText(value))
+        .filter(Boolean);
+
+    const matchers = {
+        'Chemo': ['chemo', 'chemotherapy'],
+        'Device': ['device', 'assistive device'],
+        'Diagnostic Center': ['diagnostic center', 'diagnostic', 'laboratory', 'laboratory request', 'lab'],
+        'Dialysis': ['dialysis'],
+        'Dialysis Center': ['dialysis center'],
+        'Funeral': ['funeral', 'cadaver', 'remains'],
+        'Hearing': ['hearing'],
+        'Hospital': ['hospital', 'admitted', 'admission'],
+        'Implant': ['implant'],
+        'Medical Devices': ['medical device', 'assistive device'],
+        'Optha': ['optha', 'ophtha', 'eye', 'vision'],
+        'Pharmacy': ['pharmacy', 'medicine', 'medicines', 'prescription', 'drug'],
+        'Procedure': ['procedure', 'operation', 'surgery'],
+        'Prosthesis': ['prosthesis'],
+        'Prosthesis/Orthotics': ['prosthesis', 'orthotic', 'orthotics'],
+        'Theraphy': ['therapy', 'theraphy', 'rehab', 'rehabilitation'],
+    };
+
+    for (const source of sources) {
+        const matched = Object.entries(matchers)
+            .filter(([, keywords]) => keywords.some((keyword) => source.includes(keyword)))
+            .map(([category]) => category);
+
+        if (matched.length) {
+            return [...new Set(matched)];
+        }
+    }
+
+    return [];
+}
+
+function filterServiceProviderOptions() {
+    if (!serviceProviderSelect) {
+        return;
+    }
+
+    const inferredCategories = inferServiceProviderCategories();
+    let matchedCount = 0;
+
+    Array.from(serviceProviderSelect.options).forEach((option, index) => {
+        if (index === 0) {
+            option.hidden = false;
+            return;
+        }
+
+        const categories = JSON.parse(option.dataset.categories || '[]');
+        const matches = inferredCategories.length === 0 || categories.some((category) => inferredCategories.includes(category));
+        if (matches) {
+            matchedCount++;
+        }
+        option.hidden = !matches;
+
+        if (!matches && option.selected) {
+            serviceProviderSelect.value = '';
+        }
+    });
+
+    if (inferredCategories.length && matchedCount === 0) {
+        Array.from(serviceProviderSelect.options).forEach((option, index) => {
+            option.hidden = index === 0 ? false : false;
+        });
+    }
+
+    if (serviceProviderCategoryHint) {
+        if (!inferredCategories.length) {
+            serviceProviderCategoryHint.textContent = 'Required when the mode of assistance is Guarantee Letter.';
+        } else if (matchedCount === 0) {
+            serviceProviderCategoryHint.textContent = `Required when the mode of assistance is Guarantee Letter. No provider is tagged under ${inferredCategories.join(', ')} yet, so all active providers are shown.`;
+        } else {
+            serviceProviderCategoryHint.textContent = `Required when the mode of assistance is Guarantee Letter. Showing providers under: ${inferredCategories.join(', ')}.`;
+        }
+    }
+}
+
+function updateScheduleRequirementUI() {
+    const servicePoint = servicePointSelect?.value?.trim().toLowerCase() || '';
+    const requiresSchedule = servicePoint === 'online';
+
+    if (scheduleDateInput) {
+        scheduleDateInput.required = requiresSchedule;
+    }
+
+    if (scheduleDateWrap) {
+        scheduleDateWrap.style.display = requiresSchedule ? 'block' : 'none';
+    }
+
+    if (meetingLinkWrap) {
+        meetingLinkWrap.style.display = requiresSchedule ? 'block' : 'none';
+    }
+
+    if (scheduleRequiredTag) {
+        scheduleRequiredTag.style.display = requiresSchedule ? 'inline' : 'none';
+    }
+
+    if (servicePointScheduleHint) {
+        servicePointScheduleHint.textContent = requiresSchedule
+            ? 'Online requires a schedule before saving this assessment.'
+            : 'This service point does not require a schedule.';
+    }
 }
 
 assistanceTypeSelect?.addEventListener('change', updateSubtypeOptions);
 assistanceSubtypeSelect?.addEventListener('change', updateDetailOptions);
-assistanceDetailSelect?.addEventListener('change', updateFrequencyRuleUI);
+assistanceDetailSelect?.addEventListener('change', () => {
+    updateFrequencyRuleUI();
+    filterServiceProviderOptions();
+});
+modeOfAssistanceSelect?.addEventListener('change', updateServiceProviderUI);
+servicePointSelect?.addEventListener('change', updateScheduleRequirementUI);
 updateSubtypeOptions();
+updateServiceProviderUI();
+updateScheduleRequirementUI();
 
 cancelFrequencyBtn?.addEventListener('click', function () {
     if (assessmentActionInput) {
@@ -857,6 +1126,45 @@ function togglePreviousAssistanceModal(show) {
     document.body.classList.toggle('overflow-hidden', show);
 }
 
+function toggleDocumentPreviewModal(show) {
+    if (!documentPreviewModal) {
+        return;
+    }
+
+    documentPreviewModal.classList.toggle('hidden', !show);
+    document.body.classList.toggle('overflow-hidden', show || !previousAssistanceModal?.classList.contains('hidden'));
+
+    if (!show && documentPreviewFrame) {
+        documentPreviewFrame.src = '';
+    }
+}
+
+document.querySelectorAll('.document-preview-btn').forEach((button) => {
+    button.addEventListener('click', function () {
+        if (documentPreviewType) {
+            documentPreviewType.textContent = this.dataset.documentTitle || 'Supporting Document';
+        }
+
+        if (documentPreviewName) {
+            documentPreviewName.textContent = this.dataset.documentName || 'Document Preview';
+        }
+
+        if (documentPreviewFrame) {
+            documentPreviewFrame.src = this.dataset.documentStreamUrl || '';
+        }
+
+        if (documentPreviewOpenLink) {
+            documentPreviewOpenLink.href = this.dataset.documentOpenUrl || '#';
+        }
+
+        if (documentPreviewDownloadLink) {
+            documentPreviewDownloadLink.href = this.dataset.documentDownloadUrl || '#';
+        }
+
+        toggleDocumentPreviewModal(true);
+    });
+});
+
 openPreviousAssistanceModalBtn?.addEventListener('click', function () {
     togglePreviousAssistanceModal(true);
 });
@@ -869,9 +1177,18 @@ previousAssistanceModalBackdrop?.addEventListener('click', function () {
     togglePreviousAssistanceModal(false);
 });
 
+closeDocumentPreviewModalBtn?.addEventListener('click', function () {
+    toggleDocumentPreviewModal(false);
+});
+
+documentPreviewBackdrop?.addEventListener('click', function () {
+    toggleDocumentPreviewModal(false);
+});
+
 document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') {
         togglePreviousAssistanceModal(false);
+        toggleDocumentPreviewModal(false);
     }
 });
 

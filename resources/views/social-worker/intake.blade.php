@@ -78,7 +78,7 @@
     <div>
         <a href="{{ route('socialworker.applications') }}"
            class="text-sm text-gray-500 hover:text-[#234E70]">
-            ← Back to Applications
+            &larr; Back to Applications
         </a>
 
         <h1 class="text-3xl font-bold text-[#234E70] mt-2">
@@ -95,6 +95,16 @@
            class="mt-3 inline-flex items-center justify-center rounded-lg bg-[#234E70] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#18384f]">
             Print General Intake Sheet
         </a>
+
+        @if(in_array($application->status, ['approved', 'released'], true)
+            && strtolower((string) ($application->modeOfAssistance?->name ?? $application->mode_of_assistance)) === 'guarantee letter')
+            <a href="{{ route('socialworker.guarantee-letter', $application->id) }}"
+               target="_blank"
+               rel="noopener noreferrer"
+               class="mt-3 ml-3 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700">
+                Print Guarantee Letter
+            </a>
+        @endif
     </div>
     <div class="bg-white p-6 rounded-2xl shadow space-y-6">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -310,11 +320,11 @@
                 </div>
 
                 <div>
-                    <label class="label">GIS Service Point</label>
+                    <label class="label">Service Point</label>
                     <select name="gis_visit_type" class="input w-full">
                         <option value="">Select</option>
-                        @foreach(['AICS Onsite', 'AKAP', 'Malasakit Center', 'Offsite', 'Others'] as $visitType)
-                            <option value="{{ $visitType }}" @selected(old('gis_visit_type', $application->gis_visit_type) === $visitType)>{{ $visitType }}</option>
+                        @foreach($servicePoints as $servicePoint)
+                            <option value="{{ $servicePoint->name }}" @selected(old('gis_visit_type', $application->gis_visit_type ?: 'Online') === $servicePoint->name)>{{ $servicePoint->name }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -334,6 +344,9 @@
                            name="amount_needed"
                            class="input w-full"
                            value="{{ old('amount_needed', $application->amount_needed) }}">
+                    <p class="mt-2 text-xs text-slate-500">
+                        Amount limits follow the selected mode of assistance setting.
+                    </p>
                 </div>
             </div>
 

@@ -13,6 +13,7 @@ use Illuminate\Notifications\Notifiable;
 #[Fillable([
     'name',
     'person_id',
+    'service_provider_id',
     'email',
     'password',
     'role',
@@ -64,6 +65,11 @@ class User extends Authenticatable
     public function person()
     {
         return $this->belongsTo(Person::class);
+    }
+
+    public function serviceProvider()
+    {
+        return $this->belongsTo(ServiceProvider::class);
     }
 
     public function hasGoogleCalendarConnection(): bool

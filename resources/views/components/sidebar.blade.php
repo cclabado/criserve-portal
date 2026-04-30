@@ -147,23 +147,50 @@
             <span class="text-sm tracking-wide">Dashboard</span>
         </a>
 
+        <a href="/social-worker/applications"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-sky-700 hover:bg-slate-100">
+
+            <span class="material-symbols-outlined text-slate-500 group-hover:text-sky-700">
+                description
+            </span>
+
+            <span class="text-sm tracking-wide">All Applications</span>
+        </a>
+
+        <a href="/approving-officer/applications"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-sky-700 hover:bg-slate-100">
+
+            <span class="material-symbols-outlined text-slate-500 group-hover:text-sky-700">
+                fact_check
+            </span>
+
+            <span class="text-sm tracking-wide">Approvals Queue</span>
+        </a>
+
         @php
             $libraryLinks = [
                 ['label' => 'Assistance Types', 'path' => 'admin/libraries/assistance-types'],
                 ['label' => 'Assistance Subtypes', 'path' => 'admin/libraries/assistance-subtypes'],
                 ['label' => 'Assistance Details', 'path' => 'admin/libraries/assistance-details'],
+                ['label' => 'Document Requirements', 'path' => 'admin/libraries/document-requirements'],
                 ['label' => 'Modes of Assistance', 'path' => 'admin/libraries/modes-of-assistance'],
+                ['label' => 'Service Points', 'path' => 'admin/libraries/service-points'],
                 ['label' => 'Relationships', 'path' => 'admin/libraries/relationships'],
                 ['label' => 'Referral Institutions', 'path' => 'admin/libraries/referral-institutions'],
-                ['label' => 'Frequency Rules', 'path' => 'admin/frequency-rules'],
             ];
-            $librariesOpen = request()->is('admin/libraries*') || request()->is('admin/frequency-rules*');
+            $librariesOpen = request()->is('admin/libraries*') && ! request()->is('admin/libraries/service-providers');
+            $librariesSummaryClass = $librariesOpen
+                ? 'bg-sky-50 text-sky-900 font-semibold border-r-4 border-sky-700 shadow-sm'
+                : 'text-slate-600 hover:text-sky-700 hover:bg-slate-100';
+            $librariesIconClass = $librariesOpen
+                ? 'text-sky-700'
+                : 'text-slate-500 group-hover:text-sky-700';
         @endphp
 
         <details class="group" @if($librariesOpen) open @endif>
-            <summary class="list-none group flex items-center justify-between gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 {{ $navClass(['admin/libraries*', 'admin/frequency-rules*']) }}">
+            <summary class="list-none group flex items-center justify-between gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 {{ $librariesSummaryClass }}">
                 <span class="flex items-center gap-3">
-                    <span class="material-symbols-outlined {{ $iconClass(['admin/libraries*', 'admin/frequency-rules*']) }}">
+                    <span class="material-symbols-outlined {{ $librariesIconClass }}">
                         library_books
                     </span>
                     <span class="text-sm tracking-wide">Libraries</span>
@@ -185,6 +212,26 @@
             </div>
         </details>
 
+        <a href="/admin/frequency-rules"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/frequency-rules*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('admin/frequency-rules*') }}">
+                rule_settings
+            </span>
+
+            <span class="text-sm tracking-wide">Frequency Rules</span>
+        </a>
+
+        <a href="/admin/libraries/service-providers"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/libraries/service-providers') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('admin/libraries/service-providers') }}">
+                local_hospital
+            </span>
+
+            <span class="text-sm tracking-wide">Service Providers</span>
+        </a>
+
         <a href="/admin/users"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/users*') }}">
 
@@ -203,26 +250,6 @@
             </span>
 
             <span class="text-sm tracking-wide">Support Tickets</span>
-        </a>
-
-        <a href="/social-worker/applications"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-sky-700 hover:bg-slate-100">
-
-            <span class="material-symbols-outlined text-slate-500 group-hover:text-sky-700">
-                description
-            </span>
-
-            <span class="text-sm tracking-wide">All Applications</span>
-        </a>
-
-        <a href="/approving-officer/applications"
-           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-slate-600 hover:text-sky-700 hover:bg-slate-100">
-
-            <span class="material-symbols-outlined text-slate-500 group-hover:text-sky-700">
-                fact_check
-            </span>
-
-            <span class="text-sm tracking-wide">Approvals Queue</span>
         </a>
 
         @endif
@@ -267,6 +294,20 @@
                     My Approvals
                 </span>
             </a>
+
+        @endif
+
+        @if($role === 'service_provider')
+
+        <a href="/service-provider/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('service-provider/dashboard') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('service-provider/dashboard') }}">
+                local_hospital
+            </span>
+
+            <span class="text-sm tracking-wide">Guarantee Letters</span>
+        </a>
 
         @endif
     </nav>

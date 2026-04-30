@@ -21,4 +21,11 @@ class AssistanceDetail extends Model
     {
         return $this->hasOne(AssistanceFrequencyRule::class, 'assistance_detail_id');
     }
+
+    public function documentRequirements()
+    {
+        return $this->hasMany(AssistanceDocumentRequirement::class, 'assistance_detail_id')
+            ->orderBy('sort_order')
+            ->orderBy('name');
+    }
 }
