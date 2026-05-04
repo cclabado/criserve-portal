@@ -228,5 +228,19 @@ class Application extends Model
     {
         return $this->hasMany(ApplicationAssistanceRecommendation::class)->orderBy('sort_order')->orderBy('id');
     }
+
+    public function recommendationFinalAmountTotal(): float
+    {
+        $this->loadMissing('assistanceRecommendations');
+
+        return (float) $this->assistanceRecommendations
+            ->sum(fn (ApplicationAssistanceRecommendation $recommendation) => (float) $recommendation->final_amount);
+    }
+
+    public function syncFinalAmountFromRecommendations(): void
+    {
+        $this->final_amount = $this->recommendationFinalAmountTotal();
+        $this->save();
+    }
 }
     

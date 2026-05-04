@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Models\Application;
+use App\Models\ModeOfAssistance;
 use App\Notifications\GuaranteeLetterApprovedNotification;
 use App\Services\FamilyNetworkService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ApprovingOfficerController extends Controller
@@ -150,8 +152,10 @@ class ApprovingOfficerController extends Controller
 
     public function approve(Request $request, $id)
     {
-        $app = Application::with(['modeOfAssistance', 'serviceProvider.accounts', 'client'])->findOrFail($id);
-        $finalAmount = (float) $request->input('final_amount', 0);
+        $app = Application::with(['modeOfAssistance', 'serviceProvider.accounts', 'client', 'assistanceRecommendations'])->findOrFail($id);
+        $finalAmount = $app->assistanceRecommendations->isNotEmpty()
+            ? $app->recommendationFinalAmountTotal()
+            : (float) $request->input('final_amount', 0);
 
         $this->validateModeAmountRule($app, $finalAmount, 'final_amount');
 
@@ -175,6 +179,58 @@ class ApprovingOfficerController extends Controller
             ->with('success', 'Application approved successfully.');
     }
 
+    public function updateRecommendation(Request $request, $applicationId, $recommendationId)
+    {
+        $application = Application::with('assistanceRecommendations')->findOrFail($applicationId);
+        $this->ensureRecommendationCanBeEdited($application);
+
+        $validated = $request->validate([
+            'final_amount' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $recommendation = $application->assistanceRecommendations()
+            ->with('modeOfAssistance')
+            ->findOrFail($recommendationId);
+
+        $this->validateRecommendationModeAmountRule(
+            $recommendation->modeOfAssistance,
+            (float) $validated['final_amount'],
+            'final_amount'
+        );
+
+        DB::transaction(function () use ($application, $recommendation, $validated) {
+            $recommendation->update([
+                'final_amount' => $validated['final_amount'],
+            ]);
+
+            $application->load('assistanceRecommendations');
+            $application->syncFinalAmountFromRecommendations();
+        });
+
+        return redirect()
+            ->route('approving.show', ['id' => $application->id, 'tab' => 'recommendation'])
+            ->with('success', 'Assistance amount updated successfully.');
+    }
+
+    public function destroyRecommendation($applicationId, $recommendationId)
+    {
+        $application = Application::with('assistanceRecommendations')->findOrFail($applicationId);
+        $this->ensureRecommendationCanBeEdited($application);
+
+        $recommendation = $application->assistanceRecommendations()->findOrFail($recommendationId);
+
+        DB::transaction(function () use ($application, $recommendation) {
+            $recommendation->delete();
+
+            $application->load('assistanceRecommendations');
+            $application->syncFinalAmountFromRecommendations();
+        });
+
+        return redirect()
+            ->route('approving.show', ['id' => $application->id, 'tab' => 'recommendation'])
+            ->with('success', 'Assistance item removed successfully.');
+    }
+
     public function deny(Request $request, $id)
     {
         $app = Application::findOrFail($id);
@@ -189,13 +245,76 @@ class ApprovingOfficerController extends Controller
             ->with('success', 'Application denied successfully.');
     }
 
+    public function certificate($id)
+    {
+        $application = Application::with([
+            'client',
+            'beneficiary.relationshipData',
+            'assistanceType',
+            'assistanceSubtype',
+            'assistanceDetail',
+            'modeOfAssistance',
+            'serviceProvider',
+            'frequencyRule',
+            'frequencyBasisApplication',
+            'documents',
+            'assistanceRecommendations.assistanceType',
+            'assistanceRecommendations.assistanceSubtype',
+            'assistanceRecommendations.assistanceDetail',
+            'assistanceRecommendations.referralInstitution',
+            'socialWorker',
+        ])->findOrFail($id);
+
+        if (! in_array($application->status, ['approved', 'released'], true)) {
+            abort(403, 'Certificate available only for approved or released applications.');
+        }
+
+        return view('social-worker.certificate', compact('application'));
+    }
+
+    public function guaranteeLetter($id)
+    {
+        $application = Application::with([
+            'client',
+            'beneficiary.relationshipData',
+            'assistanceType',
+            'assistanceSubtype',
+            'assistanceDetail',
+            'modeOfAssistance',
+            'serviceProvider',
+            'documents',
+            'assistanceRecommendations.assistanceType',
+            'assistanceRecommendations.assistanceSubtype',
+            'assistanceRecommendations.assistanceDetail',
+            'assistanceRecommendations.modeOfAssistance',
+            'assistanceRecommendations.referralInstitution',
+            'socialWorker',
+            'approvingOfficer',
+        ])->findOrFail($id);
+
+        if (! in_array($application->status, ['approved', 'released'], true)) {
+            abort(403, 'Guarantee Letter is available only for approved or released applications.');
+        }
+
+        if (strtolower((string) ($application->modeOfAssistance?->name ?? $application->mode_of_assistance)) !== 'guarantee letter') {
+            abort(403, 'Guarantee Letter printing is only available when the mode of assistance is Guarantee Letter.');
+        }
+
+        return view('social-worker.guarantee-letter', compact('application'));
+    }
+
     protected function validateModeAmountRule(Application $application, float $amount, string $field): void
     {
-        $minimumAmount = $application->modeOfAssistance?->minimum_amount !== null
-            ? (float) $application->modeOfAssistance->minimum_amount
+        $this->validateRecommendationModeAmountRule($application->modeOfAssistance, $amount, $field);
+    }
+
+    protected function validateRecommendationModeAmountRule(?ModeOfAssistance $mode, float $amount, string $field): void
+    {
+        $minimumAmount = $mode?->minimum_amount !== null
+            ? (float) $mode->minimum_amount
             : null;
-        $maximumAmount = $application->modeOfAssistance?->maximum_amount !== null
-            ? (float) $application->modeOfAssistance->maximum_amount
+        $maximumAmount = $mode?->maximum_amount !== null
+            ? (float) $mode->maximum_amount
             : null;
 
         if ($minimumAmount !== null && $amount < $minimumAmount) {
@@ -208,6 +327,13 @@ class ApprovingOfficerController extends Controller
             throw ValidationException::withMessages([
                 $field => 'This mode of assistance only allows amounts up to PHP '.number_format($maximumAmount, 2).'.',
             ]);
+        }
+    }
+
+    protected function ensureRecommendationCanBeEdited(Application $application): void
+    {
+        if ($application->status !== 'for_approval') {
+            abort(403, 'Recommendations can only be changed while the application is pending approval.');
         }
     }
 

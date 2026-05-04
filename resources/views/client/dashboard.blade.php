@@ -137,35 +137,78 @@
                     @endif
                 </div>
             @else
-                <div class="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-5">
-                    @foreach($steps as $key => $label)
-                        @php
-                            $stepIndex = array_search($key, $statusOrder, true);
-                            $done = $stepIndex <= $currentIndex;
-                            $current = $stepIndex === $currentIndex;
-                        @endphp
+                <div class="mt-8">
+                    <div class="relative hidden px-3 sm:block">
+                        <div class="absolute left-[9%] right-[9%] top-5 h-1 rounded-full bg-slate-200"></div>
+                        @if($currentIndex > 0)
+                            @php
+                                $progressWidth = ((100 / (count($statusOrder) - 1)) * $currentIndex);
+                                $activeRailWidth = 82 * ($progressWidth / 100);
+                            @endphp
+                            <div class="absolute left-[9%] top-5 h-1 rounded-full bg-[#184f73]" style="width: {{ $activeRailWidth }}%;"></div>
+                        @endif
 
-                        <div class="relative text-center">
-                            @if($stepIndex < count($statusOrder) - 1)
-                                <div class="absolute left-1/2 top-5 hidden h-1 w-full translate-x-1/2 rounded-full sm:block {{ $stepIndex < $currentIndex ? 'bg-[#184f73]' : 'bg-slate-200' }}"></div>
-                            @endif
+                        <div class="relative grid grid-cols-5 gap-3">
+                            @foreach($steps as $key => $label)
+                                @php
+                                    $stepIndex = array_search($key, $statusOrder, true);
+                                    $done = $stepIndex <= $currentIndex;
+                                    $current = $stepIndex === $currentIndex;
+                                @endphp
 
-                            <div class="relative z-10 mx-auto flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold {{ $done ? 'bg-[#184f73] text-white shadow-lg shadow-sky-900/15' : 'bg-slate-200 text-slate-500' }}">
-                                @if($done && !$current)
-                                    &#10003;
-                                @else
-                                    {{ $stepIndex + 1 }}
-                                @endif
-                            </div>
+                                <div class="flex flex-col items-center text-center">
+                                    <div class="relative z-10 flex h-11 w-11 items-center justify-center rounded-full border-4 border-white text-sm font-bold {{ $done ? 'bg-[#184f73] text-white shadow-lg shadow-sky-900/15' : 'bg-slate-200 text-slate-500' }}">
+                                        @if($done && ! $current)
+                                            &#10003;
+                                        @else
+                                            {{ $stepIndex + 1 }}
+                                        @endif
+                                    </div>
 
-                            <p class="mt-3 text-sm font-semibold {{ $done ? 'text-sky-900' : 'text-slate-500' }}">
-                                {{ $label }}
-                            </p>
-                            @if($current)
-                                <p class="mt-1 text-xs font-medium text-sky-700">Current stage</p>
-                            @endif
+                                    <p class="mt-4 text-sm font-semibold leading-tight {{ $done ? 'text-sky-900' : 'text-slate-500' }}">
+                                        {{ $label }}
+                                    </p>
+
+                                    <div class="mt-2 min-h-[1.25rem]">
+                                        @if($current)
+                                            <span class="inline-flex items-center rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700">
+                                                Current
+                                            </span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
                         </div>
-                    @endforeach
+                    </div>
+
+                    <div class="space-y-4 sm:hidden">
+                        @foreach($steps as $key => $label)
+                            @php
+                                $stepIndex = array_search($key, $statusOrder, true);
+                                $done = $stepIndex <= $currentIndex;
+                                $current = $stepIndex === $currentIndex;
+                            @endphp
+
+                            <div class="flex items-start gap-4 rounded-2xl border px-4 py-4 {{ $current ? 'border-sky-200 bg-sky-50/70' : 'border-slate-200 bg-white' }}">
+                                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold {{ $done ? 'bg-[#184f73] text-white' : 'bg-slate-200 text-slate-500' }}">
+                                    @if($done && ! $current)
+                                        &#10003;
+                                    @else
+                                        {{ $stepIndex + 1 }}
+                                    @endif
+                                </div>
+
+                                <div class="min-w-0">
+                                    <p class="text-sm font-semibold {{ $done ? 'text-sky-900' : 'text-slate-500' }}">
+                                        {{ $label }}
+                                    </p>
+                                    @if($current)
+                                        <p class="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-sky-700">Current stage</p>
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             @endif
         </div>

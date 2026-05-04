@@ -250,7 +250,7 @@ class ClientDashboardController extends Controller
     {
         $application = $this->applicationQuery()->with([
             'client',
-            'beneficiary',
+            'beneficiary.relationshipData',
             'familyMembers',
             'documents',
             'assistanceType',
@@ -260,6 +260,11 @@ class ClientDashboardController extends Controller
             'frequencyBasisApplication',
             'modeOfAssistance',
             'serviceProvider',
+            'assistanceRecommendations.assistanceType',
+            'assistanceRecommendations.assistanceSubtype',
+            'assistanceRecommendations.assistanceDetail',
+            'assistanceRecommendations.modeOfAssistance',
+            'assistanceRecommendations.referralInstitution',
         ])->findOrFail($id);
 
         return view('client.application-details', compact('application'));

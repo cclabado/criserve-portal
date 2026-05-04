@@ -206,6 +206,18 @@ Route::middleware(['auth', 'role:approving_officer'])->group(function () {
     Route::get('/application/{id}', [App\Http\Controllers\ApprovingOfficerController::class, 'show'])
         ->name('approving.show');
 
+    Route::get('/application/{id}/certificate', [App\Http\Controllers\ApprovingOfficerController::class, 'certificate'])
+        ->name('approving.certificate');
+
+    Route::get('/application/{id}/guarantee-letter', [App\Http\Controllers\ApprovingOfficerController::class, 'guaranteeLetter'])
+        ->name('approving.guarantee-letter');
+
+    Route::post('/application/{applicationId}/recommendation/{recommendationId}', [App\Http\Controllers\ApprovingOfficerController::class, 'updateRecommendation'])
+        ->name('approving.recommendations.update');
+
+    Route::delete('/application/{applicationId}/recommendation/{recommendationId}', [App\Http\Controllers\ApprovingOfficerController::class, 'destroyRecommendation'])
+        ->name('approving.recommendations.destroy');
+
     Route::post('/application/{id}/approve', [App\Http\Controllers\ApprovingOfficerController::class, 'approve'])
         ->name('approving.approve');
 

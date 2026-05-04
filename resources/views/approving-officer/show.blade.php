@@ -7,6 +7,7 @@
     $totalRecommendedAmount = $application->assistanceRecommendations->isNotEmpty()
         ? $recommendationFinalAmount
         : (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
+    $activeTab = request('tab', 'client-info');
 
     $frequencyBadgeClasses = [
         'eligible' => 'bg-emerald-100 text-emerald-800 border border-emerald-200',
@@ -112,33 +113,45 @@
             </div>
         </div>
 
-        @if(in_array($application->status, ['approved', 'released'], true))
-            <a href="{{ route('socialworker.certificate', $application->id) }}"
-               target="_blank"
-               rel="noopener noreferrer"
-               class="inline-flex items-center justify-center rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700">
-                Print Certificate of Eligibility
-            </a>
-        @endif
+        <div class="flex flex-wrap gap-3">
+            @if(in_array($application->status, ['approved', 'released'], true)
+                && strtolower((string) ($application->modeOfAssistance?->name ?? $application->mode_of_assistance)) === 'guarantee letter')
+                <a href="{{ route('approving.guarantee-letter', $application->id) }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700">
+                    Print Guarantee Letter
+                </a>
+            @endif
+
+            @if(in_array($application->status, ['approved', 'released'], true))
+                <a href="{{ route('approving.certificate', $application->id) }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="inline-flex items-center justify-center rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700">
+                    Print Certificate of Eligibility
+                </a>
+            @endif
+        </div>
     </div>
 
     <div class="card">
         <div class="tabs" role="tablist" aria-label="Approving officer review sections">
-            <button type="button" class="tab-button is-active" data-tab-target="tab-client-info" role="tab" aria-selected="true">
+            <button type="button" class="tab-button {{ $activeTab === 'client-info' ? 'is-active' : '' }}" data-tab-target="tab-client-info" role="tab" aria-selected="{{ $activeTab === 'client-info' ? 'true' : 'false' }}">
                 Client / Beneficiary
             </button>
-            <button type="button" class="tab-button" data-tab-target="tab-initial-assessment" role="tab" aria-selected="false">
+            <button type="button" class="tab-button {{ $activeTab === 'initial-assessment' ? 'is-active' : '' }}" data-tab-target="tab-initial-assessment" role="tab" aria-selected="{{ $activeTab === 'initial-assessment' ? 'true' : 'false' }}">
                 Initial Assessment
             </button>
-            <button type="button" class="tab-button" data-tab-target="tab-intake" role="tab" aria-selected="false">
+            <button type="button" class="tab-button {{ $activeTab === 'intake' ? 'is-active' : '' }}" data-tab-target="tab-intake" role="tab" aria-selected="{{ $activeTab === 'intake' ? 'true' : 'false' }}">
                 Social Worker's Intake
             </button>
-            <button type="button" class="tab-button" data-tab-target="tab-recommendation" role="tab" aria-selected="false">
+            <button type="button" class="tab-button {{ $activeTab === 'recommendation' ? 'is-active' : '' }}" data-tab-target="tab-recommendation" role="tab" aria-selected="{{ $activeTab === 'recommendation' ? 'true' : 'false' }}">
                 Recommendation
             </button>
         </div>
 
-        <div id="tab-client-info" class="tab-panel is-active" role="tabpanel">
+        <div id="tab-client-info" class="tab-panel {{ $activeTab === 'client-info' ? 'is-active' : '' }}" role="tabpanel" @if($activeTab !== 'client-info') hidden @endif>
             <div class="section-card">
                 <h2 class="title">Client Information</h2>
 
@@ -221,7 +234,7 @@
 
         </div>
 
-        <div id="tab-initial-assessment" class="tab-panel" role="tabpanel" hidden>
+        <div id="tab-initial-assessment" class="tab-panel {{ $activeTab === 'initial-assessment' ? 'is-active' : '' }}" role="tabpanel" @if($activeTab !== 'initial-assessment') hidden @endif>
             <div class="section-card">
                 <h2 class="title">Assessment Details</h2>
 
@@ -290,7 +303,7 @@
             </div>
         </div>
 
-        <div id="tab-intake" class="tab-panel" role="tabpanel" hidden>
+        <div id="tab-intake" class="tab-panel {{ $activeTab === 'intake' ? 'is-active' : '' }}" role="tabpanel" @if($activeTab !== 'intake') hidden @endif>
             <div class="section-card">
                 <h2 class="title">General Intake Sheet</h2>
 
@@ -477,7 +490,7 @@
 
         </div>
 
-        <div id="tab-recommendation" class="tab-panel" role="tabpanel" hidden>
+        <div id="tab-recommendation" class="tab-panel {{ $activeTab === 'recommendation' ? 'is-active' : '' }}" role="tabpanel" @if($activeTab !== 'recommendation') hidden @endif>
             <div class="section-card">
                 <h2 class="title">Narrative Assessment</h2>
 
@@ -496,7 +509,15 @@
 
             @if($application->assistanceRecommendations->isNotEmpty())
                 <div class="section-card">
-                    <h2 class="title">Assistance Provided</h2>
+                    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <h2 class="title !mb-0">Assistance Provided</h2>
+                        <div class="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Current Total Final Amount</p>
+                            <p class="mt-1 text-xl font-bold" data-recommendation-total-display>
+                                PHP {{ number_format((float) $totalRecommendedAmount, 2) }}
+                            </p>
+                        </div>
+                    </div>
 
                     <div class="mt-4 space-y-3">
                         @foreach($application->assistanceRecommendations as $recommendation)
@@ -527,12 +548,47 @@
                                         @endif
                                     </div>
 
-                                    <div class="text-left md:text-right">
-                                        <p class="text-xs text-gray-500">Amount</p>
-                                        <p class="text-lg font-bold text-[#234E70]">
-                                            PHP {{ number_format((float) $recommendation->final_amount, 2) }}
-                                        </p>
-                                    </div>
+                                    @if(!($readOnly ?? false) && $application->status === 'for_approval')
+                                        <div class="w-full md:w-auto md:min-w-[260px]">
+                                            <form method="POST"
+                                                  action="{{ route('approving.recommendations.update', ['applicationId' => $application->id, 'recommendationId' => $recommendation->id]) }}"
+                                                  class="space-y-3">
+                                                @csrf
+                                                <div class="text-left md:text-right">
+                                                    <label class="text-xs text-gray-500">Amount</label>
+                                                    <input type="number"
+                                                           step="0.01"
+                                                           min="0"
+                                                           name="final_amount"
+                                                           class="input mt-1 recommendation-amount-input md:text-right"
+                                                           value="{{ old('final_amount', (float) $recommendation->final_amount) }}">
+                                                </div>
+                                                <div class="flex gap-2 md:justify-end">
+                                                    <button type="submit"
+                                                            class="rounded-lg bg-[#234E70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d405c]">
+                                                        Update
+                                                    </button>
+                                                </div>
+                                            </form>
+                                                    <form method="POST"
+                                                          action="{{ route('approving.recommendations.destroy', ['applicationId' => $application->id, 'recommendationId' => $recommendation->id]) }}"
+                                                          onsubmit="return confirm('Remove this assistance item?');">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit"
+                                                                class="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50">
+                                                            Remove
+                                                        </button>
+                                                    </form>
+                                        </div>
+                                    @else
+                                        <div class="text-left md:text-right">
+                                            <p class="text-xs text-gray-500">Amount</p>
+                                            <p class="text-lg font-bold text-[#234E70]">
+                                                PHP {{ number_format((float) $recommendation->final_amount, 2) }}
+                                            </p>
+                                        </div>
+                                    @endif
                                 </div>
 
                                 @if($recommendation->notes)
@@ -559,17 +615,23 @@
                                 <p class="mt-1 text-sm text-emerald-800">Confirm the final approved amount for release.</p>
                             </div>
 
-                            <div>
-                                <label class="label">Approved Amount</label>
-                                <input type="number"
-                                       step="0.01"
-                                       name="final_amount"
-                                       class="input w-full"
-                                       value="{{ $totalRecommendedAmount }}">
-                                <p class="mt-2 text-xs text-emerald-800">
-                                    Amount limits follow the selected mode of assistance setting.
-                                </p>
-                            </div>
+                             <div>
+                                 <label class="label">Approved Amount</label>
+                                 <input type="number"
+                                        step="0.01"
+                                        name="final_amount"
+                                        class="input w-full"
+                                        value="{{ $totalRecommendedAmount }}"
+                                        data-approved-final-amount
+                                        @if($application->assistanceRecommendations->isNotEmpty()) readonly @endif>
+                                 <p class="mt-2 text-xs text-emerald-800">
+                                     @if($application->assistanceRecommendations->isNotEmpty())
+                                         This amount is automatically calculated from the assistance items above.
+                                     @else
+                                         Amount limits follow the selected mode of assistance setting.
+                                     @endif
+                                 </p>
+                             </div>
 
                             <button type="submit"
                                     class="w-full rounded-lg bg-green-600 px-5 py-3 text-white hover:bg-green-700">
@@ -843,10 +905,14 @@
 document.addEventListener('DOMContentLoaded', () => {
     const buttons = Array.from(document.querySelectorAll('.tab-button'));
     const panels = Array.from(document.querySelectorAll('.tab-panel'));
+    const recommendationAmountInputs = Array.from(document.querySelectorAll('.recommendation-amount-input'));
+    const recommendationTotalDisplay = document.querySelector('[data-recommendation-total-display]');
+    const approvedFinalAmountInput = document.querySelector('[data-approved-final-amount]');
     const familyNetworkModal = document.getElementById('familyNetworkModal');
     const openFamilyNetworkModalBtn = document.getElementById('openFamilyNetworkModalBtn');
     const closeFamilyNetworkModalBtn = document.getElementById('closeFamilyNetworkModalBtn');
     const familyNetworkModalBackdrop = document.getElementById('familyNetworkModalBackdrop');
+    const formatPhp = (value) => `PHP ${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const activateTab = (targetId) => {
         buttons.forEach((button) => {
@@ -860,11 +926,40 @@ document.addEventListener('DOMContentLoaded', () => {
             panel.classList.toggle('is-active', isActive);
             panel.hidden = !isActive;
         });
+
+        const nextTab = targetId.replace('tab-', '');
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', nextTab);
+        window.history.replaceState({}, '', url);
     };
 
     buttons.forEach((button) => {
         button.addEventListener('click', () => activateTab(button.dataset.tabTarget));
     });
+
+    if (recommendationAmountInputs.length) {
+        const syncRecommendationTotals = () => {
+            const total = recommendationAmountInputs.reduce((sum, input) => {
+                const value = parseFloat(input.value);
+
+                return sum + (Number.isFinite(value) ? value : 0);
+            }, 0);
+
+            if (recommendationTotalDisplay) {
+                recommendationTotalDisplay.textContent = formatPhp(total);
+            }
+
+            if (approvedFinalAmountInput) {
+                approvedFinalAmountInput.value = total.toFixed(2);
+            }
+        };
+
+        recommendationAmountInputs.forEach((input) => {
+            input.addEventListener('input', syncRecommendationTotals);
+        });
+
+        syncRecommendationTotals();
+    }
 
     if (familyNetworkModal && openFamilyNetworkModalBtn) {
         const openModal = () => {
