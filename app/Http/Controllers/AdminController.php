@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use App\Models\Application;
 use App\Models\AssistanceDetail;
 use App\Models\AssistanceDocumentRequirement;
 use App\Models\AssistanceFrequencyRule;
 use App\Models\AssistanceSubtype;
 use App\Models\AssistanceType;
+use App\Models\Client;
 use App\Models\ModeOfAssistance;
+use App\Models\Position;
 use App\Models\Relationship;
 use App\Models\ReferralInstitution;
 use App\Models\ServicePoint;
@@ -20,6 +23,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AdminController extends Controller
@@ -50,6 +54,66 @@ class AdminController extends Controller
         return view('admin.dashboard', compact(
             'stats',
             'applications',
+        ));
+    }
+
+    public function reports(Request $request): View|StreamedResponse
+    {
+        $filters = $this->resolveReportFilters($request);
+        $query = $this->buildReportQuery($filters);
+
+        if ($request->input('format') === 'csv') {
+            return $this->downloadReportCsv(clone $query, $filters);
+        }
+
+        $applications = (clone $query)
+            ->with(['client', 'assistanceType', 'assistanceSubtype', 'modeOfAssistance', 'socialWorker', 'approvingOfficer'])
+            ->latest('created_at')
+            ->paginate(20)
+            ->withQueryString();
+
+        $summary = [
+            'total_applications' => (clone $query)->count(),
+            'approved' => (clone $query)->where('status', 'approved')->count(),
+            'denied' => (clone $query)->where('status', 'denied')->count(),
+            'released' => (clone $query)->where('status', 'released')->count(),
+            'for_approval' => (clone $query)->where('status', 'for_approval')->count(),
+            'total_amount' => round((float) ((clone $query)->sum('final_amount') ?: 0), 2),
+            'recommended_amount' => round((float) ((clone $query)->sum('recommended_amount') ?: 0), 2),
+            'amount_needed' => round((float) ((clone $query)->sum('amount_needed') ?: 0), 2),
+        ];
+
+        $statusBreakdown = (clone $query)
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->orderByDesc('total')
+            ->pluck('total', 'status');
+
+        $typeBreakdown = (clone $query)
+            ->leftJoin('assistance_types', 'assistance_types.id', '=', 'applications.assistance_type_id')
+            ->selectRaw("COALESCE(assistance_types.name, 'Unassigned') as label, COUNT(*) as total")
+            ->groupBy('label')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->pluck('total', 'label');
+
+        $sectorBreakdown = (clone $query)
+            ->selectRaw("COALESCE(NULLIF(client_sector, ''), 'Unassigned') as label, COUNT(*) as total")
+            ->groupBy('label')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->pluck('total', 'label');
+
+        $options = $this->reportFilterOptions();
+
+        return view('admin.reports', compact(
+            'applications',
+            'filters',
+            'summary',
+            'statusBreakdown',
+            'typeBreakdown',
+            'sectorBreakdown',
+            'options',
         ));
     }
 
@@ -184,6 +248,7 @@ class AdminController extends Controller
     public function users(Request $request): View
     {
         $users = User::query()
+            ->with('position')
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = $request->string('search')->trim();
 
@@ -205,6 +270,7 @@ class AdminController extends Controller
         return view('admin.users', [
             'users' => $users,
             'roles' => $roles,
+            'positions' => Position::where('is_active', true)->orderBy('name')->get(),
             'serviceProviders' => ServiceProvider::where('is_active', true)->orderBy('name')->get(),
             'filters' => [
                 'search' => (string) $request->input('search', ''),
@@ -251,16 +317,39 @@ class AdminController extends Controller
             'civil_status' => ['nullable', 'string', 'max:255'],
             'role' => ['required', 'in:'.implode(',', $this->roles)],
             'service_provider_id' => ['nullable', 'exists:service_providers,id'],
+            'position_id' => ['nullable', Rule::exists('positions', 'id')->where(fn ($query) => $query->where('is_active', true))],
+            'license_number' => ['nullable', 'string', 'max:255'],
+            'approval_min_amount' => ['nullable', 'numeric', 'min:0'],
+            'approval_max_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         if ($redirect = $this->guardRoleChange($request->user(), $user, $validated['role'])) {
             return $redirect;
         }
 
+        $this->validateStaffPositionDetails($validated);
+        $this->validateApprovingOfficerRange($validated);
+
+        $position = ! empty($validated['position_id'])
+            ? Position::query()->find((int) $validated['position_id'])
+            : null;
+
         $user->update([
             ...$validated,
             'service_provider_id' => $validated['role'] === 'service_provider'
                 ? ($validated['service_provider_id'] ?? null)
+                : null,
+            'position_id' => in_array($validated['role'], ['social_worker', 'approving_officer'], true)
+                ? ($validated['position_id'] ?? null)
+                : null,
+            'license_number' => $position?->requires_license_number
+                ? (filled($validated['license_number'] ?? null) ? trim((string) $validated['license_number']) : null)
+                : null,
+            'approval_min_amount' => $validated['role'] === 'approving_officer'
+                ? ($this->normalizeMoneyValue($validated['approval_min_amount'] ?? null) ?? 0.0)
+                : null,
+            'approval_max_amount' => $validated['role'] === 'approving_officer'
+                ? $this->normalizeMoneyValue($validated['approval_max_amount'] ?? null)
                 : null,
             'name' => trim(implode(' ', array_filter([
                 $validated['first_name'],
@@ -292,6 +381,52 @@ class AdminController extends Controller
         return null;
     }
 
+    protected function validateApprovingOfficerRange(array $validated): void
+    {
+        if (($validated['role'] ?? null) !== 'approving_officer') {
+            return;
+        }
+
+        $minimumAmount = $this->normalizeMoneyValue($validated['approval_min_amount'] ?? null) ?? 0.0;
+        $maximumAmount = $this->normalizeMoneyValue($validated['approval_max_amount'] ?? null);
+
+        if ($maximumAmount !== null && $maximumAmount < $minimumAmount) {
+            throw ValidationException::withMessages([
+                'approval_max_amount' => 'Maximum approval amount must be greater than or equal to the minimum approval amount.',
+            ]);
+        }
+    }
+
+    protected function normalizeMoneyValue(mixed $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return round((float) $value, 2);
+    }
+
+    protected function validateStaffPositionDetails(array $validated): void
+    {
+        if (! in_array($validated['role'] ?? null, ['social_worker', 'approving_officer'], true)) {
+            return;
+        }
+
+        if (empty($validated['position_id'])) {
+            throw ValidationException::withMessages([
+                'position_id' => 'Position is required for social workers and approving officers.',
+            ]);
+        }
+
+        $position = Position::query()->find((int) $validated['position_id']);
+
+        if ($position?->requires_license_number && blank($validated['license_number'] ?? null)) {
+            throw ValidationException::withMessages([
+                'license_number' => 'License number is required for the selected position.',
+            ]);
+        }
+    }
+
     public function storeAssistanceType(Request $request): RedirectResponse
     {
         return $this->storeLibraryRecord($request, 'assistance-types');
@@ -315,6 +450,11 @@ class AdminController extends Controller
     public function storeRelationship(Request $request): RedirectResponse
     {
         return $this->storeLibraryRecord($request, 'relationships');
+    }
+
+    public function storePosition(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'positions');
     }
 
     public function storeReferralInstitution(Request $request): RedirectResponse
@@ -426,6 +566,7 @@ class AdminController extends Controller
                 'name' => ['required', 'string', 'max:255', Rule::unique('service_points', 'name')->ignore($ignoreId)],
             ]),
             'service-providers' => $this->validateServiceProviderPayload($request, $ignoreId),
+            'positions' => $this->validatePositionPayload($request, $ignoreId),
             'relationships' => $request->validate([
                 'name' => ['required', 'string', 'max:255', Rule::unique('relationships', 'name')->ignore($ignoreId)],
             ]),
@@ -623,6 +764,41 @@ class AdminController extends Controller
         ];
     }
 
+    protected function validatePositionPayload(Request $request, ?int $ignoreId = null): array
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'position_code' => ['nullable', 'string', 'max:255'],
+            'salary_grade' => ['nullable', 'integer', 'min:1', 'max:33'],
+            'requires_license_number' => ['nullable', 'boolean'],
+        ]);
+
+        $name = trim((string) $validated['name']);
+        $positionCode = filled($validated['position_code'] ?? null)
+            ? strtoupper(trim((string) $validated['position_code']))
+            : null;
+
+        $query = Position::query()
+            ->whereRaw('LOWER(name) = ?', [strtolower($name)]);
+
+        if ($ignoreId) {
+            $query->whereKeyNot($ignoreId);
+        }
+
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'name' => 'This position already exists.',
+            ]);
+        }
+
+        return [
+            'name' => $name,
+            'position_code' => $positionCode,
+            'salary_grade' => ! empty($validated['salary_grade']) ? (int) $validated['salary_grade'] : null,
+            'requires_license_number' => (bool) ($validated['requires_license_number'] ?? false),
+        ];
+    }
+
     protected function validateFrequencyRulePayload(Request $request, ?int $ignoreId = null): array
     {
         $validated = $request->validate([
@@ -697,6 +873,216 @@ class AdminController extends Controller
         ];
     }
 
+    protected function resolveReportFilters(Request $request): array
+    {
+        $validated = $request->validate([
+            'report_type' => ['nullable', Rule::in(['daily', 'monthly', 'yearly', 'custom'])],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+            'status' => ['nullable', 'string', 'max:255'],
+            'assistance_type_id' => ['nullable', 'exists:assistance_types,id'],
+            'assistance_subtype_id' => ['nullable', 'exists:assistance_subtypes,id'],
+            'mode_of_assistance_id' => ['nullable', 'exists:mode_of_assistances,id'],
+            'service_provider_id' => ['nullable', 'exists:service_providers,id'],
+            'social_worker_id' => ['nullable', 'exists:users,id'],
+            'approving_officer_id' => ['nullable', 'exists:users,id'],
+            'service_point' => ['nullable', 'string', 'max:255'],
+            'client_sector' => ['nullable', 'string', 'max:255'],
+            'client_sub_category' => ['nullable', 'string', 'max:255'],
+            'sex' => ['nullable', 'string', 'max:255'],
+            'min_amount' => ['nullable', 'numeric', 'min:0'],
+            'max_amount' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $reportType = $validated['report_type'] ?? 'daily';
+        $today = now()->startOfDay();
+
+        [$dateFrom, $dateTo] = match ($reportType) {
+            'monthly' => [$today->copy()->startOfMonth(), $today->copy()->endOfMonth()],
+            'yearly' => [$today->copy()->startOfYear(), $today->copy()->endOfYear()],
+            'custom' => [
+                ! empty($validated['date_from']) ? Carbon::parse($validated['date_from'])->startOfDay() : null,
+                ! empty($validated['date_to']) ? Carbon::parse($validated['date_to'])->endOfDay() : null,
+            ],
+            default => [$today->copy()->startOfDay(), $today->copy()->endOfDay()],
+        };
+
+        if ($dateFrom && $dateTo && $dateTo->lt($dateFrom)) {
+            throw ValidationException::withMessages([
+                'date_to' => 'Date to must be on or after date from.',
+            ]);
+        }
+
+        return [
+            'report_type' => $reportType,
+            'date_from' => $dateFrom?->toDateString(),
+            'date_to' => $dateTo?->toDateString(),
+            'status' => $validated['status'] ?? 'all',
+            'assistance_type_id' => $validated['assistance_type_id'] ?? null,
+            'assistance_subtype_id' => $validated['assistance_subtype_id'] ?? null,
+            'mode_of_assistance_id' => $validated['mode_of_assistance_id'] ?? null,
+            'service_provider_id' => $validated['service_provider_id'] ?? null,
+            'social_worker_id' => $validated['social_worker_id'] ?? null,
+            'approving_officer_id' => $validated['approving_officer_id'] ?? null,
+            'service_point' => $validated['service_point'] ?? 'all',
+            'client_sector' => $validated['client_sector'] ?? 'all',
+            'client_sub_category' => $validated['client_sub_category'] ?? 'all',
+            'sex' => $validated['sex'] ?? 'all',
+            'min_amount' => isset($validated['min_amount']) ? (float) $validated['min_amount'] : null,
+            'max_amount' => isset($validated['max_amount']) ? (float) $validated['max_amount'] : null,
+        ];
+    }
+
+    protected function buildReportQuery(array $filters)
+    {
+        $query = Application::query();
+
+        if (! empty($filters['date_from'])) {
+            $query->whereDate('applications.created_at', '>=', $filters['date_from']);
+        }
+
+        if (! empty($filters['date_to'])) {
+            $query->whereDate('applications.created_at', '<=', $filters['date_to']);
+        }
+
+        $query
+            ->when(($filters['status'] ?? 'all') !== 'all', fn ($builder) => $builder->where('applications.status', $filters['status']))
+            ->when(! empty($filters['assistance_type_id']), fn ($builder) => $builder->where('applications.assistance_type_id', $filters['assistance_type_id']))
+            ->when(! empty($filters['assistance_subtype_id']), fn ($builder) => $builder->where('applications.assistance_subtype_id', $filters['assistance_subtype_id']))
+            ->when(! empty($filters['mode_of_assistance_id']), fn ($builder) => $builder->where('applications.mode_of_assistance_id', $filters['mode_of_assistance_id']))
+            ->when(! empty($filters['service_provider_id']), fn ($builder) => $builder->where('applications.service_provider_id', $filters['service_provider_id']))
+            ->when(! empty($filters['social_worker_id']), fn ($builder) => $builder->where('applications.social_worker_id', $filters['social_worker_id']))
+            ->when(! empty($filters['approving_officer_id']), fn ($builder) => $builder->where('applications.approving_officer_id', $filters['approving_officer_id']))
+            ->when(($filters['service_point'] ?? 'all') !== 'all', fn ($builder) => $builder->where('applications.gis_visit_type', $filters['service_point']))
+            ->when(($filters['client_sector'] ?? 'all') !== 'all', fn ($builder) => $builder->where('applications.client_sector', $filters['client_sector']))
+            ->when(($filters['client_sub_category'] ?? 'all') !== 'all', fn ($builder) => $builder->where('applications.client_sub_category', $filters['client_sub_category']))
+            ->when(($filters['sex'] ?? 'all') !== 'all', fn ($builder) => $builder->whereHas('client', fn ($clientQuery) => $clientQuery->where('sex', $filters['sex'])))
+            ->when($filters['min_amount'] !== null, fn ($builder) => $builder->where(function ($amountQuery) use ($filters) {
+                $amountQuery->where('applications.final_amount', '>=', $filters['min_amount'])
+                    ->orWhere(function ($fallbackQuery) use ($filters) {
+                        $fallbackQuery->whereNull('applications.final_amount')
+                            ->where('applications.recommended_amount', '>=', $filters['min_amount']);
+                    })
+                    ->orWhere(function ($fallbackQuery) use ($filters) {
+                        $fallbackQuery->whereNull('applications.final_amount')
+                            ->whereNull('applications.recommended_amount')
+                            ->where('applications.amount_needed', '>=', $filters['min_amount']);
+                    });
+            }))
+            ->when($filters['max_amount'] !== null, fn ($builder) => $builder->where(function ($amountQuery) use ($filters) {
+                $amountQuery->where('applications.final_amount', '<=', $filters['max_amount'])
+                    ->orWhere(function ($fallbackQuery) use ($filters) {
+                        $fallbackQuery->whereNull('applications.final_amount')
+                            ->where('applications.recommended_amount', '<=', $filters['max_amount']);
+                    })
+                    ->orWhere(function ($fallbackQuery) use ($filters) {
+                        $fallbackQuery->whereNull('applications.final_amount')
+                            ->whereNull('applications.recommended_amount')
+                            ->where('applications.amount_needed', '<=', $filters['max_amount']);
+                    });
+            }));
+
+        return $query;
+    }
+
+    protected function reportFilterOptions(): array
+    {
+        return [
+            'statuses' => Application::query()->select('status')->distinct()->orderBy('status')->pluck('status'),
+            'assistanceTypes' => AssistanceType::where('is_active', true)->orderBy('name')->get(),
+            'assistanceSubtypes' => AssistanceSubtype::where('is_active', true)->orderBy('name')->get(),
+            'modesOfAssistance' => ModeOfAssistance::where('is_active', true)->orderBy('name')->get(),
+            'serviceProviders' => ServiceProvider::where('is_active', true)->orderBy('name')->get(),
+            'socialWorkers' => User::where('role', 'social_worker')->orderBy('name')->get(),
+            'approvingOfficers' => User::where('role', 'approving_officer')->orderBy('name')->get(),
+            'servicePoints' => Application::query()
+                ->whereNotNull('gis_visit_type')
+                ->where('gis_visit_type', '!=', '')
+                ->select('gis_visit_type')
+                ->distinct()
+                ->orderBy('gis_visit_type')
+                ->pluck('gis_visit_type'),
+            'clientSectors' => Application::query()
+                ->whereNotNull('client_sector')
+                ->where('client_sector', '!=', '')
+                ->select('client_sector')
+                ->distinct()
+                ->orderBy('client_sector')
+                ->pluck('client_sector'),
+            'clientSubCategories' => Application::query()
+                ->whereNotNull('client_sub_category')
+                ->where('client_sub_category', '!=', '')
+                ->select('client_sub_category')
+                ->distinct()
+                ->orderBy('client_sub_category')
+                ->pluck('client_sub_category'),
+            'sexes' => Client::query()
+                ->whereNotNull('sex')
+                ->where('sex', '!=', '')
+                ->select('sex')
+                ->distinct()
+                ->orderBy('sex')
+                ->pluck('sex'),
+        ];
+    }
+
+    protected function downloadReportCsv($query, array $filters): StreamedResponse
+    {
+        $filename = 'admin-report-'.$filters['report_type'].'-'.now()->format('Ymd-His').'.csv';
+
+        return response()->streamDownload(function () use ($query) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'Reference No',
+                'Created Date',
+                'Client',
+                'Sex',
+                'Status',
+                'Assistance Type',
+                'Assistance Subtype',
+                'Mode of Assistance',
+                'Service Point',
+                'Client Sector',
+                'Client Sub Category',
+                'Amount Needed',
+                'Recommended Amount',
+                'Final Amount',
+                'Social Worker',
+                'Approving Officer',
+            ]);
+
+            $query->with(['client', 'assistanceType', 'assistanceSubtype', 'modeOfAssistance', 'socialWorker', 'approvingOfficer'])
+                ->orderBy('created_at')
+                ->chunk(200, function ($applications) use ($handle) {
+                    foreach ($applications as $application) {
+                        fputcsv($handle, [
+                            $application->reference_no,
+                            optional($application->created_at)->format('Y-m-d H:i:s'),
+                            trim(($application->client?->first_name ?? '').' '.($application->client?->last_name ?? '')),
+                            $application->client?->sex,
+                            $application->status,
+                            $application->assistanceType?->name,
+                            $application->assistanceSubtype?->name,
+                            $application->modeOfAssistance?->name ?? $application->mode_of_assistance,
+                            $application->gis_visit_type,
+                            $application->client_sector,
+                            $application->client_sub_category,
+                            $application->amount_needed,
+                            $application->recommended_amount,
+                            $application->final_amount,
+                            $application->socialWorker?->name,
+                            $application->approvingOfficer?->name,
+                        ]);
+                    }
+                });
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
     protected function libraryDefinitions(): array
     {
         return [
@@ -769,6 +1155,16 @@ class AdminController extends Controller
                 'search_columns' => ['name', 'addressee', 'email', 'contact_number', 'address'],
                 'with' => ['accounts'],
                 'icon' => 'local_hospital',
+            ],
+            'positions' => [
+                'title' => 'Positions',
+                'singular' => 'Position',
+                'description' => 'Manage plantilla-style government position titles assigned to social workers, approving officers, and other staff accounts.',
+                'model' => Position::class,
+                'order_by' => 'name',
+                'search_columns' => ['name', 'position_code'],
+                'with' => [],
+                'icon' => 'badge',
             ],
             'relationships' => [
                 'title' => 'Relationships',

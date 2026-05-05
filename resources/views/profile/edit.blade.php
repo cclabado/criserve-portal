@@ -16,7 +16,7 @@
 
     <section class="profile-card">
         <div class="max-w-3xl">
-            @include('profile.partials.update-profile-information-form')
+            @include('profile.partials.update-profile-information-form', ['positions' => $positions])
         </div>
     </section>
 

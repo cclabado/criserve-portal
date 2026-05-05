@@ -78,6 +78,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
 
     Route::get('/admin/dashboard', [AdminController::class, 'dashboard'])
         ->name('admin.dashboard');
+    Route::get('/admin/reports', [AdminController::class, 'reports'])
+        ->name('admin.reports');
     Route::get('/admin/libraries', [AdminController::class, 'libraries'])
         ->name('admin.libraries');
     Route::get('/admin/libraries/{library}', [AdminController::class, 'showLibrary'])
@@ -108,6 +110,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.libraries.service-points.store');
     Route::post('/admin/libraries/service-providers', [AdminController::class, 'storeServiceProvider'])
         ->name('admin.libraries.service-providers.store');
+    Route::post('/admin/libraries/positions', [AdminController::class, 'storePosition'])
+        ->name('admin.libraries.positions.store');
     Route::post('/admin/libraries/relationships', [AdminController::class, 'storeRelationship'])
         ->name('admin.libraries.relationships.store');
     Route::post('/admin/libraries/referral-institutions', [AdminController::class, 'storeReferralInstitution'])

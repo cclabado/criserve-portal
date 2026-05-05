@@ -242,5 +242,24 @@ class Application extends Model
         $this->final_amount = $this->recommendationFinalAmountTotal();
         $this->save();
     }
+
+    public function approvalRoutingAmount(): float
+    {
+        $this->loadMissing('assistanceRecommendations');
+
+        if ($this->assistanceRecommendations->isNotEmpty()) {
+            return $this->recommendationFinalAmountTotal();
+        }
+
+        foreach (['final_amount', 'recommended_amount', 'amount_needed'] as $field) {
+            $amount = $this->{$field};
+
+            if ($amount !== null) {
+                return (float) $amount;
+            }
+        }
+
+        return 0.0;
+    }
 }
     

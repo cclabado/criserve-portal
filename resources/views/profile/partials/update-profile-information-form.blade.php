@@ -1,4 +1,20 @@
-<section>
+<section
+    x-data="{
+        role: @js($user->role),
+        selectedPositionId: @js((string) old('position_id', $user->position_id ?? '')),
+        positions: @js(($positions ?? collect())->mapWithKeys(fn ($position) => [
+            (string) $position->id => [
+                'requires_license_number' => (bool) $position->requires_license_number,
+            ],
+        ])),
+        get isStaffRole() {
+            return ['social_worker', 'approving_officer'].includes(this.role);
+        },
+        get requiresLicense() {
+            return Boolean(this.positions?.[this.selectedPositionId]?.requires_license_number);
+        },
+    }"
+>
     <header>
         <h2 class="text-lg font-medium text-gray-900">
             {{ __('Profile Information') }}
@@ -99,6 +115,37 @@
                     <option value="Widowed" @selected(old('civil_status', $user->civil_status) === 'Widowed')>Widowed</option>
                 </select>
                 <x-input-error class="mt-2" :messages="$errors->get('civil_status')" />
+            </div>
+        </div>
+
+        <div x-show="isStaffRole" x-cloak class="grid gap-4 md:grid-cols-2">
+            <div>
+                <x-input-label for="position_id" :value="__('Position')" />
+                <select id="position_id"
+                        name="position_id"
+                        class="input mt-1 block w-full"
+                        x-model="selectedPositionId">
+                    <option value="">Select position</option>
+                    @foreach(($positions ?? collect()) as $position)
+                        <option value="{{ $position->id }}" @selected((string) old('position_id', $user->position_id ?? '') === (string) $position->id)>
+                            {{ $position->name }}
+                            @if($position->salary_grade)
+                                (SG {{ $position->salary_grade }})
+                            @endif
+                        </option>
+                    @endforeach
+                </select>
+                <x-input-error class="mt-2" :messages="$errors->get('position_id')" />
+            </div>
+
+            <div x-show="requiresLicense" x-cloak>
+                <x-input-label for="license_number" :value="__('License Number')" />
+                <x-text-input id="license_number"
+                              name="license_number"
+                              type="text"
+                              class="mt-1 block w-full"
+                              :value="old('license_number', $user->license_number)" />
+                <x-input-error class="mt-2" :messages="$errors->get('license_number')" />
             </div>
         </div>
 

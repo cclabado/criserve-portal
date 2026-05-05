@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Position;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -39,6 +40,13 @@ class AdminUserManagementTest extends TestCase
     public function test_admin_can_update_user_details(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
+        $position = Position::create([
+            'name' => 'Administrative Officer I',
+            'position_code' => 'ADO1',
+            'salary_grade' => 11,
+            'requires_license_number' => false,
+            'is_active' => true,
+        ]);
         $user = User::factory()->create([
             'role' => 'client',
             'first_name' => 'Old',
@@ -56,6 +64,7 @@ class AdminUserManagementTest extends TestCase
             'sex' => 'Female',
             'civil_status' => 'Single',
             'role' => 'approving_officer',
+            'position_id' => $position->id,
         ]);
 
         $response->assertRedirect(route('admin.users'));
@@ -67,5 +76,6 @@ class AdminUserManagementTest extends TestCase
         $this->assertSame('jane@example.com', $user->email);
         $this->assertSame('Jane Q Doe Jr', $user->name);
         $this->assertSame('approving_officer', $user->role);
+        $this->assertSame($position->id, $user->position_id);
     }
 }

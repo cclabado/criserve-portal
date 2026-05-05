@@ -123,6 +123,11 @@
                     <span class="material-symbols-outlined text-[18px]">support_agent</span>
                     Open Support Tickets
                 </a>
+
+                <a href="{{ route('admin.reports') }}" class="btn-secondary inline-flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">assessment</span>
+                    Open Reports
+                </a>
             </div>
         </div>
 

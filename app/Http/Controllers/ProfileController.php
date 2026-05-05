@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\Position;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,7 @@ class ProfileController extends Controller
     {
         return view('profile.edit', [
             'user' => $request->user(),
+            'positions' => Position::where('is_active', true)->orderBy('name')->get(),
         ]);
     }
 
@@ -35,6 +37,18 @@ class ProfileController extends Controller
                 $validated['last_name'] ?? null,
                 $validated['extension_name'] ?? null,
             ])));
+        }
+
+        if (! $request->user()->requiresStaffPosition()) {
+            unset($validated['position_id'], $validated['license_number']);
+        } else {
+            $position = ! empty($validated['position_id'])
+                ? Position::query()->find((int) $validated['position_id'])
+                : null;
+
+            $validated['license_number'] = $position?->requires_license_number
+                ? (filled($validated['license_number'] ?? null) ? trim((string) $validated['license_number']) : null)
+                : null;
         }
 
         $request->user()->fill($validated);

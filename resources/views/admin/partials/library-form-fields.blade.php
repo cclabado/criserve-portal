@@ -155,6 +155,28 @@
         <label class="label">Address</label>
         <textarea name="address" class="input min-h-[110px]" placeholder="Provider address">{{ old('address', $item->address ?? '') }}</textarea>
     </div>
+@elseif($definition['key'] === 'positions')
+    <div class="modal-grid two">
+        <div>
+            <label class="label">Position Title</label>
+            <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Social Welfare Officer I">
+        </div>
+        <div>
+            <label class="label">Position Code</label>
+            <input type="text" name="position_code" class="input" value="{{ old('position_code', $item->position_code ?? '') }}" placeholder="SOCWO1">
+        </div>
+        <div>
+            <label class="label">Salary Grade</label>
+            <input type="number" min="1" max="33" name="salary_grade" class="input" value="{{ old('salary_grade', $item->salary_grade ?? '') }}" placeholder="11">
+        </div>
+        <div>
+            <label class="label">License Requirement</label>
+            <select name="requires_license_number" class="input">
+                <option value="0" @selected((string) old('requires_license_number', isset($item) ? (int) ($item->requires_license_number ?? false) : 0) === '0')>No license required</option>
+                <option value="1" @selected((string) old('requires_license_number', isset($item) ? (int) ($item->requires_license_number ?? false) : 0) === '1')>License required</option>
+            </select>
+        </div>
+    </div>
 @elseif($definition['key'] === 'relationships')
     <div>
         <label class="label">Relationship Name</label>

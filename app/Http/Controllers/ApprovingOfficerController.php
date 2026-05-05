@@ -8,6 +8,7 @@ use App\Models\Application;
 use App\Models\ModeOfAssistance;
 use App\Notifications\GuaranteeLetterApprovedNotification;
 use App\Services\FamilyNetworkService;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -20,7 +21,11 @@ class ApprovingOfficerController extends Controller
 
     public function dashboard()
     {
-        $pending = Application::where('status', 'for_approval')->count();
+        $eligibleApplications = $this->eligibleApplicationsQuery(auth()->user());
+
+        $pending = (clone $eligibleApplications)
+            ->where('status', 'for_approval')
+            ->count();
         $approvedToday = Application::where('status', 'approved')
             ->whereDate('updated_at', today())
             ->count();
@@ -81,7 +86,8 @@ class ApprovingOfficerController extends Controller
 
     public function applications()
     {
-        $applications = Application::with(['client', 'assistanceType'])
+        $applications = $this->eligibleApplicationsQuery(auth()->user())
+            ->with(['client', 'assistanceType'])
             ->where('status', 'for_approval')
             ->latest()
             ->paginate(10);
@@ -138,6 +144,7 @@ class ApprovingOfficerController extends Controller
             'assistanceSubtype',
             'modeOfAssistance',
         ])->findOrFail($id);
+        $this->ensureOfficerCanHandleApplication($application);
 
         if (is_null($application->approving_officer_id)) {
             $application->approving_officer_id = auth()->id();
@@ -157,6 +164,7 @@ class ApprovingOfficerController extends Controller
             ? $app->recommendationFinalAmountTotal()
             : (float) $request->input('final_amount', 0);
 
+        $this->ensureOfficerCanHandleAmount(auth()->user(), $finalAmount);
         $this->validateModeAmountRule($app, $finalAmount, 'final_amount');
 
         $app->final_amount = $finalAmount;
@@ -234,6 +242,7 @@ class ApprovingOfficerController extends Controller
     public function deny(Request $request, $id)
     {
         $app = Application::findOrFail($id);
+        $this->ensureOfficerCanHandleApplication($app);
 
         $app->approving_officer_id = auth()->id();
         $app->status = 'denied';
@@ -335,6 +344,77 @@ class ApprovingOfficerController extends Controller
         if ($application->status !== 'for_approval') {
             abort(403, 'Recommendations can only be changed while the application is pending approval.');
         }
+    }
+
+    protected function eligibleApplicationsQuery(User $officer)
+    {
+        $range = $this->resolveOfficerRange($officer);
+
+        if ($range === null) {
+            return Application::query()->whereRaw('1 = 0');
+        }
+
+        $amountExpression = $this->approvalAmountSql();
+        $query = Application::query()
+            ->whereRaw("{$amountExpression} >= ?", [$range['min']]);
+
+        if ($range['max'] !== null) {
+            $query->whereRaw("{$amountExpression} <= ?", [$range['max']]);
+        }
+
+        return $query;
+    }
+
+    protected function ensureOfficerCanHandleApplication(Application $application): void
+    {
+        $this->ensureOfficerCanHandleAmount(auth()->user(), $application->approvalRoutingAmount());
+    }
+
+    protected function ensureOfficerCanHandleAmount(?User $officer, float $amount): void
+    {
+        $range = $officer ? $this->resolveOfficerRange($officer) : null;
+
+        if ($range === null) {
+            abort(403, 'No approval amount range is assigned to your account.');
+        }
+
+        if ($amount < $range['min']) {
+            abort(403, 'This application amount is below your approval range.');
+        }
+
+        if ($range['max'] !== null && $amount > $range['max']) {
+            abort(403, 'This application amount exceeds your approval range.');
+        }
+    }
+
+    protected function resolveOfficerRange(User $officer): ?array
+    {
+        if ($officer->role !== 'approving_officer') {
+            return null;
+        }
+
+        return [
+            'min' => $officer->approval_min_amount !== null ? (float) $officer->approval_min_amount : 0.0,
+            'max' => $officer->approval_max_amount !== null ? (float) $officer->approval_max_amount : null,
+        ];
+    }
+
+    protected function approvalAmountSql(): string
+    {
+        return <<<SQL
+CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM application_assistance_recommendations aar_exists
+        WHERE aar_exists.application_id = applications.id
+    ) THEN COALESCE((
+        SELECT SUM(aar_sum.final_amount)
+        FROM application_assistance_recommendations aar_sum
+        WHERE aar_sum.application_id = applications.id
+    ), 0)
+    ELSE COALESCE(applications.final_amount, applications.recommended_amount, applications.amount_needed, 0)
+END
+SQL;
     }
 
     protected function resolveHouseholdMembers(Application $application)

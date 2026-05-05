@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Position;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -99,5 +100,35 @@ class ProfileTest extends TestCase
         $user->refresh();
         $this->assertTrue($user->is_active);
         $this->assertNull($user->deactivated_at);
+    }
+
+    public function test_social_worker_profile_requires_license_number_for_licensed_position(): void
+    {
+        $position = Position::create([
+            'name' => 'Social Welfare Officer I',
+            'position_code' => 'SOCWO1',
+            'salary_grade' => 11,
+            'requires_license_number' => true,
+            'is_active' => true,
+        ]);
+
+        $user = User::factory()->create([
+            'role' => 'social_worker',
+            'position_id' => $position->id,
+        ]);
+
+        $response = $this
+            ->actingAs($user)
+            ->from('/profile')
+            ->patch('/profile', [
+                'name' => 'Licensed Worker',
+                'email' => $user->email,
+                'position_id' => $position->id,
+                'license_number' => '',
+            ]);
+
+        $response
+            ->assertSessionHasErrors('license_number')
+            ->assertRedirect('/profile');
     }
 }

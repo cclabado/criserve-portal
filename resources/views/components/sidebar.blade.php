@@ -242,6 +242,16 @@
             <span class="text-sm tracking-wide">User Management</span>
         </a>
 
+        <a href="/admin/reports"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/reports*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('admin/reports*') }}">
+                assessment
+            </span>
+
+            <span class="text-sm tracking-wide">Reports</span>
+        </a>
+
         <a href="/admin/support-tickets"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/support-tickets*') }}">
 

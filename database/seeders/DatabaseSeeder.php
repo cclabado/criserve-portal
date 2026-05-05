@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(RelationshipSeeder::class);
         $this->call(RelationshipBackfillSeeder::class);
+        $this->call(PositionSeeder::class);
         $this->call(ModeOfAssistanceSeeder::class);
         $this->call(AssistanceSeeder::class);
         $this->call(AssistanceFrequencyRuleSeeder::class);

@@ -9,6 +9,11 @@
             'email' => $user->email,
             'role' => $user->role,
             'service_provider_id' => $user->service_provider_id,
+            'position_id' => $user->position_id,
+            'license_number' => $user->license_number,
+            'position_name' => $user->position?->name,
+            'approval_min_amount' => $user->approval_min_amount,
+            'approval_max_amount' => $user->approval_max_amount,
             'first_name' => $user->first_name,
             'middle_name' => $user->middle_name,
             'last_name' => $user->last_name,
@@ -21,6 +26,12 @@
         serviceProviders: @js($serviceProviders->map(fn ($provider) => [
             'id' => $provider->id,
             'name' => $provider->name,
+        ])->values()),
+        positions: @js($positions->map(fn ($position) => [
+            'id' => $position->id,
+            'name' => $position->name,
+            'salary_grade' => $position->salary_grade,
+            'requires_license_number' => (bool) $position->requires_license_number,
         ])->values()),
     })"
     class="space-y-6">
@@ -151,7 +162,7 @@
                                         class="edit-button"
                                         @click="openEdit({{ $user->id }})">
                                     <span class="material-symbols-outlined text-[18px]">edit_square</span>
-                                    Edit / Modify
+                                    Edit
                                 </button>
                             </td>
                         </tr>
@@ -238,6 +249,49 @@
                         </select>
                     </div>
 
+                    <div x-show="isStaffRole" x-cloak class="md:col-span-2">
+                        <label class="label">Position</label>
+                        <select name="position_id" class="input" x-model="form.position_id">
+                            <option value="">Select position</option>
+                            @foreach($positions as $position)
+                                <option value="{{ $position->id }}">
+                                    {{ $position->name }}
+                                    @if($position->salary_grade)
+                                        (SG {{ $position->salary_grade }})
+                                    @endif
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div x-show="requiresLicense" x-cloak class="md:col-span-2">
+                        <label class="label">License Number</label>
+                        <input type="text" name="license_number" class="input" x-model="form.license_number" placeholder="Enter PRC or license number">
+                    </div>
+
+                    <div x-show="form.role === 'approving_officer'" x-cloak>
+                        <label class="label">Minimum Approval Amount</label>
+                        <input type="number"
+                               step="0.01"
+                               min="0"
+                               name="approval_min_amount"
+                               class="input"
+                               x-model="form.approval_min_amount"
+                               placeholder="0.00">
+                    </div>
+
+                    <div x-show="form.role === 'approving_officer'" x-cloak>
+                        <label class="label">Maximum Approval Amount</label>
+                        <input type="number"
+                               step="0.01"
+                               min="0"
+                               name="approval_max_amount"
+                               class="input"
+                               x-model="form.approval_max_amount"
+                               placeholder="Leave blank for no upper limit">
+                        <p class="mt-2 text-xs text-slate-500">Leave blank to allow approvals from the minimum amount and up.</p>
+                    </div>
+
                     <div>
                         <label class="label">Sex</label>
                         <select name="sex" class="input" x-model="form.sex">
@@ -274,6 +328,7 @@ function userManagement(config) {
         users: config.users,
         updateBaseUrl: config.updateBaseUrl,
         serviceProviders: config.serviceProviders,
+        positions: config.positions,
         showModal: false,
         formAction: '',
         form: {
@@ -289,6 +344,18 @@ function userManagement(config) {
             civil_status: '',
             role: 'client',
             service_provider_id: '',
+            position_id: '',
+            license_number: '',
+            approval_min_amount: '',
+            approval_max_amount: '',
+        },
+        get isStaffRole() {
+            return ['social_worker', 'approving_officer'].includes(this.form.role);
+        },
+        get requiresLicense() {
+            const position = this.positions.find((item) => String(item.id) === String(this.form.position_id));
+
+            return Boolean(position?.requires_license_number);
         },
         openEdit(userId) {
             const user = this.users.find((item) => item.id === userId);
@@ -306,6 +373,10 @@ function userManagement(config) {
                 civil_status: user.civil_status ?? '',
                 role: user.role ?? 'client',
                 service_provider_id: user.service_provider_id ? String(user.service_provider_id) : '',
+                position_id: user.position_id ? String(user.position_id) : '',
+                license_number: user.license_number ?? '',
+                approval_min_amount: user.approval_min_amount ?? '',
+                approval_max_amount: user.approval_max_amount ?? '',
             };
             this.formAction = `${this.updateBaseUrl}/${user.id}`;
             this.showModal = true;
@@ -465,11 +536,14 @@ function userManagement(config) {
     display:inline-flex;
     align-items:center;
     gap:8px;
-    padding:10px 14px;
-    border-radius:12px;
+    padding:8px 10px;
+    border-radius:10px;
     background:#234E70;
     color:#fff;
-    font-weight:700;
+    font-weight:600;
+    font-size:13px;
+    line-height:1;
+    white-space:nowrap;
 }
 .modal-backdrop{
     position:fixed;

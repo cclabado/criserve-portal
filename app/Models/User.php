@@ -14,6 +14,10 @@ use Illuminate\Notifications\Notifiable;
     'name',
     'person_id',
     'service_provider_id',
+    'position_id',
+    'license_number',
+    'approval_min_amount',
+    'approval_max_amount',
     'email',
     'password',
     'role',
@@ -50,6 +54,8 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'deactivated_at' => 'datetime',
+            'approval_min_amount' => 'decimal:2',
+            'approval_max_amount' => 'decimal:2',
             'google_access_token' => 'encrypted',
             'google_refresh_token' => 'encrypted',
             'google_token_expires_at' => 'datetime',
@@ -70,6 +76,16 @@ class User extends Authenticatable
     public function serviceProvider()
     {
         return $this->belongsTo(ServiceProvider::class);
+    }
+
+    public function position()
+    {
+        return $this->belongsTo(Position::class);
+    }
+
+    public function requiresStaffPosition(): bool
+    {
+        return in_array($this->role, ['social_worker', 'approving_officer'], true);
     }
 
     public function hasGoogleCalendarConnection(): bool

@@ -21,6 +21,7 @@
         'modes-of-assistance' => route('admin.libraries.modes-of-assistance.store'),
         'service-points' => route('admin.libraries.service-points.store'),
         'service-providers' => route('admin.libraries.service-providers.store'),
+        'positions' => route('admin.libraries.positions.store'),
         'relationships' => route('admin.libraries.relationships.store'),
         'referral-institutions' => route('admin.libraries.referral-institutions.store'),
     ];
@@ -126,6 +127,11 @@
                             <th>Addressee</th>
                             <th>Contact</th>
                             <th>Accounts</th>
+                        @elseif($definition['key'] === 'positions')
+                            <th>Position</th>
+                            <th>Code</th>
+                            <th>Salary Grade</th>
+                            <th>License Rule</th>
                         @elseif($definition['key'] === 'referral-institutions')
                             <th>Institution</th>
                             <th>Addressee</th>
@@ -157,6 +163,9 @@
                                 'applies_when_amount_exceeds' => $item->applies_when_amount_exceeds ?? null,
                                 'minimum_amount' => $item->minimum_amount ?? null,
                                 'maximum_amount' => $item->maximum_amount ?? null,
+                                'position_code' => $item->position_code ?? null,
+                                'salary_grade' => $item->salary_grade ?? null,
+                                'requires_license_number' => (int) ($item->requires_license_number ?? false),
                                 'sort_order' => $item->sort_order ?? 0,
                                 'is_active' => (bool) $item->is_active,
                                 'password' => null,
@@ -235,6 +244,16 @@
                                 <td>{{ $item->addressee ?: '-' }}</td>
                                 <td>{{ $item->contact_number ?: '-' }}</td>
                                 <td>{{ $item->accounts?->count() ?? 0 }} linked account(s)</td>
+                            @elseif($definition['key'] === 'positions')
+                                <td>
+                                    <p class="table-primary">{{ $item->name }}</p>
+                                    @unless($item->is_active)
+                                        <p class="table-secondary table-secondary--archived">Archived position title</p>
+                                    @endunless
+                                </td>
+                                <td>{{ $item->position_code ?: '-' }}</td>
+                                <td>{{ $item->salary_grade ? 'SG '.$item->salary_grade : '-' }}</td>
+                                <td>{{ $item->requires_license_number ? 'License required' : 'No license required' }}</td>
                             @elseif($definition['key'] === 'referral-institutions')
                                 <td>
                                     <p class="table-primary">{{ $item->name }}</p>
