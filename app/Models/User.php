@@ -35,6 +35,11 @@ use Illuminate\Notifications\Notifiable;
     'google_refresh_token',
     'google_token_expires_at',
     'google_calendar_connected_at',
+    'mfa_code_hash',
+    'mfa_code_expires_at',
+    'mfa_code_sent_at',
+    'mfa_remember_token_hash',
+    'mfa_remember_until',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -60,6 +65,9 @@ class User extends Authenticatable
             'google_refresh_token' => 'encrypted',
             'google_token_expires_at' => 'datetime',
             'google_calendar_connected_at' => 'datetime',
+            'mfa_code_expires_at' => 'datetime',
+            'mfa_code_sent_at' => 'datetime',
+            'mfa_remember_until' => 'datetime',
         ];
     }
 
@@ -91,5 +99,10 @@ class User extends Authenticatable
     public function hasGoogleCalendarConnection(): bool
     {
         return filled($this->google_refresh_token);
+    }
+
+    public function requiresMfa(): bool
+    {
+        return in_array($this->role, config('security.mfa.required_roles', []), true);
     }
 }

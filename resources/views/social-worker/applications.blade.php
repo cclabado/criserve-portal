@@ -150,6 +150,20 @@ Filter
 <p class="font-semibold text-sm">
 {{ $app->client->first_name }} {{ $app->client->last_name }}
 </p>
+@if($app->beneficiary && strcasecmp($app->beneficiary->relationshipData?->name ?? '', 'Self') !== 0)
+<p class="text-xs text-slate-600">
+Beneficiary:
+{{ trim(collect([
+    $app->beneficiary->first_name,
+    $app->beneficiary->middle_name,
+    $app->beneficiary->last_name,
+    $app->beneficiary->extension_name,
+])->filter()->implode(' ')) }}
+@if($app->beneficiary->relationshipData?->name)
+({{ $app->beneficiary->relationshipData->name }})
+@endif
+</p>
+@endif
 <p class="text-xs text-gray-500">
 ID: {{ $app->reference_no }}
 </p>
@@ -166,11 +180,10 @@ ID: {{ $app->reference_no }}
     <div class="text-xs text-slate-500 mt-1">
         {{ $app->assistanceSubtype->name ?? 'Subtype not set' }}
     </div>
-    @if($app->frequency_status)
+    @if($app->frequency_status && $app->frequency_status !== 'review_required')
     <div class="mt-2">
         <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase
             @if($app->frequency_status === 'eligible') bg-emerald-100 text-emerald-800
-            @elseif($app->frequency_status === 'review_required') bg-amber-100 text-amber-800
             @elseif($app->frequency_status === 'blocked') bg-rose-100 text-rose-800
             @elseif($app->frequency_status === 'overridden') bg-sky-100 text-sky-800
             @else bg-slate-100 text-slate-700
@@ -249,9 +262,15 @@ bg-gray-100 text-gray-600
         @elseif($status === 'for_approval')
 
             <a href="/social-worker/application/{{ $app->id }}"
-            class="px-4 py-2 w-28 text-center rounded-lg text-sm font-semibold 
-                   border border-slate-300 text-slate-700 hover:bg-slate-100 shadow-sm transition">
-                View
+            class="group relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 shadow-sm transition"
+            aria-label="View application details">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12Z" />
+                    <circle cx="12" cy="12" r="3" />
+                </svg>
+                <span class="pointer-events-none absolute -top-11 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100">
+                    View details
+                </span>
             </a>
 
         @elseif($status === 'approved')
@@ -259,14 +278,29 @@ bg-gray-100 text-gray-600
             <div class="flex justify-end gap-2">
 
                 <a href="{{ route('socialworker.show', $app->id) }}"
-                class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-slate-100">
-                    View Details
+                class="group relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+                aria-label="View application details">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12Z" />
+                        <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <span class="pointer-events-none absolute -top-11 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100">
+                        View details
+                    </span>
                 </a>
 
                 <a href="{{ route('socialworker.certificate', $app->id) }}"
                 target="_blank"
-                class="px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700">
-                    Print Certificate
+                class="group relative inline-flex h-10 w-10 items-center justify-center rounded-lg bg-green-600 text-white hover:bg-green-700"
+                aria-label="Print certificate">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 9V2h12v7" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 14h12v8H6z" />
+                    </svg>
+                    <span class="pointer-events-none absolute -top-11 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100">
+                        Print certificate
+                    </span>
                 </a>
 
                 <form method="POST"
@@ -275,8 +309,14 @@ bg-gray-100 text-gray-600
 
                     <button type="submit"
                         onclick="return confirm('Mark this application as released?')"
-                        class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700">
-                        Mark Released
+                        class="group relative inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                        aria-label="Mark application as released">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m20 6-11 11-5-5" />
+                        </svg>
+                        <span class="pointer-events-none absolute -top-11 right-0 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100">
+                            Mark released
+                        </span>
                     </button>
                 </form>
 
@@ -287,8 +327,15 @@ bg-gray-100 text-gray-600
             <div class="flex justify-end">
 
                 <a href="{{ route('socialworker.show', $app->id) }}"
-                class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-slate-100">
-                    View Details
+                class="group relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+                aria-label="View application details">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12Z" />
+                        <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <span class="pointer-events-none absolute -top-11 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100">
+                        View details
+                    </span>
                 </a>
 
             </div>
@@ -296,9 +343,15 @@ bg-gray-100 text-gray-600
         @else
 
             <a href="/social-worker/application/{{ $app->id }}"
-            class="px-4 py-2 w-28 text-center rounded-lg text-sm font-semibold 
-                   bg-gray-200 text-gray-700">
-                View
+            class="group relative inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gray-200 text-gray-700"
+            aria-label="View application details">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12Z" />
+                    <circle cx="12" cy="12" r="3" />
+                </svg>
+                <span class="pointer-events-none absolute -top-11 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100">
+                    View details
+                </span>
             </a>
 
         @endif

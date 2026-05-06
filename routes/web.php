@@ -114,6 +114,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.libraries.positions.store');
     Route::post('/admin/libraries/relationships', [AdminController::class, 'storeRelationship'])
         ->name('admin.libraries.relationships.store');
+    Route::post('/admin/libraries/client-types', [AdminController::class, 'storeClientType'])
+        ->name('admin.libraries.client-types.store');
     Route::post('/admin/libraries/referral-institutions', [AdminController::class, 'storeReferralInstitution'])
         ->name('admin.libraries.referral-institutions.store');
     Route::patch('/admin/libraries/{library}/{item}', [AdminController::class, 'updateLibrary'])

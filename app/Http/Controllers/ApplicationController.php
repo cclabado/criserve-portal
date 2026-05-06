@@ -16,6 +16,8 @@ use App\Models\Document;
 use Illuminate\Http\JsonResponse;
 use App\Models\ModeOfAssistance;
 use App\Models\ServiceProvider;
+use App\Services\AuditLogService;
+use App\Services\DocumentSecurityService;
 use App\Services\FamilyNetworkService;
 use App\Services\FrequencyEligibilityService;
 use App\Services\IdentityMappingService;
@@ -27,7 +29,9 @@ class ApplicationController extends Controller
     public function __construct(
         protected FrequencyEligibilityService $frequencyEligibility,
         protected IdentityMappingService $identityMapping,
-        protected FamilyNetworkService $familyNetwork
+        protected FamilyNetworkService $familyNetwork,
+        protected DocumentSecurityService $documentSecurity,
+        protected AuditLogService $auditLogs
     ) {
     }
 
@@ -132,10 +136,10 @@ class ApplicationController extends Controller
             'frequency_case_key' => ['nullable', 'string', 'max:255'],
             'frequency_exception_reason' => ['nullable', 'string'],
             'documents' => ['nullable', 'array'],
-            'documents.*' => ['file', 'max:10240'],
+            'documents.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,doc,docx'],
             'required_documents' => ['nullable', 'array'],
             'required_documents.*' => ['nullable', 'array'],
-            'required_documents.*.*' => ['file', 'max:10240'],
+            'required_documents.*.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,doc,docx'],
         ]);
 
         $this->validateAssistanceSelection(
@@ -314,6 +318,9 @@ class ApplicationController extends Controller
         
         // ================= DOCUMENTS =================
         $this->storeApplicationDocuments($application, $request, $documentRequirements);
+        $this->auditLogs->log($request, 'application.submitted', $application, [
+            'reference_no' => $application->reference_no,
+        ]);
 
         return redirect('/client/dashboard')
             ->with('success', 'Application submitted successfully!')
@@ -550,15 +557,18 @@ class ApplicationController extends Controller
             }
 
             foreach ($request->file("required_documents.{$requirement->id}") as $file) {
-                $filename = time().'_'.$file->getClientOriginalName();
-                $path = $file->storeAs('documents', $filename, 'public');
+                $storedDocument = $this->documentSecurity->secureStore($file);
 
                 Document::create([
                     'application_id' => $application->id,
                     'document_requirement_id' => $requirement->id,
                     'document_type' => $requirement->name,
-                    'file_name' => $filename,
-                    'file_path' => $path,
+                    'file_name' => $storedDocument['file_name'],
+                    'file_path' => $storedDocument['path'],
+                    'storage_disk' => $storedDocument['disk'],
+                    'mime_type' => $storedDocument['mime_type'],
+                    'file_size' => $storedDocument['file_size'],
+                    'file_hash' => $storedDocument['file_hash'],
                 ]);
             }
         }
@@ -568,14 +578,17 @@ class ApplicationController extends Controller
         }
 
         foreach ($request->file('documents') as $file) {
-            $filename = time().'_'.$file->getClientOriginalName();
-            $path = $file->storeAs('documents', $filename, 'public');
+            $storedDocument = $this->documentSecurity->secureStore($file);
 
             Document::create([
                 'application_id' => $application->id,
                 'document_type' => 'Additional Supporting Document',
-                'file_name' => $filename,
-                'file_path' => $path,
+                'file_name' => $storedDocument['file_name'],
+                'file_path' => $storedDocument['path'],
+                'storage_disk' => $storedDocument['disk'],
+                'mime_type' => $storedDocument['mime_type'],
+                'file_size' => $storedDocument['file_size'],
+                'file_hash' => $storedDocument['file_hash'],
             ]);
         }
     }

@@ -12,6 +12,10 @@ class Document extends Model
         'document_type',
         'file_name',
         'file_path',
+        'storage_disk',
+        'mime_type',
+        'file_size',
+        'file_hash',
         'remarks',
     ];
 

@@ -5,11 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\Application;
 use App\Models\Document;
 use App\Notifications\UpdatedStatementUploadedNotification;
+use App\Services\AuditLogService;
+use App\Services\DocumentSecurityService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class ServiceProviderController extends Controller
 {
+    public function __construct(
+        protected DocumentSecurityService $documentSecurity,
+        protected AuditLogService $auditLogs
+    ) {
+    }
+
     public function dashboard(Request $request)
     {
         $provider = $request->user()->serviceProvider;
@@ -51,30 +59,38 @@ class ServiceProviderController extends Controller
         abort_unless((int) $application->service_provider_id === (int) $provider->id, 403);
 
         $request->validate([
-            'statement_file' => ['required', 'file', 'max:10240'],
+            'statement_file' => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,doc,docx'],
         ]);
 
         $file = $request->file('statement_file');
-        $filename = time().'_'.$file->getClientOriginalName();
-        $path = $file->storeAs('documents', $filename, 'public');
+        $storedDocument = $this->documentSecurity->secureStore($file);
 
         Document::create([
             'application_id' => $application->id,
             'document_type' => 'Updated Statement of Account',
-            'file_name' => $filename,
-            'file_path' => $path,
+            'file_name' => $storedDocument['file_name'],
+            'file_path' => $storedDocument['path'],
+            'storage_disk' => $storedDocument['disk'],
+            'mime_type' => $storedDocument['mime_type'],
+            'file_size' => $storedDocument['file_size'],
+            'file_hash' => $storedDocument['file_hash'],
             'remarks' => 'Uploaded by service provider '.$provider->name,
         ]);
 
         $application->loadMissing('socialWorker', 'approvingOfficer');
 
         if ($application->socialWorker) {
-            $application->socialWorker->notify(new UpdatedStatementUploadedNotification($application, $filename));
+            $application->socialWorker->notify(new UpdatedStatementUploadedNotification($application, $storedDocument['file_name']));
         }
 
         if ($application->approvingOfficer) {
-            $application->approvingOfficer->notify(new UpdatedStatementUploadedNotification($application, $filename));
+            $application->approvingOfficer->notify(new UpdatedStatementUploadedNotification($application, $storedDocument['file_name']));
         }
+
+        $this->auditLogs->log($request, 'document.upload.updated_statement', $application, [
+            'document_type' => 'Updated Statement of Account',
+            'file_name' => $storedDocument['file_name'],
+        ]);
 
         return redirect()
             ->route('service-provider.dashboard')

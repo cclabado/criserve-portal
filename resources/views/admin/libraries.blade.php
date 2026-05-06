@@ -23,6 +23,7 @@
         'service-providers' => route('admin.libraries.service-providers.store'),
         'positions' => route('admin.libraries.positions.store'),
         'relationships' => route('admin.libraries.relationships.store'),
+        'client-types' => route('admin.libraries.client-types.store'),
         'referral-institutions' => route('admin.libraries.referral-institutions.store'),
     ];
 @endphp

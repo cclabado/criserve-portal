@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Application;
 use App\Models\ModeOfAssistance;
 use App\Notifications\GuaranteeLetterApprovedNotification;
+use App\Services\AuditLogService;
 use App\Services\FamilyNetworkService;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,8 @@ use Illuminate\Validation\ValidationException;
 class ApprovingOfficerController extends Controller
 {
     public function __construct(
-        protected FamilyNetworkService $familyNetwork
+        protected FamilyNetworkService $familyNetwork,
+        protected AuditLogService $auditLogs
     ) {
     }
 
@@ -182,6 +184,11 @@ class ApprovingOfficerController extends Controller
             }
         }
 
+        $this->auditLogs->log($request, 'application.approved', $app, [
+            'reference_no' => $app->reference_no,
+            'final_amount' => $app->final_amount,
+        ]);
+
         return redirect()
             ->route('approving.applications')
             ->with('success', 'Application approved successfully.');
@@ -215,6 +222,11 @@ class ApprovingOfficerController extends Controller
             $application->syncFinalAmountFromRecommendations();
         });
 
+        $this->auditLogs->log($request, 'recommendation.updated', $recommendation, [
+            'application_id' => $application->id,
+            'final_amount' => $validated['final_amount'],
+        ]);
+
         return redirect()
             ->route('approving.show', ['id' => $application->id, 'tab' => 'recommendation'])
             ->with('success', 'Assistance amount updated successfully.');
@@ -234,6 +246,10 @@ class ApprovingOfficerController extends Controller
             $application->syncFinalAmountFromRecommendations();
         });
 
+        $this->auditLogs->log(request(), 'recommendation.deleted', $application, [
+            'recommendation_id' => $recommendationId,
+        ]);
+
         return redirect()
             ->route('approving.show', ['id' => $application->id, 'tab' => 'recommendation'])
             ->with('success', 'Assistance item removed successfully.');
@@ -248,6 +264,10 @@ class ApprovingOfficerController extends Controller
         $app->status = 'denied';
         $app->denial_reason = $request->denial_reason;
         $app->save();
+        $this->auditLogs->log($request, 'application.denied', $app, [
+            'reference_no' => $app->reference_no,
+            'denial_reason' => $app->denial_reason,
+        ]);
 
         return redirect()
             ->route('approving.applications')

@@ -176,6 +176,7 @@
                 ['label' => 'Modes of Assistance', 'path' => 'admin/libraries/modes-of-assistance'],
                 ['label' => 'Service Points', 'path' => 'admin/libraries/service-points'],
                 ['label' => 'Relationships', 'path' => 'admin/libraries/relationships'],
+                ['label' => 'Client Types', 'path' => 'admin/libraries/client-types'],
                 ['label' => 'Referral Institutions', 'path' => 'admin/libraries/referral-institutions'],
             ];
             $librariesOpen = request()->is('admin/libraries*') && ! request()->is('admin/libraries/service-providers');

@@ -91,6 +91,20 @@
         ->orderBy('name')
         ->pluck('name')
         ->all();
+    $clientTypeOptions = \App\Models\ClientType::where('is_active', true)
+        ->orderByRaw("CASE
+            WHEN LOWER(name) = 'new' THEN 1
+            WHEN LOWER(name) = 'new walk-in' THEN 2
+            WHEN LOWER(name) = 'returning' THEN 3
+            WHEN LOWER(name) = 'referral' THEN 4
+            ELSE 99
+        END")
+        ->orderBy('name')
+        ->pluck('name')
+        ->all();
+    if ($application->gis_client_type && ! in_array($application->gis_client_type, $clientTypeOptions, true)) {
+        array_unshift($clientTypeOptions, $application->gis_client_type);
+    }
     $modeOptions = ['Outright Cash', 'Guarantee Letter', 'Material Assistance', 'Psychosocial Support', 'Referral Service'];
     $primaryAssistance = trim(implode(' - ', array_filter([
         $application->assistanceType?->name,
@@ -146,9 +160,9 @@
             <div class="field"><span class="label">Reference:</span><span class="line">{{ $application->reference_no }}</span></div>
         </div>
         <div class="box">
-            <div>{{ $check($application->gis_client_type, 'New') }} New Walk-in</div>
-            <div>{{ $check($application->gis_client_type, 'Returning') }} Returning</div>
-            <div>{{ $check($application->gis_client_type, 'Referral') }} Referral</div>
+            @foreach($clientTypeOptions as $clientTypeOption)
+                <div>{{ $check($application->gis_client_type, $clientTypeOption) }} {{ $clientTypeOption }}</div>
+            @endforeach
         </div>
     </div>
 

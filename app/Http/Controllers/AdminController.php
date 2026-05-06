@@ -10,6 +10,7 @@ use App\Models\AssistanceFrequencyRule;
 use App\Models\AssistanceSubtype;
 use App\Models\AssistanceType;
 use App\Models\Client;
+use App\Models\ClientType;
 use App\Models\ModeOfAssistance;
 use App\Models\Position;
 use App\Models\Relationship;
@@ -18,6 +19,7 @@ use App\Models\ServicePoint;
 use App\Models\ServiceProvider;
 use App\Models\SupportTicket;
 use App\Models\User;
+use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -28,6 +30,11 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AdminController extends Controller
 {
+    public function __construct(
+        protected AuditLogService $auditLogs
+    ) {
+    }
+
     protected array $roles = [
         'admin',
         'client',
@@ -298,6 +305,9 @@ class AdminController extends Controller
         $user->update([
             'role' => $validated['role'],
         ]);
+        $this->auditLogs->log($request, 'user.role_updated', $user, [
+            'new_role' => $validated['role'],
+        ]);
 
         return redirect()
             ->to(route('admin.users'))
@@ -357,6 +367,10 @@ class AdminController extends Controller
                 $validated['last_name'],
                 $validated['extension_name'] ?? null,
             ]))),
+        ]);
+        $this->auditLogs->log($request, 'user.updated', $user, [
+            'role' => $validated['role'],
+            'email' => $validated['email'],
         ]);
 
         return redirect()
@@ -450,6 +464,11 @@ class AdminController extends Controller
     public function storeRelationship(Request $request): RedirectResponse
     {
         return $this->storeLibraryRecord($request, 'relationships');
+    }
+
+    public function storeClientType(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'client-types');
     }
 
     public function storePosition(Request $request): RedirectResponse
@@ -569,6 +588,9 @@ class AdminController extends Controller
             'positions' => $this->validatePositionPayload($request, $ignoreId),
             'relationships' => $request->validate([
                 'name' => ['required', 'string', 'max:255', Rule::unique('relationships', 'name')->ignore($ignoreId)],
+            ]),
+            'client-types' => $request->validate([
+                'name' => ['required', 'string', 'max:255', Rule::unique('client_types', 'name')->ignore($ignoreId)],
             ]),
             'referral-institutions' => $request->validate([
                 'name' => ['required', 'string', 'max:255', Rule::unique('referral_institutions', 'name')->ignore($ignoreId)],
@@ -1175,6 +1197,16 @@ class AdminController extends Controller
                 'search_columns' => ['name'],
                 'with' => [],
                 'icon' => 'family_restroom',
+            ],
+            'client-types' => [
+                'title' => 'Client Types',
+                'singular' => 'Client type',
+                'description' => 'Manage the client type options used in the General Intake Sheet and social worker intake flow.',
+                'model' => ClientType::class,
+                'order_by' => 'name',
+                'search_columns' => ['name'],
+                'with' => [],
+                'icon' => 'group',
             ],
             'referral-institutions' => [
                 'title' => 'Referral Institutions',

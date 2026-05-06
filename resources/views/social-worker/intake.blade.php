@@ -312,10 +312,11 @@
                 <div>
                     <label class="label">Client Type</label>
                     <select name="gis_client_type" class="input w-full">
+                        @php $selectedClientType = old('gis_client_type', $defaultClientType); @endphp
                         <option value="">Select</option>
-                        <option value="New" @selected(old('gis_client_type', $application->gis_client_type) === 'New')>New Walk-in</option>
-                        <option value="Returning" @selected(old('gis_client_type', $application->gis_client_type) === 'Returning')>Returning</option>
-                        <option value="Referral" @selected(old('gis_client_type', $application->gis_client_type) === 'Referral')>Referral</option>
+                        @foreach($clientTypes as $clientType)
+                            <option value="{{ $clientType->name }}" @selected($selectedClientType === $clientType->name)>{{ $clientType->name }}</option>
+                        @endforeach
                     </select>
                 </div>
 

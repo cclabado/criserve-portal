@@ -182,6 +182,11 @@
         <label class="label">Relationship Name</label>
         <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Sibling">
     </div>
+@elseif($definition['key'] === 'client-types')
+    <div>
+        <label class="label">Client Type Name</label>
+        <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Returning">
+    </div>
 @elseif($definition['key'] === 'referral-institutions')
     <div class="modal-grid two">
         <div>

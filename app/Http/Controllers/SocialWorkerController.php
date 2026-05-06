@@ -8,6 +8,7 @@ use App\Models\AssistanceDetail;
 use App\Models\AssistanceSubtype;
 use App\Models\AssistanceType;
 use App\Models\BeneficiaryProfile;
+use App\Models\ClientType;
 use App\Models\Document;
 use App\Models\FamilyMember;
 use App\Models\ModeOfAssistance;
@@ -16,6 +17,7 @@ use App\Models\ReferralInstitution;
 use App\Models\ServicePoint;
 use App\Models\ServiceProvider;
 use App\Notifications\InitialAssessmentScheduledNotification;
+use App\Services\AuditLogService;
 use App\Services\AiRecommendationService;
 use App\Services\FamilyNetworkService;
 use App\Services\FrequencyEligibilityService;
@@ -31,7 +33,8 @@ class SocialWorkerController extends Controller
     public function __construct(
         protected GoogleCalendarService $googleCalendar,
         protected FrequencyEligibilityService $frequencyEligibility,
-        protected FamilyNetworkService $familyNetwork
+        protected FamilyNetworkService $familyNetwork,
+        protected AuditLogService $auditLogs
     ) {
     }
 
@@ -90,7 +93,12 @@ class SocialWorkerController extends Controller
 
     public function applications(Request $request)
     {
-        $query = Application::with(['client', 'assistanceType', 'modeOfAssistance'])->latest();
+        $query = Application::with([
+            'client',
+            'beneficiary.relationshipData',
+            'assistanceType',
+            'modeOfAssistance',
+        ])->latest();
 
         if ($request->status && $request->status != 'all') {
             $query->where('status', $request->status);
@@ -107,6 +115,11 @@ class SocialWorkerController extends Controller
                 $q->where('reference_no', 'like', "%$search%");
                 $q->orWhereHas('client', function ($c) use ($search) {
                     $c->where('first_name', 'like', "%$search%")
+                        ->orWhere('last_name', 'like', "%$search%")
+                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
+                });
+                $q->orWhereHas('beneficiary', function ($b) use ($search) {
+                    $b->where('first_name', 'like', "%$search%")
                         ->orWhere('last_name', 'like', "%$search%")
                         ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
                 });
@@ -672,6 +685,21 @@ class SocialWorkerController extends Controller
         $referralInstitutions = ReferralInstitution::where('is_active', true)->orderBy('name')->get();
 
         $serviceProviders = ServiceProvider::where('is_active', true)->orderBy('name')->get();
+        $clientTypes = ClientType::where('is_active', true)
+            ->orderByRaw("CASE
+                WHEN LOWER(name) = 'new' THEN 1
+                WHEN LOWER(name) = 'new walk-in' THEN 2
+                WHEN LOWER(name) = 'returning' THEN 3
+                WHEN LOWER(name) = 'referral' THEN 4
+                ELSE 99
+            END")
+            ->orderBy('name')
+            ->get();
+        $hasPreviousApplications = Application::where('client_id', $application->client_id)
+            ->where('id', '!=', $application->id)
+            ->exists();
+        $defaultClientType = $application->gis_client_type
+            ?: $this->resolveDefaultClientTypeName($clientTypes, $hasPreviousApplications);
 
         return view('social-worker.intake', compact(
             'application',
@@ -679,7 +707,9 @@ class SocialWorkerController extends Controller
             'modesOfAssistance',
             'serviceProviders',
             'servicePoints',
-            'referralInstitutions'
+            'referralInstitutions',
+            'clientTypes',
+            'defaultClientType'
         ));
     }
 
@@ -871,6 +901,9 @@ class SocialWorkerController extends Controller
 
         $application->status = 'released';
         $application->save();
+        $this->auditLogs->log(request(), 'application.released', $application, [
+            'reference_no' => $application->reference_no,
+        ]);
 
         return redirect()
             ->route('socialworker.applications')
@@ -958,7 +991,10 @@ class SocialWorkerController extends Controller
             'has_insurance_coverage' => ['nullable', 'boolean'],
             'has_savings' => ['nullable', 'boolean'],
             'amount_needed' => ['required', 'numeric', 'min:0'],
-            'gis_client_type' => ['nullable', 'in:New,Returning,Referral'],
+            'gis_client_type' => [
+                'nullable',
+                Rule::exists('client_types', 'name')->where(fn ($query) => $query->where('is_active', true)),
+            ],
             'gis_visit_type' => [
                 'nullable',
                 'string',
@@ -1320,6 +1356,25 @@ class SocialWorkerController extends Controller
                 $field => 'This mode of assistance only allows amounts up to PHP '.number_format($maximumAmount, 2).'.',
             ]);
         }
+    }
+
+    protected function resolveDefaultClientTypeName($clientTypes, bool $hasPreviousApplications): ?string
+    {
+        $preferredNames = $hasPreviousApplications
+            ? ['returning']
+            : ['new', 'new walk-in'];
+
+        foreach ($preferredNames as $preferredName) {
+            $match = $clientTypes->first(
+                fn ($clientType) => strtolower(trim((string) $clientType->name)) === $preferredName
+            );
+
+            if ($match) {
+                return $match->name;
+            }
+        }
+
+        return null;
     }
 
     protected function validateAssessmentScheduling(Request $request): void
