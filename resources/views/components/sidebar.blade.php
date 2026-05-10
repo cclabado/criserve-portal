@@ -89,7 +89,7 @@
 
 
         <!-- ================= SOCIAL WORKER ================= -->
-        @if($role === 'social_worker')
+        @if(auth()->user()?->canAccessSocialWorkerModule())
 
         <a href="/social-worker/dashboard"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/dashboard') }}">
@@ -243,6 +243,16 @@
             <span class="text-sm tracking-wide">User Management</span>
         </a>
 
+        <a href="/admin/audit-logs"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/audit-logs*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('admin/audit-logs*') }}">
+                history
+            </span>
+
+            <span class="text-sm tracking-wide">Audit Trail</span>
+        </a>
+
         <a href="/admin/reports"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/reports*') }}">
 
@@ -253,6 +263,16 @@
             <span class="text-sm tracking-wide">Reports</span>
         </a>
 
+        <a href="/admin/deduplication"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/deduplication*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('admin/deduplication*') }}">
+                find_replace
+            </span>
+
+            <span class="text-sm tracking-wide">Bulk Deduplication</span>
+        </a>
+
         <a href="/admin/support-tickets"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/support-tickets*') }}">
 
@@ -261,6 +281,40 @@
             </span>
 
             <span class="text-sm tracking-wide">Support Tickets</span>
+        </a>
+
+        @endif
+
+        @if($role === 'reporting_officer')
+
+        <a href="/reporting-officer/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('reporting-officer/dashboard') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('reporting-officer/dashboard') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/reporting-officer/reports"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('reporting-officer/reports*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('reporting-officer/reports*') }}">
+                assessment
+            </span>
+
+            <span class="text-sm tracking-wide">Reports</span>
+        </a>
+
+        <a href="/reporting-officer/deduplication"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('reporting-officer/deduplication*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('reporting-officer/deduplication*') }}">
+                find_replace
+            </span>
+
+            <span class="text-sm tracking-wide">Bulk Deduplication</span>
         </a>
 
         @endif
@@ -318,6 +372,34 @@
             </span>
 
             <span class="text-sm tracking-wide">Guarantee Letters</span>
+        </a>
+
+        @endif
+
+        @if($role === 'referral_institution')
+
+        <a href="/referral-institution/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('referral-institution/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('referral-institution/dashboard*') }}">
+                handshake
+            </span>
+
+            <span class="text-sm tracking-wide">Referral Desk</span>
+        </a>
+
+        @endif
+
+        @if($role === 'referral_officer')
+
+        <a href="/referral-officer/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('referral-officer/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('referral-officer/dashboard*') }}">
+                hub
+            </span>
+
+            <span class="text-sm tracking-wide">Referral Dashboard</span>
         </a>
 
         @endif

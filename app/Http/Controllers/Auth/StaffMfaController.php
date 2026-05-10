@@ -43,7 +43,7 @@ class StaffMfaController extends Controller
         }
 
         $request->validate([
-            'code' => ['required', 'digits:'.max(6, (int) config('security.mfa.code_length', 6))],
+            'code' => ['required', 'digits:'.max(4, (int) config('security.mfa.code_length', 6))],
         ]);
 
         $attemptKey = 'mfa-attempt:'.$user->id.'|'.$request->ip();
@@ -120,9 +120,12 @@ class StaffMfaController extends Controller
     {
         return match ($role) {
             'admin' => redirect()->route('admin.dashboard'),
+            'reporting_officer' => redirect()->route('reporting.dashboard'),
             'social_worker' => redirect('/social-worker/dashboard'),
             'approving_officer' => redirect()->route('approving.dashboard'),
             'service_provider' => redirect()->route('service-provider.dashboard'),
+            'referral_institution' => redirect()->route('referral-institution.dashboard'),
+            'referral_officer' => redirect()->route('referral-officer.dashboard'),
             default => redirect()->route('client.dashboard'),
         };
     }

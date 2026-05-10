@@ -3,6 +3,9 @@
 @section('content')
 
 @php
+    $isReportingOfficer = auth()->user()?->role === 'reporting_officer';
+    $dashboardRoute = $isReportingOfficer ? route('reporting.dashboard') : route('admin.dashboard');
+    $reportsRoute = $isReportingOfficer ? route('reporting.reports') : route('admin.reports');
     $appliedFilterCount = collect([
         ($filters['status'] ?? 'all') !== 'all',
         ! empty($filters['assistance_type_id']),
@@ -26,7 +29,7 @@
 
     <section class="reports-hero">
         <div>
-            <p class="reports-kicker">Administrator</p>
+            <p class="reports-kicker">{{ $isReportingOfficer ? 'Reporting Officer' : 'Administrator' }}</p>
             <h1 class="reports-title">Report Generation</h1>
             <p class="reports-copy">
                 Build daily, monthly, yearly, or custom reports with cleaner filters and a quick operational summary.
@@ -53,12 +56,12 @@
             </div>
 
             <div class="reports-hero__actions">
-                <a href="{{ route('admin.dashboard') }}" class="btn-ghost inline-flex items-center justify-center gap-2">
+                <a href="{{ $dashboardRoute }}" class="btn-ghost inline-flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined text-[18px]">arrow_back</span>
                     Dashboard
                 </a>
 
-                <a href="{{ route('admin.reports', array_merge(request()->query(), ['format' => 'csv'])) }}"
+                <a href="{{ $reportsRoute }}?{{ http_build_query(array_merge(request()->query(), ['format' => 'csv'])) }}"
                    class="btn-primary inline-flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined text-[18px]">download</span>
                     Download CSV
@@ -93,7 +96,7 @@
             </div>
         </div>
 
-        <form method="GET" action="{{ route('admin.reports') }}" class="space-y-6 mt-6">
+        <form method="GET" action="{{ $reportsRoute }}" class="space-y-6 mt-6">
             <input type="hidden" name="report_type" value="custom">
 
             <div class="filter-band">
@@ -288,7 +291,7 @@
                     Generate Report
                 </button>
 
-                <a href="{{ route('admin.reports') }}" class="btn-secondary inline-flex items-center justify-center gap-2">
+                <a href="{{ $reportsRoute }}" class="btn-secondary inline-flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined text-[18px]">refresh</span>
                     Reset
                 </a>

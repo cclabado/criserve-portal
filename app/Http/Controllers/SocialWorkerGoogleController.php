@@ -17,7 +17,7 @@ class SocialWorkerGoogleController extends Controller
 
     public function redirect(Request $request): RedirectResponse
     {
-        abort_unless($request->user()?->role === 'social_worker', 403);
+        abort_unless($this->canUseSocialWorkerTools($request), 403);
 
         if (! config('services.google.client_id') || ! config('services.google.client_secret') || ! config('services.google.redirect_uri')) {
             return redirect()
@@ -33,7 +33,7 @@ class SocialWorkerGoogleController extends Controller
 
     public function callback(Request $request): RedirectResponse
     {
-        abort_unless($request->user()?->role === 'social_worker', 403);
+        abort_unless($this->canUseSocialWorkerTools($request), 403);
 
         if ($request->has('error')) {
             return redirect()
@@ -65,7 +65,7 @@ class SocialWorkerGoogleController extends Controller
 
     public function disconnect(Request $request): RedirectResponse
     {
-        abort_unless($request->user()?->role === 'social_worker', 403);
+        abort_unless($this->canUseSocialWorkerTools($request), 403);
 
         try {
             $this->googleCalendar->disconnectUser($request->user());
@@ -78,5 +78,10 @@ class SocialWorkerGoogleController extends Controller
                 ->route('profile.edit')
                 ->with('error', 'Google disconnect failed: '.$e->getMessage());
         }
+    }
+
+    protected function canUseSocialWorkerTools(Request $request): bool
+    {
+        return (bool) $request->user()?->canAccessSocialWorkerModule();
     }
 }

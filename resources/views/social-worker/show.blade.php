@@ -90,7 +90,41 @@
     $disabilityTypeItems = $multiValueSections['Disability Types'] ?? [];
 @endphp
 
-<main class="p-8 max-w-6xl mx-auto space-y-6">
+<main
+    class="p-8 max-w-6xl mx-auto space-y-6"
+    x-data="{
+        previewOpen: false,
+        previewUrl: '',
+        previewDownloadUrl: '',
+        previewTitle: '',
+        previewType: '',
+        openPreview({ url, downloadUrl, title }) {
+            this.previewUrl = url;
+            this.previewDownloadUrl = downloadUrl;
+            this.previewTitle = title;
+            this.previewType = '';
+            this.previewOpen = true;
+            document.body.classList.add('overflow-y-hidden');
+        },
+        closePreview() {
+            this.previewOpen = false;
+            this.previewUrl = '';
+            this.previewDownloadUrl = '';
+            this.previewTitle = '';
+            this.previewType = '';
+            document.body.classList.remove('overflow-y-hidden');
+        },
+        openPreviewFromButton(button) {
+            this.openPreview({
+                url: button.dataset.previewUrl || '',
+                downloadUrl: button.dataset.previewDownloadUrl || '',
+                title: button.dataset.previewTitle || 'Attachment',
+            });
+            this.previewType = button.dataset.previewType || 'application/octet-stream';
+        }
+    }"
+    x-on:keydown.escape.window="if (previewOpen) closePreview()"
+>
 
     <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
@@ -291,10 +325,17 @@
                                 <p class="text-xs text-gray-500">{{ $doc->remarks }}</p>
                             </div>
 
-                            <a href="{{ route('documents.show', $doc->id) }}"
-                               class="rounded-lg bg-[#234E70] px-4 py-2 text-sm text-white">
-                                View Attachment
-                            </a>
+                            <button type="button"
+                               class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#234E70] text-white transition hover:bg-[#1b3d58]"
+                               aria-label="View attachment"
+                               title="View attachment"
+                               data-preview-url="{{ route('documents.stream', $doc->id) }}"
+                               data-preview-download-url="{{ route('documents.download', $doc->id) }}"
+                               data-preview-title="{{ $doc->file_name ?? 'Attachment' }}"
+                               data-preview-type="{{ $doc->mime_type ?? 'application/octet-stream' }}"
+                               @click="openPreviewFromButton($el)">
+                                <span class="material-symbols-outlined text-[20px]">visibility</span>
+                            </button>
                         </div>
                     @empty
                         <p class="text-sm text-gray-500">No attachments.</p>
@@ -558,6 +599,57 @@
                     </div>
                 </div>
             @endif
+        </div>
+    </div>
+    <div
+        x-cloak
+        x-show="previewOpen"
+        x-transition.opacity
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+        @click.self="closePreview()"
+    >
+        <div class="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div class="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
+                <div class="min-w-0">
+                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Attachment Preview</p>
+                    <h3 class="truncate text-base font-semibold text-slate-900" x-text="previewTitle"></h3>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <a :href="previewUrl"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        Open
+                    </a>
+                    <a :href="previewDownloadUrl"
+                       class="inline-flex items-center rounded-xl bg-[#234E70] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1b3d58]">
+                        Download
+                    </a>
+                    <button type="button"
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100"
+                        @click="closePreview()"
+                        aria-label="Close attachment preview">
+                        <span class="material-symbols-outlined text-[20px]">close</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="min-h-[70vh] bg-slate-100 p-4">
+                <template x-if="previewType.startsWith('image/')">
+                    <div class="flex h-[70vh] items-center justify-center rounded-2xl border border-slate-200 bg-white p-4">
+                        <img :src="previewUrl" :alt="previewTitle" class="max-h-full max-w-full rounded-xl object-contain">
+                    </div>
+                </template>
+
+                <template x-if="!previewType.startsWith('image/')">
+                    <iframe
+                        :src="previewUrl"
+                        class="h-[70vh] w-full rounded-2xl border border-slate-200 bg-white"
+                        title="Attachment preview"
+                    ></iframe>
+                </template>
+            </div>
         </div>
     </div>
 </main>

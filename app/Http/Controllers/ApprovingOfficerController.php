@@ -28,29 +28,39 @@ class ApprovingOfficerController extends Controller
         $pending = (clone $eligibleApplications)
             ->where('status', 'for_approval')
             ->count();
-        $approvedToday = Application::where('status', 'approved')
-            ->whereDate('updated_at', today())
-            ->count();
+        $officerStats = Application::query()
+            ->selectRaw("SUM(CASE WHEN status = 'approved' AND DATE(updated_at) = ? THEN 1 ELSE 0 END) as approved_today", [today()->toDateString()])
+            ->selectRaw("SUM(CASE WHEN status = 'denied' AND DATE(updated_at) = ? THEN 1 ELSE 0 END) as denied_today", [today()->toDateString()])
+            ->selectRaw("SUM(CASE WHEN approving_officer_id = ? THEN 1 ELSE 0 END) as my_approvals", [auth()->id()])
+            ->selectRaw("SUM(CASE WHEN approving_officer_id = ? AND status = 'released' AND YEAR(updated_at) = ? AND MONTH(updated_at) = ? THEN 1 ELSE 0 END) as released_this_month", [auth()->id(), now()->year, now()->month])
+            ->first();
 
-        $deniedToday = Application::where('status', 'denied')
-            ->whereDate('updated_at', today())
-            ->count();
-
-        $myApprovals = Application::where('approving_officer_id', auth()->id())->count();
-        $releasedThisMonth = Application::where('approving_officer_id', auth()->id())
-            ->where('status', 'released')
-            ->whereYear('updated_at', now()->year)
-            ->whereMonth('updated_at', now()->month)
-            ->count();
+        $approvedToday = (int) ($officerStats?->approved_today ?? 0);
+        $deniedToday = (int) ($officerStats?->denied_today ?? 0);
+        $myApprovals = (int) ($officerStats?->my_approvals ?? 0);
+        $releasedThisMonth = (int) ($officerStats?->released_this_month ?? 0);
 
         $trendDates = collect(range(6, 0))->map(fn (int $daysAgo) => now()->subDays($daysAgo)->startOfDay());
         $trendDates->push(now()->startOfDay());
 
-        $decisionTrend = $trendDates->map(function (Carbon $date) {
+        $trendStart = now()->subDays(6)->startOfDay();
+        $trendRows = Application::query()
+            ->selectRaw('DATE(updated_at) as day')
+            ->selectRaw("SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved")
+            ->selectRaw("SUM(CASE WHEN status = 'denied' THEN 1 ELSE 0 END) as denied")
+            ->whereDate('updated_at', '>=', $trendStart)
+            ->whereIn('status', ['approved', 'denied'])
+            ->groupBy('day')
+            ->get()
+            ->keyBy('day');
+
+        $decisionTrend = $trendDates->map(function (Carbon $date) use ($trendRows) {
+            $row = $trendRows->get($date->toDateString());
+
             return [
                 'label' => $date->format('M d'),
-                'approved' => Application::where('status', 'approved')->whereDate('updated_at', $date)->count(),
-                'denied' => Application::where('status', 'denied')->whereDate('updated_at', $date)->count(),
+                'approved' => (int) ($row->approved ?? 0),
+                'denied' => (int) ($row->denied ?? 0),
             ];
         });
 
@@ -60,11 +70,17 @@ class ApprovingOfficerController extends Controller
             1
         );
 
+        $statusRows = Application::query()
+            ->selectRaw('status, COUNT(*) as total')
+            ->whereIn('status', ['for_approval', 'approved', 'denied', 'released'])
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
         $statusBreakdown = [
-            'For Approval' => Application::where('status', 'for_approval')->count(),
-            'Approved' => Application::where('status', 'approved')->count(),
-            'Denied' => Application::where('status', 'denied')->count(),
-            'Released' => Application::where('status', 'released')->count(),
+            'For Approval' => (int) ($statusRows['for_approval'] ?? 0),
+            'Approved' => (int) ($statusRows['approved'] ?? 0),
+            'Denied' => (int) ($statusRows['denied'] ?? 0),
+            'Released' => (int) ($statusRows['released'] ?? 0),
         ];
 
         $recentApprovals = Application::with(['client', 'assistanceType'])

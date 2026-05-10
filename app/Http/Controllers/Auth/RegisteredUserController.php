@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\User;
+use App\Services\AuditLogService;
 use App\Services\FamilyNetworkService;
 use App\Services\IdentityMappingService;
 use Illuminate\Auth\Events\Registered;
@@ -21,7 +22,8 @@ class RegisteredUserController extends Controller
 {
     public function __construct(
         protected IdentityMappingService $identityMapping,
-        protected FamilyNetworkService $familyNetwork
+        protected FamilyNetworkService $familyNetwork,
+        protected AuditLogService $auditLogs
     ) {
     }
 
@@ -91,6 +93,7 @@ class RegisteredUserController extends Controller
         event(new Registered($user));
 
         Auth::login($user);
+        $this->auditLogs->log($request, 'auth.register', $user, [], $user);
 
         return redirect()->route('client.dashboard');
     }

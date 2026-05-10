@@ -13,6 +13,10 @@ class ApplicationAssistanceRecommendation extends Model
         'assistance_detail_id',
         'mode_of_assistance_id',
         'referral_institution_id',
+        'referral_status',
+        'referral_notes',
+        'referred_at',
+        'referral_responded_at',
         'frequency_rule_id',
         'frequency_basis_application_id',
         'recommended_amount',
@@ -30,6 +34,8 @@ class ApplicationAssistanceRecommendation extends Model
         'recommended_amount' => 'decimal:2',
         'final_amount' => 'decimal:2',
         'frequency_checked_at' => 'datetime',
+        'referred_at' => 'datetime',
+        'referral_responded_at' => 'datetime',
     ];
 
     public function application()

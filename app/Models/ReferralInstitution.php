@@ -18,4 +18,19 @@ class ReferralInstitution extends Model
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    public function accounts()
+    {
+        return $this->hasMany(User::class)->orderBy('name');
+    }
+
+    public function referrals()
+    {
+        return $this->hasMany(ApplicationAssistanceRecommendation::class)->orderByDesc('updated_at');
+    }
+
+    public function institutionReferrals()
+    {
+        return $this->hasMany(InstitutionReferral::class)->orderByDesc('submitted_at');
+    }
 }

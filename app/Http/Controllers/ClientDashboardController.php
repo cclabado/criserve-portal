@@ -84,12 +84,18 @@ class ClientDashboardController extends Controller
             ->first();
 
         $baseQuery = Application::query()->where('user_id', auth()->id());
+        $summaryRow = (clone $baseQuery)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("SUM(CASE WHEN status IN ('submitted', 'under_review', 'for_approval', 'approved') THEN 1 ELSE 0 END) as active")
+            ->selectRaw("SUM(CASE WHEN status = 'released' THEN 1 ELSE 0 END) as released")
+            ->selectRaw("SUM(CASE WHEN status IN ('cancelled', 'denied') THEN 1 ELSE 0 END) as cancelled")
+            ->first();
 
         $statusSummary = [
-            'total' => (clone $baseQuery)->count(),
-            'active' => (clone $baseQuery)->whereIn('status', ['submitted', 'under_review', 'for_approval', 'approved'])->count(),
-            'released' => (clone $baseQuery)->where('status', 'released')->count(),
-            'cancelled' => (clone $baseQuery)->whereIn('status', ['cancelled', 'denied'])->count(),
+            'total' => (int) ($summaryRow?->total ?? 0),
+            'active' => (int) ($summaryRow?->active ?? 0),
+            'released' => (int) ($summaryRow?->released ?? 0),
+            'cancelled' => (int) ($summaryRow?->cancelled ?? 0),
         ];
 
         $trendStart = Carbon::today()->subDays(6);
@@ -112,11 +118,17 @@ class ClientDashboardController extends Controller
 
         $maxTrendValue = max(1, ...$trendValues);
 
+        $statusRows = (clone $baseQuery)
+            ->selectRaw('status, COUNT(*) as total')
+            ->whereIn('status', ['submitted', 'under_review', 'for_approval', 'released'])
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
         $statusBreakdown = [
-            'Submitted' => (clone $baseQuery)->where('status', 'submitted')->count(),
-            'Under Review' => (clone $baseQuery)->where('status', 'under_review')->count(),
-            'For Approval' => (clone $baseQuery)->where('status', 'for_approval')->count(),
-            'Released' => (clone $baseQuery)->where('status', 'released')->count(),
+            'Submitted' => (int) ($statusRows['submitted'] ?? 0),
+            'Under Review' => (int) ($statusRows['under_review'] ?? 0),
+            'For Approval' => (int) ($statusRows['for_approval'] ?? 0),
+            'Released' => (int) ($statusRows['released'] ?? 0),
         ];
 
         $types = AssistanceType::where('is_active', true)->get();

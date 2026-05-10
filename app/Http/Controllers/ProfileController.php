@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
 use App\Models\Position;
+use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +13,11 @@ use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
+    public function __construct(
+        protected AuditLogService $auditLogs
+    ) {
+    }
+
     /**
      * Display the user's profile form.
      */
@@ -58,6 +64,7 @@ class ProfileController extends Controller
         }
 
         $request->user()->save();
+        $this->auditLogs->log($request, 'profile.updated', $request->user());
 
         return Redirect::route('profile.edit')->with('status', 'profile-updated');
     }
@@ -79,6 +86,7 @@ class ProfileController extends Controller
             'is_active' => false,
             'deactivated_at' => now(),
         ])->save();
+        $this->auditLogs->log($request, 'profile.deactivated', $user);
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

@@ -22,12 +22,13 @@ return [
     ],
     'mfa' => [
         'code_length' => (int) env('MFA_CODE_LENGTH', 6),
+        'default_code' => env('MFA_DEFAULT_CODE'),
         'expires_minutes' => (int) env('MFA_EXPIRES_MINUTES', 10),
         'remember_days' => (int) env('MFA_REMEMBER_DAYS', 30),
         'cookie_name' => env('MFA_REMEMBER_COOKIE', 'criserve_mfa_remember'),
         'required_roles' => array_values(array_filter(array_map(
             'trim',
-            explode(',', (string) env('MFA_REQUIRED_ROLES', 'admin,social_worker,approving_officer,service_provider'))
+            explode(',', (string) env('MFA_REQUIRED_ROLES', 'admin,social_worker,approving_officer,reporting_officer,service_provider,referral_institution,referral_officer'))
         ))),
     ],
 ];

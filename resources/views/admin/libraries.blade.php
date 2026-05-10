@@ -138,6 +138,7 @@
                             <th>Addressee</th>
                             <th>Contact</th>
                             <th>Email</th>
+                            <th>Accounts</th>
                         @else
                             <th>Name</th>
                         @endif
@@ -268,6 +269,7 @@
                                 <td>{{ $item->addressee ?: '-' }}</td>
                                 <td>{{ $item->contact_number ?: '-' }}</td>
                                 <td>{{ $item->email ?: '-' }}</td>
+                                <td>{{ $item->accounts_count ?? 0 }} linked account(s)</td>
                             @else
                                 <td>
                                     <p class="table-primary">{{ $item->name }}</p>
@@ -317,7 +319,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="empty-state">
+                            <td colspan="{{ $definition['key'] === 'referral-institutions' ? 7 : 6 }}" class="empty-state">
                                 No {{ strtolower($definition['title']) }} found for the selected filters.
                             </td>
                         </tr>

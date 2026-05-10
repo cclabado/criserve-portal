@@ -9,6 +9,7 @@
             'email' => $user->email,
             'role' => $user->role,
             'service_provider_id' => $user->service_provider_id,
+            'referral_institution_id' => $user->referral_institution_id,
             'position_id' => $user->position_id,
             'license_number' => $user->license_number,
             'position_name' => $user->position?->name,
@@ -22,10 +23,15 @@
             'sex' => $user->sex,
             'civil_status' => $user->civil_status,
         ])->values()),
+        createBaseUrl: @js(route('admin.users.store')),
         updateBaseUrl: @js(url('/admin/users')),
         serviceProviders: @js($serviceProviders->map(fn ($provider) => [
             'id' => $provider->id,
             'name' => $provider->name,
+        ])->values()),
+        referralInstitutions: @js($referralInstitutions->map(fn ($institution) => [
+            'id' => $institution->id,
+            'name' => $institution->name,
         ])->values()),
         positions: @js($positions->map(fn ($position) => [
             'id' => $position->id,
@@ -132,6 +138,10 @@
                 <p class="panel-kicker">Users</p>
                 <h2 class="panel-title">All Registered Accounts</h2>
             </div>
+
+            <button type="button" class="btn-primary" @click="openCreate()">
+                Create Account
+            </button>
         </div>
 
         <div class="table-wrap mt-6">
@@ -185,9 +195,9 @@
         <div class="modal-panel">
             <div class="modal-head">
                 <div>
-                    <p class="panel-kicker">Edit User</p>
-                    <h2 class="panel-title" x-text="form.name || 'Update Account'"></h2>
-                    <p class="modal-copy">Update profile details and role access for this account.</p>
+                    <p class="panel-kicker" x-text="isCreateMode ? 'Create User' : 'Edit User'"></p>
+                    <h2 class="panel-title" x-text="isCreateMode ? 'Create Account' : (form.name || 'Update Account')"></h2>
+                    <p class="modal-copy" x-text="isCreateMode ? 'Create a new user account and assign the right role access.' : 'Update profile details and role access for this account.'"></p>
                 </div>
 
                 <button type="button" class="modal-close" @click="closeModal()">
@@ -197,7 +207,9 @@
 
             <form method="POST" :action="formAction" class="mt-6 space-y-4">
                 @csrf
-                @method('PATCH')
+                <template x-if="!isCreateMode">
+                    <input type="hidden" name="_method" value="PATCH">
+                </template>
 
                 <div class="grid gap-4 md:grid-cols-2">
                     <div>
@@ -225,6 +237,16 @@
                         <input type="email" name="email" class="input" x-model="form.email" required>
                     </div>
 
+                    <div x-show="isCreateMode" x-cloak>
+                        <label class="label">Password</label>
+                        <input type="password" name="password" class="input" :required="isCreateMode" x-model="form.password">
+                    </div>
+
+                    <div x-show="isCreateMode" x-cloak>
+                        <label class="label">Confirm Password</label>
+                        <input type="password" name="password_confirmation" class="input" :required="isCreateMode" x-model="form.password_confirmation">
+                    </div>
+
                     <div>
                         <label class="label">Birthdate</label>
                         <input type="date" name="birthdate" class="input" x-model="form.birthdate">
@@ -245,6 +267,16 @@
                             <option value="">Select service provider</option>
                             @foreach($serviceProviders as $provider)
                                 <option value="{{ $provider->id }}">{{ $provider->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div x-show="form.role === 'referral_institution'" x-cloak class="md:col-span-2">
+                        <label class="label">Linked Referral Institution</label>
+                        <select name="referral_institution_id" class="input" x-model="form.referral_institution_id">
+                            <option value="">Select referral institution</option>
+                            @foreach($referralInstitutions as $institution)
+                                <option value="{{ $institution->id }}">{{ $institution->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -314,7 +346,7 @@
 
                 <div class="modal-actions">
                     <button type="button" class="btn-secondary" @click="closeModal()">Cancel</button>
-                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <button type="submit" class="btn-primary" x-text="isCreateMode ? 'Create Account' : 'Save Changes'"></button>
                 </div>
             </form>
         </div>
@@ -326,10 +358,13 @@
 function userManagement(config) {
     return {
         users: config.users,
+        createBaseUrl: config.createBaseUrl,
         updateBaseUrl: config.updateBaseUrl,
         serviceProviders: config.serviceProviders,
+        referralInstitutions: config.referralInstitutions,
         positions: config.positions,
         showModal: false,
+        isCreateMode: false,
         formAction: '',
         form: {
             id: null,
@@ -344,18 +379,50 @@ function userManagement(config) {
             civil_status: '',
             role: 'client',
             service_provider_id: '',
+            referral_institution_id: '',
             position_id: '',
             license_number: '',
             approval_min_amount: '',
             approval_max_amount: '',
+            password: '',
+            password_confirmation: '',
         },
         get isStaffRole() {
-            return ['social_worker', 'approving_officer'].includes(this.form.role);
+            return ['social_worker', 'approving_officer', 'referral_officer'].includes(this.form.role);
         },
         get requiresLicense() {
             const position = this.positions.find((item) => String(item.id) === String(this.form.position_id));
 
             return Boolean(position?.requires_license_number);
+        },
+        defaultForm() {
+            return {
+                id: null,
+                name: '',
+                first_name: '',
+                middle_name: '',
+                last_name: '',
+                extension_name: '',
+                email: '',
+                birthdate: '',
+                sex: '',
+                civil_status: '',
+                role: 'client',
+                service_provider_id: '',
+                referral_institution_id: '',
+                position_id: '',
+                license_number: '',
+                approval_min_amount: '',
+                approval_max_amount: '',
+                password: '',
+                password_confirmation: '',
+            };
+        },
+        openCreate() {
+            this.isCreateMode = true;
+            this.form = this.defaultForm();
+            this.formAction = this.createBaseUrl;
+            this.showModal = true;
         },
         openEdit(userId) {
             const user = this.users.find((item) => item.id === userId);
@@ -364,7 +431,9 @@ function userManagement(config) {
                 return;
             }
 
+            this.isCreateMode = false;
             this.form = {
+                ...this.defaultForm(),
                 ...user,
                 middle_name: user.middle_name ?? '',
                 extension_name: user.extension_name ?? '',
@@ -373,6 +442,7 @@ function userManagement(config) {
                 civil_status: user.civil_status ?? '',
                 role: user.role ?? 'client',
                 service_provider_id: user.service_provider_id ? String(user.service_provider_id) : '',
+                referral_institution_id: user.referral_institution_id ? String(user.referral_institution_id) : '',
                 position_id: user.position_id ? String(user.position_id) : '',
                 license_number: user.license_number ?? '',
                 approval_min_amount: user.approval_min_amount ?? '',
@@ -383,6 +453,8 @@ function userManagement(config) {
         },
         closeModal() {
             this.showModal = false;
+            this.isCreateMode = false;
+            this.form = this.defaultForm();
         },
     };
 }

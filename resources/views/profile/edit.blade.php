@@ -20,7 +20,7 @@
         </div>
     </section>
 
-    @if($user->role === 'social_worker')
+    @if($user->canAccessSocialWorkerModule())
         <section class="profile-card">
             <div class="max-w-3xl">
                 @include('profile.partials.google-calendar-connection')

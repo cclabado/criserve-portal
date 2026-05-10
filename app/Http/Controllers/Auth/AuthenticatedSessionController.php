@@ -68,6 +68,14 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('service-provider.dashboard');
         }
 
+        if ($user->role === 'referral_institution') {
+            return redirect()->route('referral-institution.dashboard');
+        }
+
+        if ($user->role === 'referral_officer') {
+            return redirect()->route('referral-officer.dashboard');
+        }
+
         return redirect()->route('client.dashboard');
     }
 
@@ -76,6 +84,9 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        $user = $request->user();
+        $this->auditLogs->log($request, 'auth.logout', $user, [], $user);
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

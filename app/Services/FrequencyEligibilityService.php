@@ -9,6 +9,8 @@ use Carbon\Carbon;
 
 class FrequencyEligibilityService
 {
+    protected array $ruleCache = [];
+
     public function evaluate(array $payload, ?Application $currentApplication = null): array
     {
         $rule = $this->resolveRule(
@@ -60,19 +62,25 @@ class FrequencyEligibilityService
 
     protected function resolveRule(?int $subtypeId, ?int $detailId): ?AssistanceFrequencyRule
     {
+        $cacheKey = ($subtypeId ?: 0).':'.($detailId ?: 0);
+
+        if (array_key_exists($cacheKey, $this->ruleCache)) {
+            return $this->ruleCache[$cacheKey];
+        }
+
         if ($detailId) {
             $detailRule = AssistanceFrequencyRule::where('assistance_detail_id', $detailId)->first();
 
             if ($detailRule) {
-                return $detailRule;
+                return $this->ruleCache[$cacheKey] = $detailRule;
             }
         }
 
         if (! $subtypeId) {
-            return null;
+            return $this->ruleCache[$cacheKey] = null;
         }
 
-        return AssistanceFrequencyRule::where('assistance_subtype_id', $subtypeId)
+        return $this->ruleCache[$cacheKey] = AssistanceFrequencyRule::where('assistance_subtype_id', $subtypeId)
             ->whereNull('assistance_detail_id')
             ->first();
     }

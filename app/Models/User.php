@@ -14,6 +14,7 @@ use Illuminate\Notifications\Notifiable;
     'name',
     'person_id',
     'service_provider_id',
+    'referral_institution_id',
     'position_id',
     'license_number',
     'approval_min_amount',
@@ -86,6 +87,11 @@ class User extends Authenticatable
         return $this->belongsTo(ServiceProvider::class);
     }
 
+    public function referralInstitution()
+    {
+        return $this->belongsTo(ReferralInstitution::class);
+    }
+
     public function position()
     {
         return $this->belongsTo(Position::class);
@@ -104,5 +110,34 @@ class User extends Authenticatable
     public function requiresMfa(): bool
     {
         return in_array($this->role, config('security.mfa.required_roles', []), true);
+    }
+
+    public function canAccessSocialWorkerModule(): bool
+    {
+        if ($this->role === 'social_worker') {
+            return true;
+        }
+
+        if ($this->role !== 'referral_officer') {
+            return false;
+        }
+
+        return $this->hasSocialWorkerPosition();
+    }
+
+    public function hasSocialWorkerPosition(): bool
+    {
+        $positionName = strtolower(trim((string) $this->position?->name));
+        $positionCode = strtolower(trim((string) $this->position?->position_code));
+
+        if ($positionName === '' && $positionCode === '') {
+            return false;
+        }
+
+        return str_contains($positionName, 'social worker')
+            || str_contains($positionName, 'socialwork')
+            || str_contains($positionCode, 'social worker')
+            || str_contains($positionCode, 'socialwork')
+            || str_contains($positionCode, 'sw');
     }
 }

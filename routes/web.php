@@ -10,6 +10,8 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\ServiceProviderController;
+use App\Http\Controllers\BulkDeduplicationController;
+use App\Http\Controllers\ReferralController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -80,6 +82,14 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.dashboard');
     Route::get('/admin/reports', [AdminController::class, 'reports'])
         ->name('admin.reports');
+    Route::get('/admin/deduplication', [BulkDeduplicationController::class, 'index'])
+        ->name('admin.deduplication.index');
+    Route::post('/admin/deduplication', [BulkDeduplicationController::class, 'store'])
+        ->name('admin.deduplication.store');
+    Route::get('/admin/deduplication/{run}/status', [BulkDeduplicationController::class, 'status'])
+        ->name('admin.deduplication.status');
+    Route::get('/admin/deduplication/{run}/{type}', [BulkDeduplicationController::class, 'download'])
+        ->name('admin.deduplication.download');
     Route::get('/admin/libraries', [AdminController::class, 'libraries'])
         ->name('admin.libraries');
     Route::get('/admin/libraries/{library}', [AdminController::class, 'showLibrary'])
@@ -88,6 +98,10 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.frequency-rules');
     Route::get('/admin/users', [AdminController::class, 'users'])
         ->name('admin.users');
+    Route::get('/admin/audit-logs', [AdminController::class, 'auditLogs'])
+        ->name('admin.audit-logs');
+    Route::post('/admin/users', [AdminController::class, 'storeUser'])
+        ->name('admin.users.store');
     Route::get('/admin/support-tickets', [AdminController::class, 'supportTickets'])
         ->name('admin.support-tickets');
     Route::patch('/admin/support-tickets/{supportTicket}', [AdminController::class, 'updateSupportTicket'])
@@ -131,6 +145,41 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::delete('/admin/frequency-rules/{frequencyRule}', [AdminController::class, 'destroyFrequencyRule'])
         ->name('admin.frequency-rules.destroy');
 
+});
+
+Route::middleware(['auth', 'role:reporting_officer'])->prefix('reporting-officer')->group(function () {
+    Route::get('/dashboard', [AdminController::class, 'dashboard'])
+        ->name('reporting.dashboard');
+    Route::get('/reports', [AdminController::class, 'reports'])
+        ->name('reporting.reports');
+    Route::get('/deduplication', [BulkDeduplicationController::class, 'index'])
+        ->name('reporting.deduplication.index');
+    Route::post('/deduplication', [BulkDeduplicationController::class, 'store'])
+        ->name('reporting.deduplication.store');
+    Route::get('/deduplication/{run}/status', [BulkDeduplicationController::class, 'status'])
+        ->name('reporting.deduplication.status');
+    Route::get('/deduplication/{run}/{type}', [BulkDeduplicationController::class, 'download'])
+        ->name('reporting.deduplication.download');
+});
+
+Route::middleware(['auth', 'role:referral_institution'])->prefix('referral-institution')->group(function () {
+    Route::get('/dashboard', [ReferralController::class, 'institutionDashboard'])
+        ->name('referral-institution.dashboard');
+    Route::get('/application/create', [ReferralController::class, 'createInstitutionApplication'])
+        ->name('referral-institution.applications.create');
+    Route::post('/application', [ReferralController::class, 'storeInstitutionApplication'])
+        ->name('referral-institution.applications.store');
+    Route::patch('/referrals/{recommendation}', [ReferralController::class, 'updateReferral'])
+        ->name('referral-institution.referrals.update');
+});
+
+Route::middleware(['auth', 'role:referral_officer'])->prefix('referral-officer')->group(function () {
+    Route::get('/dashboard', [ReferralController::class, 'officerDashboard'])
+        ->name('referral-officer.dashboard');
+    Route::patch('/referrals/{recommendation}', [ReferralController::class, 'updateReferral'])
+        ->name('referral-officer.referrals.update');
+    Route::patch('/institution-referrals/{institutionReferral}', [ReferralController::class, 'updateInstitutionReferral'])
+        ->name('referral-officer.institution-referrals.update');
 });
 
 /*

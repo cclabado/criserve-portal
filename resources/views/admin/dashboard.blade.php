@@ -2,34 +2,47 @@
 
 @section('content')
 
+@php($isReportingOfficer = auth()->user()?->role === 'reporting_officer')
+
 <main class="space-y-6">
 
     <section class="admin-hero">
         <div>
-            <p class="admin-kicker">Administrator</p>
-            <h1 class="admin-title">System Access and Library Management</h1>
+            <p class="admin-kicker">{{ $isReportingOfficer ? 'Reporting Officer' : 'Administrator' }}</p>
+            <h1 class="admin-title">{{ $isReportingOfficer ? 'Reporting Dashboard' : 'System Access and Library Management' }}</h1>
             <p class="admin-subtitle">
-                The administrator role can oversee every module, monitor users and applications,
-                and maintain the library records used across the workflow.
+                {{ $isReportingOfficer
+                    ? 'Review operational metrics and jump straight into report generation without exposing the rest of the administrative workspace.'
+                    : 'The administrator role can oversee every module, monitor users and applications, and maintain the library records used across the workflow.' }}
             </p>
         </div>
 
         <div class="admin-actions">
-            <a href="/social-worker/applications" class="admin-action-card">
-                <span class="material-symbols-outlined">folder_open</span>
-                <div>
-                    <p class="admin-action-title">Open Applications</p>
-                    <p class="admin-action-copy">View the full social worker queue.</p>
-                </div>
-            </a>
+            @if($isReportingOfficer)
+                <a href="{{ route('reporting.reports') }}" class="admin-action-card">
+                    <span class="material-symbols-outlined">assessment</span>
+                    <div>
+                        <p class="admin-action-title">Open Reports</p>
+                        <p class="admin-action-copy">Build filtered exports and review reporting summaries.</p>
+                    </div>
+                </a>
+            @else
+                <a href="/social-worker/applications" class="admin-action-card">
+                    <span class="material-symbols-outlined">folder_open</span>
+                    <div>
+                        <p class="admin-action-title">Open Applications</p>
+                        <p class="admin-action-copy">View the full social worker queue.</p>
+                    </div>
+                </a>
 
-            <a href="/approving-officer/applications" class="admin-action-card">
-                <span class="material-symbols-outlined">fact_check</span>
-                <div>
-                    <p class="admin-action-title">Open Approvals</p>
-                    <p class="admin-action-copy">Jump into the approving officer queue.</p>
-                </div>
-            </a>
+                <a href="/approving-officer/applications" class="admin-action-card">
+                    <span class="material-symbols-outlined">fact_check</span>
+                    <div>
+                        <p class="admin-action-title">Open Approvals</p>
+                        <p class="admin-action-copy">Jump into the approving officer queue.</p>
+                    </div>
+                </a>
+            @endif
         </div>
     </section>
 
@@ -75,59 +88,79 @@
             <p class="metric-copy">Approved cases already released.</p>
         </article>
 
-        <article class="metric-card">
-            <p class="metric-label">Open Support Tickets</p>
-            <p class="metric-value">{{ number_format($stats['open_support_tickets']) }}</p>
-            <p class="metric-copy">Support requests waiting for review.</p>
-        </article>
+        @unless($isReportingOfficer)
+            <article class="metric-card">
+                <p class="metric-label">Open Support Tickets</p>
+                <p class="metric-value">{{ number_format($stats['open_support_tickets']) }}</p>
+                <p class="metric-copy">Support requests waiting for review.</p>
+            </article>
+        @endunless
     </section>
 
     <section class="grid gap-6 xl:grid-cols-[1.25fr,.95fr]">
         <div class="panel-card">
             <div class="panel-head">
                 <div>
-                    <p class="panel-kicker">User Management</p>
-                    <h2 class="panel-title">Separate User Workspace</h2>
+                    <p class="panel-kicker">{{ $isReportingOfficer ? 'Reporting Workspace' : 'User Management' }}</p>
+                    <h2 class="panel-title">{{ $isReportingOfficer ? 'Reports and Exports' : 'Separate User Workspace' }}</h2>
                 </div>
             </div>
 
             <div class="grid gap-4 md:grid-cols-2">
-                <div class="soft-card">
-                    <p class="soft-card-title">Edit User Details</p>
-                    <p class="soft-card-copy">
-                        Use the dedicated user-management page to update names, email addresses,
-                        profile information, and account roles from one place.
-                    </p>
-                </div>
+                @if($isReportingOfficer)
+                    <div class="soft-card">
+                        <p class="soft-card-title">Generate Operational Reports</p>
+                        <p class="soft-card-copy">
+                            Use the reports workspace to filter applications by date, status, assistance type, and responsible staff.
+                        </p>
+                    </div>
 
-                <div class="soft-card">
-                    <p class="soft-card-title">Role Controls</p>
-                    <p class="soft-card-copy">
-                        Role changes are handled there as well, with guardrails to prevent removing the last administrator.
-                    </p>
-                </div>
+                    <div class="soft-card">
+                        <p class="soft-card-title">Export CSV Snapshots</p>
+                        <p class="soft-card-copy">
+                            Download the filtered report set as a CSV file for submission, sharing, or further analysis.
+                        </p>
+                    </div>
+                @else
+                    <div class="soft-card">
+                        <p class="soft-card-title">Edit User Details</p>
+                        <p class="soft-card-copy">
+                            Use the dedicated user-management page to update names, email addresses,
+                            profile information, and account roles from one place.
+                        </p>
+                    </div>
+
+                    <div class="soft-card">
+                        <p class="soft-card-title">Role Controls</p>
+                        <p class="soft-card-copy">
+                            Role changes are handled there as well, with guardrails to prevent removing the last administrator.
+                        </p>
+                    </div>
+                @endif
             </div>
 
             <div class="mt-6 flex flex-wrap gap-3">
-                <a href="{{ route('admin.users') }}" class="btn-primary inline-flex items-center gap-2">
-                    <span class="material-symbols-outlined text-[18px]">manage_accounts</span>
-                    Open User Management
-                </a>
-
-                <a href="{{ route('admin.libraries') }}" class="btn-secondary inline-flex items-center gap-2">
-                    <span class="material-symbols-outlined text-[18px]">library_books</span>
-                    Open Libraries
-                </a>
-
-                <a href="{{ route('admin.support-tickets') }}" class="btn-secondary inline-flex items-center gap-2">
-                    <span class="material-symbols-outlined text-[18px]">support_agent</span>
-                    Open Support Tickets
-                </a>
-
-                <a href="{{ route('admin.reports') }}" class="btn-secondary inline-flex items-center gap-2">
+                <a href="{{ $isReportingOfficer ? route('reporting.reports') : route('admin.reports') }}" class="btn-primary inline-flex items-center gap-2">
                     <span class="material-symbols-outlined text-[18px]">assessment</span>
                     Open Reports
                 </a>
+
+                @unless($isReportingOfficer)
+                    <a href="{{ route('admin.users') }}" class="btn-secondary inline-flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">manage_accounts</span>
+                        Open User Management
+                    </a>
+
+                    <a href="{{ route('admin.libraries') }}" class="btn-secondary inline-flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">library_books</span>
+                        Open Libraries
+                    </a>
+
+                    <a href="{{ route('admin.support-tickets') }}" class="btn-secondary inline-flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">support_agent</span>
+                        Open Support Tickets
+                    </a>
+                @endunless
             </div>
         </div>
 

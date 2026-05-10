@@ -40,35 +40,51 @@ class SocialWorkerController extends Controller
 
     public function dashboard()
     {
-        $totalPending = Application::where('status', 'submitted')->count();
+        $applicationStats = Application::query()
+            ->selectRaw('COUNT(*) as total_handled')
+            ->selectRaw("SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) as total_pending")
+            ->selectRaw("SUM(CASE WHEN status = 'under_review' THEN 1 ELSE 0 END) as urgent")
+            ->selectRaw("SUM(CASE WHEN social_worker_id = ? THEN 1 ELSE 0 END) as my_handled", [auth()->id()])
+            ->selectRaw("SUM(CASE WHEN status = 'released' AND YEAR(updated_at) = ? AND MONTH(updated_at) = ? THEN 1 ELSE 0 END) as released_this_month", [now()->year, now()->month])
+            ->first();
+
+        $totalPending = (int) ($applicationStats?->total_pending ?? 0);
         $approvedToday = Application::where('status', 'approved')
             ->whereDate('updated_at', today())
             ->count();
-        $urgent = Application::where('status', 'under_review')->count();
-        $totalHandled = Application::count();
-        $myHandled = Application::where('social_worker_id', auth()->id())->count();
-        $releasedThisMonth = Application::where('status', 'released')
-            ->whereYear('updated_at', now()->year)
-            ->whereMonth('updated_at', now()->month)
-            ->count();
+        $urgent = (int) ($applicationStats?->urgent ?? 0);
+        $totalHandled = (int) ($applicationStats?->total_handled ?? 0);
+        $myHandled = (int) ($applicationStats?->my_handled ?? 0);
+        $releasedThisMonth = (int) ($applicationStats?->released_this_month ?? 0);
 
         $trendDates = collect(range(6, 0))->map(fn (int $daysAgo) => now()->subDays($daysAgo)->startOfDay());
         $trendDates->push(now()->startOfDay());
 
-        $dailyIntakes = $trendDates->map(function (Carbon $date) {
-            return Application::whereDate('created_at', $date)->count();
-        });
+        $trendStart = now()->subDays(6)->startOfDay();
+        $dailyIntakeMap = Application::query()
+            ->selectRaw('DATE(created_at) as day, COUNT(*) as total')
+            ->whereDate('created_at', '>=', $trendStart)
+            ->groupBy('day')
+            ->pluck('total', 'day');
+
+        $dailyIntakes = $trendDates->map(fn (Carbon $date) => (int) ($dailyIntakeMap[$date->toDateString()] ?? 0));
 
         $trendLabels = $trendDates->map(fn (Carbon $date) => $date->format('M d'));
         $maxDailyIntake = max($dailyIntakes->max() ?: 0, 1);
 
+        $statusRows = Application::query()
+            ->selectRaw('status, COUNT(*) as total')
+            ->whereIn('status', ['submitted', 'under_review', 'for_approval', 'approved', 'released', 'cancelled'])
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
         $statusBreakdown = [
-            'Submitted' => Application::where('status', 'submitted')->count(),
-            'Under Review' => Application::where('status', 'under_review')->count(),
-            'For Approval' => Application::where('status', 'for_approval')->count(),
-            'Approved' => Application::where('status', 'approved')->count(),
-            'Released' => Application::where('status', 'released')->count(),
-            'Cancelled' => Application::where('status', 'cancelled')->count(),
+            'Submitted' => (int) ($statusRows['submitted'] ?? 0),
+            'Under Review' => (int) ($statusRows['under_review'] ?? 0),
+            'For Approval' => (int) ($statusRows['for_approval'] ?? 0),
+            'Approved' => (int) ($statusRows['approved'] ?? 0),
+            'Released' => (int) ($statusRows['released'] ?? 0),
+            'Cancelled' => (int) ($statusRows['cancelled'] ?? 0),
         ];
 
         $recentApplications = Application::with(['client', 'assistanceType'])
@@ -219,20 +235,18 @@ class SocialWorkerController extends Controller
         }
 
         $schedules = $query->paginate(10)->withQueryString();
-        $totalScheduled = Application::where('social_worker_id', auth()->id())
+        $scheduleStats = Application::query()
+            ->selectRaw('COUNT(*) as total_scheduled')
+            ->selectRaw("SUM(CASE WHEN schedule_date >= ? THEN 1 ELSE 0 END) as upcoming_count", [now()])
+            ->selectRaw("SUM(CASE WHEN DATE(schedule_date) = ? THEN 1 ELSE 0 END) as today_count", [today()->toDateString()])
+            ->where('social_worker_id', auth()->id())
             ->whereIn('status', $activeScheduleStatuses)
             ->whereNotNull('schedule_date')
-            ->count();
-        $upcomingCount = Application::where('social_worker_id', auth()->id())
-            ->whereIn('status', $activeScheduleStatuses)
-            ->whereNotNull('schedule_date')
-            ->where('schedule_date', '>=', now())
-            ->count();
-        $todayCount = Application::where('social_worker_id', auth()->id())
-            ->whereIn('status', $activeScheduleStatuses)
-            ->whereNotNull('schedule_date')
-            ->whereDate('schedule_date', today())
-            ->count();
+            ->first();
+
+        $totalScheduled = (int) ($scheduleStats?->total_scheduled ?? 0);
+        $upcomingCount = (int) ($scheduleStats?->upcoming_count ?? 0);
+        $todayCount = (int) ($scheduleStats?->today_count ?? 0);
         $googleConnected = $request->user()->hasGoogleCalendarConnection();
 
         return view('social-worker.schedule', compact(
@@ -1165,6 +1179,10 @@ class SocialWorkerController extends Controller
                 'assistance_detail_id' => $detailId,
                 'mode_of_assistance_id' => $requiresModeOfAssistance ? (int) $row['mode_of_assistance_id'] : null,
                 'referral_institution_id' => $isReferralService ? (int) $row['referral_institution_id'] : null,
+                'referral_status' => $isReferralService ? 'pending' : null,
+                'referral_notes' => null,
+                'referred_at' => $isReferralService ? now() : null,
+                'referral_responded_at' => null,
                 'recommended_amount' => null,
                 'final_amount' => $isNonMonetary ? 0 : $row['final_amount'],
                 'frequency_rule_id' => $frequency['rule']?->id,

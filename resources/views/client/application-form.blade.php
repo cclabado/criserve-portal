@@ -3,8 +3,14 @@
 @section('content')
 
 @php
-    $user = auth()->user();
-    $existingClient = $client;
+    $formUser = $formUser ?? auth()->user();
+    $existingClient = $client ?? null;
+    $prefillUser = ($useAccountPrefill ?? true) ? $formUser : null;
+    $backUrl = $backUrl ?? '/client/dashboard';
+    $formAction = $formAction ?? '/client/application';
+    $pageTitle = $pageTitle ?? 'New Assistance Application';
+    $pageSubtitle = $pageSubtitle ?? 'Assistance to Individuals in Crisis Situation';
+    $lookupUrl = $lookupUrl ?? route('client.beneficiary-profile.lookup');
     $relationships = \App\Models\Relationship::where('is_active', true)->where('name', '!=', 'Other')->get();
     $familyRelationships = $relationships->where('name', '!=', 'Self')->values();
     $assistanceTypes = \App\Models\AssistanceType::with([
@@ -84,16 +90,16 @@
      x-init="init()">
 
 <div class="mb-6">
-    <a href="/client/dashboard" class="text-sm text-gray-600 mb-2 inline-block">
+    <a href="{{ $backUrl }}" class="text-sm text-gray-600 mb-2 inline-block">
         &larr; Back to Dashboard
     </a>
 
     <h1 class="text-3xl font-bold text-[#234E70]">
-        New Assistance Application
+        {{ $pageTitle }}
     </h1>
 
     <p class="text-gray-500">
-        Assistance to Individuals in Crisis Situation
+        {{ $pageSubtitle }}
     </p>
 </div>
 
@@ -119,7 +125,7 @@
     </template>
 </div>
 
-<form method="POST" action="/client/application" enctype="multipart/form-data" @submit="return validateStep(4)">
+<form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" @submit="return validateStep(4)">
 @csrf
 
 <div x-show="step == 1">
@@ -130,26 +136,26 @@
 <div class="grid grid-cols-4 gap-4 mb-4">
 <div>
 <label class="text-xs text-gray-500">Last Name</label>
-<input x-ref="last_name" name="last_name" value="{{ old('last_name', $existingClient->last_name ?? $user->last_name ?? '') }}" class="border p-2 rounded-lg w-full">
+<input x-ref="last_name" name="last_name" value="{{ old('last_name', $existingClient->last_name ?? $prefillUser?->last_name ?? '') }}" class="border p-2 rounded-lg w-full">
 </div>
 <div>
 <label class="text-xs text-gray-500">First Name</label>
-<input x-ref="first_name" name="first_name" value="{{ old('first_name', $existingClient->first_name ?? $user->first_name ?? '') }}" class="border p-2 rounded-lg w-full">
+<input x-ref="first_name" name="first_name" value="{{ old('first_name', $existingClient->first_name ?? $prefillUser?->first_name ?? '') }}" class="border p-2 rounded-lg w-full">
 </div>
 <div>
 <label class="text-xs text-gray-500">Middle Name</label>
-<input x-ref="middle_name" name="middle_name" value="{{ old('middle_name', $existingClient->middle_name ?? $user->middle_name ?? '') }}" class="border p-2 rounded-lg w-full">
+<input x-ref="middle_name" name="middle_name" value="{{ old('middle_name', $existingClient->middle_name ?? $prefillUser?->middle_name ?? '') }}" class="border p-2 rounded-lg w-full">
 </div>
 <div>
 <label class="text-xs text-gray-500">Extension</label>
-<input x-ref="extension_name" name="extension_name" value="{{ old('extension_name', $existingClient->extension_name ?? $user->extension_name ?? '') }}" class="border p-2 rounded-lg w-full">
+<input x-ref="extension_name" name="extension_name" value="{{ old('extension_name', $existingClient->extension_name ?? $prefillUser?->extension_name ?? '') }}" class="border p-2 rounded-lg w-full">
 </div>
 </div>
 
 <div class="grid grid-cols-2 gap-4 mb-4">
 <div>
 <label class="text-xs text-gray-500">Address</label>
-<input x-ref="full_address" name="full_address" value="{{ old('full_address', $existingClient->full_address ?? $user->full_address ?? $user->address ?? '') }}" class="border p-2 rounded-lg w-full">
+<input x-ref="full_address" name="full_address" value="{{ old('full_address', $existingClient->full_address ?? $prefillUser?->full_address ?? $prefillUser?->address ?? '') }}" class="border p-2 rounded-lg w-full">
 </div>
 <div>
 <label class="text-xs text-gray-500">Contact Number</label>
@@ -163,24 +169,24 @@
 <div class="select-shell">
 <select x-ref="sex" name="sex" class="form-select">
 <option value="">Select</option>
-<option value="Male" {{ old('sex', $existingClient->sex ?? $user->sex ?? '') == 'Male' ? 'selected' : '' }}>Male</option>
-<option value="Female" {{ old('sex', $existingClient->sex ?? $user->sex ?? '') == 'Female' ? 'selected' : '' }}>Female</option>
+<option value="Male" {{ old('sex', $existingClient->sex ?? $prefillUser?->sex ?? '') == 'Male' ? 'selected' : '' }}>Male</option>
+<option value="Female" {{ old('sex', $existingClient->sex ?? $prefillUser?->sex ?? '') == 'Female' ? 'selected' : '' }}>Female</option>
 </select>
 </div>
 </div>
 <div>
 <label class="text-xs text-gray-500">Birthdate</label>
-<input x-ref="birthdate" type="date" name="birthdate" value="{{ old('birthdate', $existingClient->birthdate ?? $user->birthdate ?? '') }}" class="border p-2 rounded-lg w-full">
+<input x-ref="birthdate" type="date" name="birthdate" value="{{ old('birthdate', $existingClient->birthdate ?? $prefillUser?->birthdate ?? '') }}" class="border p-2 rounded-lg w-full">
 </div>
 <div>
 <label class="text-xs text-gray-500">Civil Status</label>
 <div class="select-shell">
 <select name="civil_status" class="form-select">
 <option value="">Select</option>
-<option value="Single" {{ old('civil_status', $existingClient->civil_status ?? $user->civil_status ?? '') == 'Single' ? 'selected' : '' }}>Single</option>
-<option value="Married" {{ old('civil_status', $existingClient->civil_status ?? $user->civil_status ?? '') == 'Married' ? 'selected' : '' }}>Married</option>
-<option value="Widowed" {{ old('civil_status', $existingClient->civil_status ?? $user->civil_status ?? '') == 'Widowed' ? 'selected' : '' }}>Widowed</option>
-<option value="Separated" {{ old('civil_status', $existingClient->civil_status ?? $user->civil_status ?? '') == 'Separated' ? 'selected' : '' }}>Separated</option>
+<option value="Single" {{ old('civil_status', $existingClient->civil_status ?? $prefillUser?->civil_status ?? '') == 'Single' ? 'selected' : '' }}>Single</option>
+<option value="Married" {{ old('civil_status', $existingClient->civil_status ?? $prefillUser?->civil_status ?? '') == 'Married' ? 'selected' : '' }}>Married</option>
+<option value="Widowed" {{ old('civil_status', $existingClient->civil_status ?? $prefillUser?->civil_status ?? '') == 'Widowed' ? 'selected' : '' }}>Widowed</option>
+<option value="Separated" {{ old('civil_status', $existingClient->civil_status ?? $prefillUser?->civil_status ?? '') == 'Separated' ? 'selected' : '' }}>Separated</option>
 </select>
 </div>
 </div>
@@ -587,7 +593,7 @@ function applicationForm() {
         clientFamily: @js($clientFamily),
         familyRows: @js($oldFamily ?? $clientFamily->values()),
         loadedProfileName: '',
-        lookupUrl: @js(route('client.beneficiary-profile.lookup')),
+        lookupUrl: @js($lookupUrl),
         csrfToken: @js(csrf_token()),
         errors: {
             step1: '',
@@ -928,6 +934,11 @@ function applicationForm() {
             };
 
             if (!payload.last_name || !payload.first_name || !payload.birthdate) {
+                this.familyRows = [this.emptyFamilyRow()];
+                return;
+            }
+
+            if (!this.lookupUrl) {
                 this.familyRows = [this.emptyFamilyRow()];
                 return;
             }

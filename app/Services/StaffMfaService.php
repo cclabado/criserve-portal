@@ -24,9 +24,15 @@ class StaffMfaService
 
     public function issueChallenge(User $user): string
     {
-        $length = max(6, (int) config('security.mfa.code_length', 6));
-        $max = (10 ** $length) - 1;
-        $code = str_pad((string) random_int(0, $max), $length, '0', STR_PAD_LEFT);
+        $length = max(4, (int) config('security.mfa.code_length', 6));
+        $defaultCode = trim((string) config('security.mfa.default_code', ''));
+
+        if ($defaultCode !== '') {
+            $code = str_pad(substr(preg_replace('/\D+/', '', $defaultCode) ?? '', 0, $length), $length, '0', STR_PAD_LEFT);
+        } else {
+            $max = (10 ** $length) - 1;
+            $code = str_pad((string) random_int(0, $max), $length, '0', STR_PAD_LEFT);
+        }
 
         $user->forceFill([
             'mfa_code_hash' => Hash::make($code),

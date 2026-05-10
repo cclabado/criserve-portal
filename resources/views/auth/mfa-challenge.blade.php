@@ -26,7 +26,7 @@ body { font-family: 'Inter', sans-serif; }
                        name="code"
                        inputmode="numeric"
                        autocomplete="one-time-code"
-                       maxlength="{{ max(6, (int) config('security.mfa.code_length', 6)) }}"
+                       maxlength="{{ max(4, (int) config('security.mfa.code_length', 6)) }}"
                        required
                        class="mt-2 w-full rounded-lg border border-slate-200 bg-gray-50 px-4 py-3 tracking-[0.3em] outline-none focus:border-blue-900 focus:bg-white">
                 <x-input-error :messages="$errors->get('code')" class="mt-1" />
