@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Application extends Model
 {
@@ -76,6 +77,14 @@ class Application extends Model
         'amount_needed',
         'recommended_amount',
         'final_amount',
+        'gl_payment_status',
+        'gl_soa_status',
+        'gl_soa_review_notes',
+        'gl_soa_reviewed_by',
+        'gl_soa_reviewed_at',
+        'client_signature_path',
+        'client_signature_disk',
+        'client_signature_mime_type',
         'problem_statement',
         'social_worker_assessment',
         'ai_recommendation_summary',
@@ -92,6 +101,7 @@ class Application extends Model
         'amount_needed' => 'decimal:2',
         'recommended_amount' => 'decimal:2',
         'final_amount' => 'decimal:2',
+        'gl_soa_reviewed_at' => 'datetime',
         'has_elderly' => 'boolean',
         'has_child' => 'boolean',
         'has_pwd' => 'boolean',
@@ -165,6 +175,11 @@ class Application extends Model
     public function approvingOfficer()
     {
         return $this->belongsTo(User::class, 'approving_officer_id');
+    }
+
+    public function glSoaReviewer()
+    {
+        return $this->belongsTo(User::class, 'gl_soa_reviewed_by');
     }
 
     public function beneficiaryProfile()
@@ -260,6 +275,23 @@ class Application extends Model
         }
 
         return 0.0;
+    }
+
+    public function clientSignatureDataUrl(): ?string
+    {
+        if (blank($this->client_signature_path) || blank($this->client_signature_disk)) {
+            return null;
+        }
+
+        $disk = Storage::disk($this->client_signature_disk);
+
+        if (! $disk->exists($this->client_signature_path)) {
+            return null;
+        }
+
+        $mimeType = $this->client_signature_mime_type ?: 'image/png';
+
+        return 'data:'.$mimeType.';base64,'.base64_encode($disk->get($this->client_signature_path));
     }
 }
     

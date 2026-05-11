@@ -45,6 +45,7 @@ class AdminController extends Controller
         'approving_officer',
         'reporting_officer',
         'service_provider',
+        'gl_payment_processor',
         'referral_institution',
         'referral_officer',
     ];

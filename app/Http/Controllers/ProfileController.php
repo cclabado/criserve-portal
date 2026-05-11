@@ -9,6 +9,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
@@ -35,6 +37,7 @@ class ProfileController extends Controller
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
         $validated = $request->validated();
+        $user = $request->user();
 
         if (! empty($validated['first_name']) || ! empty($validated['last_name'])) {
             $validated['name'] = trim(implode(' ', array_filter([
@@ -45,7 +48,7 @@ class ProfileController extends Controller
             ])));
         }
 
-        if (! $request->user()->requiresStaffPosition()) {
+        if (! $user->requiresStaffPosition()) {
             unset($validated['position_id'], $validated['license_number']);
         } else {
             $position = ! empty($validated['position_id'])
@@ -57,14 +60,36 @@ class ProfileController extends Controller
                 : null;
         }
 
-        $request->user()->fill($validated);
+        unset($validated['signature_file']);
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        $user->fill($validated);
+
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
         }
 
-        $request->user()->save();
-        $this->auditLogs->log($request, 'profile.updated', $request->user());
+        if ($request->hasFile('signature_file') && in_array($user->role, ['social_worker', 'approving_officer'], true)) {
+            $disk = config('filesystems.default', 'local');
+            $directory = 'signatures/staff';
+            $file = $request->file('signature_file');
+
+            if ($user->signature_path && $user->signature_disk) {
+                Storage::disk($user->signature_disk)->delete($user->signature_path);
+            }
+
+            $path = $file->storeAs(
+                $directory,
+                Str::uuid().'.png',
+                $disk
+            );
+
+            $user->signature_path = $path;
+            $user->signature_disk = $disk;
+            $user->signature_mime_type = $file->getMimeType() ?: 'image/png';
+        }
+
+        $user->save();
+        $this->auditLogs->log($request, 'profile.updated', $user);
 
         return Redirect::route('profile.edit')->with('status', 'profile-updated');
     }

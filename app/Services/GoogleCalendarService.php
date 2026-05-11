@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Application;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -63,9 +64,11 @@ class GoogleCalendarService
 
     public function disconnectUser(User $user): void
     {
-        if ($user->google_refresh_token) {
+        $refreshToken = $this->safeRefreshToken($user);
+
+        if ($refreshToken) {
             $response = Http::asForm()->post(config('services.google.revoke_url'), [
-                'token' => $user->google_refresh_token,
+                'token' => $refreshToken,
             ]);
 
             if ($response->failed() && $response->status() !== 400) {
@@ -231,7 +234,7 @@ class GoogleCalendarService
         try {
             return $callback($accessToken);
         } catch (RequestException $e) {
-            if (($e->response?->status() ?? 0) !== 401 || ! $user->google_refresh_token) {
+            if (($e->response?->status() ?? 0) !== 401 || ! $this->safeRefreshToken($user)) {
                 throw $e;
             }
 
@@ -243,22 +246,26 @@ class GoogleCalendarService
 
     protected function accessTokenFor(User $user): string
     {
-        if (! $user->google_access_token || ! $user->google_token_expires_at || $user->google_token_expires_at->lte(now()->addMinute())) {
+        $accessToken = $this->safeAccessToken($user);
+
+        if (! $accessToken || ! $user->google_token_expires_at || $user->google_token_expires_at->lte(now()->addMinute())) {
             return $this->refreshAccessToken($user);
         }
 
-        return $user->google_access_token;
+        return $accessToken;
     }
 
     protected function refreshAccessToken(User $user): string
     {
-        if (! $user->google_refresh_token) {
+        $refreshToken = $this->safeRefreshToken($user);
+
+        if (! $refreshToken) {
             throw new RuntimeException('Google Calendar is not connected for this social worker.');
         }
 
         $tokenPayload = $this->tokenRequest([
             'grant_type' => 'refresh_token',
-            'refresh_token' => $user->google_refresh_token,
+            'refresh_token' => $refreshToken,
         ]);
 
         $user->forceFill([
@@ -267,6 +274,32 @@ class GoogleCalendarService
         ])->save();
 
         return (string) $user->google_access_token;
+    }
+
+    protected function safeAccessToken(User $user): ?string
+    {
+        if (blank($user->getRawOriginal('google_access_token'))) {
+            return null;
+        }
+
+        try {
+            return $user->google_access_token;
+        } catch (DecryptException) {
+            return null;
+        }
+    }
+
+    protected function safeRefreshToken(User $user): ?string
+    {
+        if (blank($user->getRawOriginal('google_refresh_token'))) {
+            return null;
+        }
+
+        try {
+            return $user->google_refresh_token;
+        } catch (DecryptException) {
+            return null;
+        }
     }
 
     protected function tokenRequest(array $payload): array

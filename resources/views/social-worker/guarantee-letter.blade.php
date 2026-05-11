@@ -20,6 +20,7 @@
     .body-copy ul{margin:8px 0 12px 22px;padding:0}
     .body-copy li{margin:0 0 6px}
     .signature-block{margin-top:28px;font-size:14px;line-height:1.5}
+    .signature-image{display:block;max-height:48px;max-width:220px;object-fit:contain}
     .signature-name{margin-top:34px;font-weight:700;text-transform:uppercase}
     .signature-title{font-size:13px}
     .validity{margin-top:20px;font-size:13px}
@@ -78,6 +79,8 @@
         $application->socialWorker?->last_name,
         $application->socialWorker?->extension_name,
     ]))) ?: ($application->socialWorker?->name ?? 'Assigned Social Worker');
+    $approvingOfficerSignature = $application->approvingOfficer?->signatureDataUrl();
+    $clientSignature = $application->clientSignatureDataUrl();
     $approverName = trim(implode(' ', array_filter([
         $application->approvingOfficer?->first_name,
         $application->approvingOfficer?->middle_name,
@@ -143,6 +146,9 @@
 
     <div class="signature-block">
         <div>Approved by:</div>
+        @if($approvingOfficerSignature)
+            <img src="{{ $approvingOfficerSignature }}" alt="Approving officer signature" class="signature-image">
+        @endif
         <div class="signature-name">{{ strtoupper($approverName) }}</div>
         <div class="signature-title">Approving Officer</div>
     </div>
@@ -170,7 +176,11 @@
             </div>
             <div class="receipt-row">
                 <span class="receipt-label">SIGNATURE:</span>
-                <span class="receipt-line"></span>
+                <span class="receipt-line">
+                    @if($clientSignature)
+                        <img src="{{ $clientSignature }}" alt="Client signature" class="signature-image">
+                    @endif
+                </span>
             </div>
             <div class="receipt-row">
                 <span class="receipt-label">CONTACT NO.:</span>

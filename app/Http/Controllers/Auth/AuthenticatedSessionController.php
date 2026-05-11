@@ -59,13 +59,17 @@ class AuthenticatedSessionController extends Controller
         if ($user->role === 'social_worker') {
             return redirect('/social-worker/dashboard');
         }
-        
+
         if ($user->role === 'approving_officer') {
             return redirect()->route('approving.dashboard');
         }
 
         if ($user->role === 'service_provider') {
             return redirect()->route('service-provider.dashboard');
+        }
+
+        if ($user->role === 'gl_payment_processor') {
+            return redirect()->route('gl-payment-processor.dashboard');
         }
 
         if ($user->role === 'referral_institution') {

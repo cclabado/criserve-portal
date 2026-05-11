@@ -128,6 +128,48 @@
 <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" @submit="return validateStep(4)">
 @csrf
 
+<datalist id="relationship-options">
+    <template x-for="option in relationshipOptions" :key="option.id">
+        <option :value="option.name"></option>
+    </template>
+</datalist>
+
+<datalist id="family-relationship-options">
+    <template x-for="option in familyRelationshipOptions" :key="option.id">
+        <option :value="option.name"></option>
+    </template>
+</datalist>
+
+<datalist id="assistance-type-options">
+    <template x-for="option in assistanceTypeOptions" :key="option.id">
+        <option :value="option.name"></option>
+    </template>
+</datalist>
+
+<datalist id="assistance-subtype-options">
+    <template x-for="option in filteredSubtypes()" :key="option.id">
+        <option :value="option.name"></option>
+    </template>
+</datalist>
+
+<datalist id="assistance-detail-options">
+    <template x-for="option in currentDetails()" :key="option.id">
+        <option :value="option.name"></option>
+    </template>
+</datalist>
+
+<datalist id="mode-options">
+    <template x-for="option in modeOptions" :key="option.id">
+        <option :value="option.name"></option>
+    </template>
+</datalist>
+
+<datalist id="service-provider-options">
+    <template x-for="option in filteredServiceProviders()" :key="option.id">
+        <option :value="option.name"></option>
+    </template>
+</datalist>
+
 <div x-show="step == 1">
 <div class="bg-white p-6 rounded-2xl shadow-sm">
 
@@ -192,15 +234,26 @@
 </div>
 </div>
 
-<div class="mt-4">
+<div class="mt-4 relative" @click.away="closeDropdown('relationship')">
 <label class="text-xs text-gray-500">Relationship to Beneficiary</label>
-<div class="select-shell">
-<select name="relationship_id" x-model="relationship" @change="handleRelationshipChange()" class="form-select">
-<option value="">Select</option>
-@foreach($relationships as $rel)
-<option value="{{ $rel->id }}">{{ $rel->name }}</option>
-@endforeach
-</select>
+<input type="hidden" name="relationship_id" x-model="relationship">
+<input x-model="relationshipSearch"
+       @focus="openDropdown('relationship')"
+       @click="openDropdown('relationship')"
+       @input="handleSearchInput('relationship', 'relationshipSearch', relationshipOptions)"
+       placeholder="Type to search relationship"
+       class="border p-2 rounded-lg w-full">
+<div x-show="isDropdownOpen('relationship')" x-transition class="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+    <template x-for="option in filteredNamedOptions(relationshipOptions, relationshipSearch)" :key="option.id">
+        <button type="button"
+                @click="selectDropdownOption('relationship', 'relationshipSearch', option, 'handleRelationshipChange')"
+                class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
+            <span x-text="option.name"></span>
+        </button>
+    </template>
+    <div x-show="filteredNamedOptions(relationshipOptions, relationshipSearch).length === 0" class="px-4 py-3 text-sm text-slate-400">
+        No matching relationship found.
+    </div>
 </div>
 </div>
 
@@ -314,13 +367,26 @@ Continue &rarr;
                 <input name="family_extension_name[]" placeholder="Ext." x-model="member.extension_name" class="min-w-0 rounded-lg border border-transparent bg-white/70 px-3 py-2 outline-none transition focus:border-[#234E70] focus:bg-white">
             </div>
 
-            <div class="select-shell">
-            <select name="family_relationship[]" x-model="member.relationship" class="form-select !bg-white !py-2 !text-sm">
-                <option value="">Select</option>
-                @foreach($familyRelationships as $rel)
-                    <option value="{{ $rel->id }}">{{ $rel->name }}</option>
-                @endforeach
-            </select>
+            <div class="relative" @click.away="closeFamilyRelationshipDropdown(index)">
+                <input type="hidden" name="family_relationship[]" x-model="member.relationship">
+                <input x-model="member.relationship_search"
+                       @focus="openFamilyRelationshipDropdown(index)"
+                       @click="openFamilyRelationshipDropdown(index)"
+                       @input="handleFamilyRelationshipInput(member, index)"
+                       placeholder="Type to search relationship"
+                       class="min-w-0 rounded-lg border border-transparent bg-white/70 px-3 py-2 outline-none transition focus:border-[#234E70] focus:bg-white w-full">
+                <div x-show="isFamilyRelationshipDropdownOpen(index)" x-transition class="absolute z-20 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                    <template x-for="option in filteredNamedOptions(familyRelationshipOptions, member.relationship_search)" :key="option.id">
+                        <button type="button"
+                                @click="selectFamilyRelationshipOption(index, option)"
+                                class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
+                            <span x-text="option.name"></span>
+                        </button>
+                    </template>
+                    <div x-show="filteredNamedOptions(familyRelationshipOptions, member.relationship_search).length === 0" class="px-4 py-3 text-sm text-slate-400">
+                        No matching relationship found.
+                    </div>
+                </div>
             </div>
 
             <input type="date" name="family_birthdate[]" x-model="member.birthdate" class="min-w-0 rounded-lg border border-transparent bg-white/70 px-3 py-2 outline-none transition focus:border-[#234E70] focus:bg-white">
@@ -348,41 +414,75 @@ Continue &rarr;
 <h2 class="font-bold mb-4">Assistance Information</h2>
 
 <div class="grid gap-4 md:grid-cols-2">
-    <div>
+    <div class="relative" @click.away="closeDropdown('assistance_type')">
         <label class="text-xs font-semibold tracking-wide text-slate-500">Type of Assistance</label>
-        <div class="select-shell mt-1">
-            <select name="assistance_type_id" x-model="selectedType" @change="handleTypeChange()" class="form-select">
-                <option value="">Select assistance type</option>
-                @foreach($assistanceTypes as $type)
-                <option value="{{ $type->id }}">{{ $type->name }}</option>
-                @endforeach
-            </select>
+        <input type="hidden" name="assistance_type_id" x-model="selectedType">
+        <input x-model="selectedTypeSearch"
+               @focus="openDropdown('assistance_type')"
+               @click="openDropdown('assistance_type')"
+               @input="handleSearchInput('selectedType', 'selectedTypeSearch', assistanceTypeOptions)"
+               placeholder="Type to search assistance type"
+               class="mt-1 border p-2 rounded-lg w-full">
+        <div x-show="isDropdownOpen('assistance_type')" x-transition class="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+            <template x-for="option in filteredNamedOptions(assistanceTypeOptions, selectedTypeSearch)" :key="option.id">
+                <button type="button"
+                        @click="selectDropdownOption('selectedType', 'selectedTypeSearch', option, 'handleTypeChange')"
+                        class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
+                    <span x-text="option.name"></span>
+                </button>
+            </template>
+            <div x-show="filteredNamedOptions(assistanceTypeOptions, selectedTypeSearch).length === 0" class="px-4 py-3 text-sm text-slate-400">
+                No matching assistance type found.
+            </div>
         </div>
     </div>
 
-    <div>
+    <div class="relative" @click.away="closeDropdown('assistance_subtype')">
         <label class="text-xs font-semibold tracking-wide text-slate-500">Specific Assistance</label>
-        <div class="select-shell mt-1">
-            <select name="assistance_subtype_id" x-model="selectedSubtype" @change="handleSubtypeChange()" class="form-select" :disabled="filteredSubtypes().length === 0">
-                <option value="" x-text="selectedType ? 'Select specific assistance' : 'Choose a type first'"></option>
-                <template x-for="subtype in filteredSubtypes()" :key="subtype.id">
-                    <option :value="subtype.id" x-text="subtype.name"></option>
-                </template>
-            </select>
+        <input type="hidden" name="assistance_subtype_id" x-model="selectedSubtype">
+        <input x-model="selectedSubtypeSearch"
+               @focus="openDropdown('assistance_subtype')"
+               @click="openDropdown('assistance_subtype')"
+               @input="handleSearchInput('selectedSubtype', 'selectedSubtypeSearch', filteredSubtypes())"
+               :disabled="filteredSubtypes().length === 0"
+               :placeholder="selectedType ? 'Type to search specific assistance' : 'Choose a type first'"
+               class="mt-1 border p-2 rounded-lg w-full">
+        <div x-show="isDropdownOpen('assistance_subtype') && filteredSubtypes().length > 0" x-transition class="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+            <template x-for="option in filteredNamedOptions(filteredSubtypes(), selectedSubtypeSearch)" :key="option.id">
+                <button type="button"
+                        @click="selectDropdownOption('selectedSubtype', 'selectedSubtypeSearch', option, 'handleSubtypeChange')"
+                        class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
+                    <span x-text="option.name"></span>
+                </button>
+            </template>
+            <div x-show="filteredNamedOptions(filteredSubtypes(), selectedSubtypeSearch).length === 0" class="px-4 py-3 text-sm text-slate-400">
+                No matching assistance found.
+            </div>
         </div>
     </div>
 
-    <div x-show="selectedSubtype" x-cloak>
+    <div x-show="selectedSubtype" x-cloak class="relative" @click.away="closeDropdown('assistance_detail')">
         <label class="text-xs font-semibold tracking-wide text-slate-500">Assistance Detail</label>
         <template x-if="selectedSubtypeHasDetails()">
             <div>
-                <div class="select-shell mt-1">
-                    <select name="assistance_detail_id" x-model="selectedDetail" @change="syncSelectedServiceProvider()" class="form-select">
-                        <option value="">Select assistance detail</option>
-                        <template x-for="detail in currentDetails()" :key="detail.id">
-                            <option :value="detail.id" x-text="detail.name"></option>
-                        </template>
-                    </select>
+                <input type="hidden" name="assistance_detail_id" x-model="selectedDetail">
+                <input x-model="selectedDetailSearch"
+                       @focus="openDropdown('assistance_detail')"
+                       @click="openDropdown('assistance_detail')"
+                       @input="handleSearchInput('selectedDetail', 'selectedDetailSearch', currentDetails())"
+                       placeholder="Type to search assistance detail"
+                       class="mt-1 border p-2 rounded-lg w-full">
+                <div x-show="isDropdownOpen('assistance_detail')" x-transition class="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                    <template x-for="option in filteredNamedOptions(currentDetails(), selectedDetailSearch)" :key="option.id">
+                        <button type="button"
+                                @click="selectDropdownOption('selectedDetail', 'selectedDetailSearch', option, 'syncSelectedServiceProvider')"
+                                class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
+                            <span x-text="option.name"></span>
+                        </button>
+                    </template>
+                    <div x-show="filteredNamedOptions(currentDetails(), selectedDetailSearch).length === 0" class="px-4 py-3 text-sm text-slate-400">
+                        No matching detail found.
+                    </div>
                 </div>
                 <p class="mt-2 text-xs text-slate-500" x-show="currentDetails().length > 0">
                     Select the category that best matches the request before uploading documents.
@@ -396,27 +496,49 @@ Continue &rarr;
         </template>
     </div>
 
-    <div>
+    <div class="relative" @click.away="closeDropdown('mode')">
         <label class="text-xs font-semibold tracking-wide text-slate-500">Mode of Assistance</label>
-        <div class="select-shell mt-1">
-            <select name="mode_of_assistance_id" x-model="selectedMode" class="form-select">
-                <option value="">Select mode of assistance</option>
-                @foreach($modesOfAssistance as $mode)
-                <option value="{{ $mode->id }}" {{ old('mode_of_assistance_id') == $mode->id ? 'selected' : '' }}>{{ $mode->name }}</option>
-                @endforeach
-            </select>
+        <input type="hidden" name="mode_of_assistance_id" x-model="selectedMode">
+        <input x-model="selectedModeSearch"
+               @focus="openDropdown('mode')"
+               @click="openDropdown('mode')"
+               @input="handleSearchInput('selectedMode', 'selectedModeSearch', modeOptions)"
+               placeholder="Type to search mode of assistance"
+               class="mt-1 border p-2 rounded-lg w-full">
+        <div x-show="isDropdownOpen('mode')" x-transition class="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+            <template x-for="option in filteredNamedOptions(modeOptions, selectedModeSearch)" :key="option.id">
+                <button type="button"
+                        @click="selectDropdownOption('selectedMode', 'selectedModeSearch', option, 'syncSelectedServiceProvider')"
+                        class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
+                    <span x-text="option.name"></span>
+                </button>
+            </template>
+            <div x-show="filteredNamedOptions(modeOptions, selectedModeSearch).length === 0" class="px-4 py-3 text-sm text-slate-400">
+                No matching mode found.
+            </div>
         </div>
     </div>
 
-    <div x-show="isGuaranteeLetterSelection()" x-cloak>
+    <div x-show="isGuaranteeLetterSelection()" x-cloak class="relative" @click.away="closeDropdown('service_provider')">
         <label class="text-xs font-semibold tracking-wide text-slate-500">Service Provider</label>
-        <div class="select-shell mt-1">
-            <select name="service_provider_id" x-model="selectedServiceProvider" class="form-select">
-                <option value="">Select service provider</option>
-                <template x-for="serviceProvider in filteredServiceProviders()" :key="serviceProvider.id">
-                    <option :value="serviceProvider.id" x-text="serviceProvider.name"></option>
-                </template>
-            </select>
+        <input type="hidden" name="service_provider_id" x-model="selectedServiceProvider">
+        <input x-model="selectedServiceProviderSearch"
+               @focus="openDropdown('service_provider')"
+               @click="openDropdown('service_provider')"
+               @input="handleSearchInput('selectedServiceProvider', 'selectedServiceProviderSearch', filteredServiceProviders())"
+               placeholder="Type to search service provider"
+               class="mt-1 border p-2 rounded-lg w-full">
+        <div x-show="isDropdownOpen('service_provider')" x-transition class="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+            <template x-for="option in filteredNamedOptions(filteredServiceProviders(), selectedServiceProviderSearch)" :key="option.id">
+                <button type="button"
+                        @click="selectDropdownOption('selectedServiceProvider', 'selectedServiceProviderSearch', option)"
+                        class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
+                    <span x-text="option.name"></span>
+                </button>
+            </template>
+            <div x-show="filteredNamedOptions(filteredServiceProviders(), selectedServiceProviderSearch).length === 0" class="px-4 py-3 text-sm text-slate-400">
+                No matching service provider found.
+            </div>
         </div>
         <p class="mt-2 text-xs text-slate-500" x-text="serviceProviderHelperText()"></p>
     </div>
@@ -480,6 +602,32 @@ Continue &rarr;
     </ul>
 </div>
 
+<div class="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+            <label class="text-xs font-semibold tracking-wide text-slate-500">Client Signature</label>
+            <p class="mt-2 text-sm text-slate-600">Please sign inside the pad below before submitting the application.</p>
+        </div>
+        <button type="button" @click="clearSignaturePad()" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+            Clear Signature
+        </button>
+    </div>
+
+    <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3">
+        <canvas x-ref="signature_canvas"
+                @mousedown="startSignature($event)"
+                @mousemove="drawSignature($event)"
+                @mouseup="endSignature($event)"
+                @mouseleave="endSignature($event)"
+                @touchstart="startSignature($event)"
+                @touchmove="drawSignature($event)"
+                @touchend="endSignature($event)"
+                class="block w-full rounded-xl bg-white touch-none"></canvas>
+    </div>
+
+    <input type="hidden" name="client_signature_data" x-ref="client_signature_data" :value="clientSignatureData">
+</div>
+
 <div class="flex justify-between mt-6">
 <button type="button" @click="step = 3" class="bg-gray-200 px-6 py-3 rounded-xl">&larr; Back</button>
 <button type="submit" class="bg-[#234E70] text-white px-6 py-3 rounded-xl">Submit</button>
@@ -541,6 +689,8 @@ Continue &rarr;
 function applicationForm() {
     return {
         step: 1,
+        relationshipOptions: @js($relationships->map(fn ($rel) => ['id' => (string) $rel->id, 'name' => $rel->name])->values()),
+        familyRelationshipOptions: @js($familyRelationships->map(fn ($rel) => ['id' => (string) $rel->id, 'name' => $rel->name])->values()),
         assistanceTypesData: @js($assistanceTypes->map(fn ($type) => [
             'id' => (string) $type->id,
             'name' => $type->name,
@@ -582,19 +732,31 @@ function applicationForm() {
             ])->values()->all(),
         ])->values()->all()),
         detailOptionsBySubtype: @js($assistanceDetailsBySubtype),
+        modeOptions: @js($modesOfAssistance->map(fn ($mode) => ['id' => (string) $mode->id, 'name' => $mode->name])->values()),
         selectedType: @js((string) old('assistance_type_id', '')),
+        selectedTypeSearch: '',
         selectedSubtype: @js((string) old('assistance_subtype_id', '')),
+        selectedSubtypeSearch: '',
         selectedDetail: @js((string) old('assistance_detail_id', '')),
+        selectedDetailSearch: '',
         selectedMode: @js((string) old('mode_of_assistance_id', '')),
+        selectedModeSearch: '',
         selectedServiceProvider: @js((string) old('service_provider_id', '')),
+        selectedServiceProviderSearch: '',
         amountNeeded: @js((string) old('amount_needed', '')),
         serviceProviders: @js($serviceProviderDirectory),
         relationship: @js((string) old('relationship_id', '')),
+        relationshipSearch: '',
         clientFamily: @js($clientFamily),
         familyRows: @js($oldFamily ?? $clientFamily->values()),
+        clientSignatureData: @js(old('client_signature_data', '')),
         loadedProfileName: '',
         lookupUrl: @js($lookupUrl),
         csrfToken: @js(csrf_token()),
+        signaturePadContext: null,
+        signaturePadDrawing: false,
+        activeDropdown: '',
+        familyRelationshipOpenIndex: null,
         errors: {
             step1: '',
             step2: '',
@@ -607,29 +769,293 @@ function applicationForm() {
                 this.familyRows = [this.emptyFamilyRow()];
             }
 
+            this.syncSearchLabels();
             this.handleTypeChange(false);
             this.handleSubtypeChange(false);
+            this.$nextTick(() => this.initSignaturePad());
+        },
+
+        syncSearchLabels() {
+            this.relationshipSearch = this.optionNameById(this.relationshipOptions, this.relationship);
+            this.selectedTypeSearch = this.optionNameById(this.assistanceTypeOptions, this.selectedType);
+            this.selectedSubtypeSearch = this.optionNameById(this.filteredSubtypes(), this.selectedSubtype);
+            this.selectedDetailSearch = this.optionNameById(this.currentDetails(), this.selectedDetail);
+            this.selectedModeSearch = this.optionNameById(this.modeOptions, this.selectedMode);
+            this.selectedServiceProviderSearch = this.optionNameById(this.filteredServiceProviders(), this.selectedServiceProvider);
+            this.familyRows = this.cloneRows(this.familyRows);
+        },
+
+        optionNameById(options, id) {
+            return options.find((option) => option.id === String(id || ''))?.name || '';
+        },
+
+        openDropdown(name) {
+            this.activeDropdown = name;
+        },
+
+        closeDropdown(name) {
+            if (this.activeDropdown === name) {
+                this.activeDropdown = '';
+            }
+        },
+
+        isDropdownOpen(name) {
+            return this.activeDropdown === name;
+        },
+
+        filteredNamedOptions(options, query) {
+            const needle = String(query || '').trim().toLowerCase();
+
+            if (needle === '') {
+                return options;
+            }
+
+            return options.filter((option) => String(option.name || '').toLowerCase().includes(needle));
+        },
+
+        handleSearchInput(field, searchField, options) {
+            this.openDropdown(this.dropdownNameForField(field));
+
+            if (String(this[searchField] || '').trim() === '') {
+                this[field] = '';
+
+                if (field === 'relationship') {
+                    this.handleRelationshipChange();
+                } else if (field === 'selectedType') {
+                    this.handleTypeChange();
+                } else if (field === 'selectedSubtype') {
+                    this.handleSubtypeChange();
+                } else if (field === 'selectedDetail' || field === 'selectedMode' || field === 'selectedServiceProvider') {
+                    if (field !== 'selectedServiceProvider') {
+                        this[field] = '';
+                    }
+                    this.syncSelectedServiceProvider();
+                }
+
+                return;
+            }
+
+            this.syncSearchSelection(field, this[searchField], options);
+        },
+
+        dropdownNameForField(field) {
+            return {
+                relationship: 'relationship',
+                selectedType: 'assistance_type',
+                selectedSubtype: 'assistance_subtype',
+                selectedDetail: 'assistance_detail',
+                selectedMode: 'mode',
+                selectedServiceProvider: 'service_provider',
+            }[field] || '';
+        },
+
+        selectDropdownOption(field, searchField, option, callback = null) {
+            this[field] = option.id;
+            this[searchField] = option.name;
+            this.closeDropdown(this.dropdownNameForField(field));
+
+            if (callback && typeof this[callback] === 'function') {
+                this[callback]();
+            }
+        },
+
+        syncSearchSelection(field, label, options) {
+            const matched = options.find((option) => option.name.toLowerCase() === String(label || '').trim().toLowerCase());
+            this[field] = matched?.id || '';
+
+            if (!matched && String(label || '').trim() === '') {
+                this[field] = '';
+            }
+        },
+
+        syncRowSearchSelection(row, label, options) {
+            const matched = options.find((option) => option.name.toLowerCase() === String(label || '').trim().toLowerCase());
+            row.relationship = matched?.id || '';
+
+            if (!matched && String(label || '').trim() === '') {
+                row.relationship = '';
+            }
+        },
+
+        openFamilyRelationshipDropdown(index) {
+            this.familyRelationshipOpenIndex = index;
+        },
+
+        closeFamilyRelationshipDropdown(index = null) {
+            if (index === null || this.familyRelationshipOpenIndex === index) {
+                this.familyRelationshipOpenIndex = null;
+            }
+        },
+
+        isFamilyRelationshipDropdownOpen(index) {
+            return this.familyRelationshipOpenIndex === index;
+        },
+
+        handleFamilyRelationshipInput(member, index) {
+            this.openFamilyRelationshipDropdown(index);
+
+            if (String(member.relationship_search || '').trim() === '') {
+                member.relationship = '';
+                return;
+            }
+
+            this.syncRowSearchSelection(member, member.relationship_search, this.familyRelationshipOptions);
+        },
+
+        selectFamilyRelationshipOption(index, option) {
+            const row = this.familyRows[index];
+
+            if (!row) {
+                return;
+            }
+
+            row.relationship = option.id;
+            row.relationship_search = option.name;
+            this.closeFamilyRelationshipDropdown(index);
+        },
+
+        get assistanceTypeOptions() {
+            return this.assistanceTypesData.map((type) => ({ id: type.id, name: type.name }));
+        },
+
+        initSignaturePad() {
+            const canvas = this.$refs.signature_canvas;
+
+            if (!canvas) {
+                return;
+            }
+
+            const ratio = window.devicePixelRatio || 1;
+            const width = canvas.offsetWidth || 600;
+            const height = 220;
+
+            canvas.width = width * ratio;
+            canvas.height = height * ratio;
+            canvas.style.height = `${height}px`;
+
+            const context = canvas.getContext('2d');
+            context.scale(ratio, ratio);
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            context.strokeStyle = '#163750';
+            context.lineWidth = 2.4;
+            this.signaturePadContext = context;
+
+            if (this.clientSignatureData) {
+                const image = new Image();
+                image.onload = () => {
+                    context.clearRect(0, 0, width, height);
+                    context.drawImage(image, 0, 0, width, height);
+                };
+                image.src = this.clientSignatureData;
+            }
+        },
+
+        signaturePoint(event) {
+            const canvas = this.$refs.signature_canvas;
+            const rect = canvas.getBoundingClientRect();
+            const source = event.touches?.[0] || event.changedTouches?.[0] || event;
+
+            return {
+                x: source.clientX - rect.left,
+                y: source.clientY - rect.top,
+            };
+        },
+
+        startSignature(event) {
+            if (!this.signaturePadContext) {
+                return;
+            }
+
+            event.preventDefault();
+            const point = this.signaturePoint(event);
+            this.signaturePadDrawing = true;
+            this.signaturePadContext.beginPath();
+            this.signaturePadContext.moveTo(point.x, point.y);
+        },
+
+        drawSignature(event) {
+            if (!this.signaturePadDrawing || !this.signaturePadContext) {
+                return;
+            }
+
+            event.preventDefault();
+            const point = this.signaturePoint(event);
+            this.signaturePadContext.lineTo(point.x, point.y);
+            this.signaturePadContext.stroke();
+            this.syncSignatureField();
+        },
+
+        endSignature(event) {
+            if (!this.signaturePadDrawing || !this.signaturePadContext) {
+                return;
+            }
+
+            event.preventDefault();
+            this.signaturePadDrawing = false;
+            this.syncSignatureField();
+        },
+
+        clearSignaturePad() {
+            const canvas = this.$refs.signature_canvas;
+
+            if (!canvas || !this.signaturePadContext) {
+                return;
+            }
+
+            this.signaturePadContext.clearRect(0, 0, canvas.width, canvas.height);
+            this.clientSignatureData = '';
+            if (this.$refs.client_signature_data) {
+                this.$refs.client_signature_data.value = '';
+            }
+        },
+
+        syncSignatureField() {
+            const canvas = this.$refs.signature_canvas;
+
+            if (!canvas) {
+                return;
+            }
+
+            this.clientSignatureData = canvas.toDataURL('image/png');
+
+            if (this.$refs.client_signature_data) {
+                this.$refs.client_signature_data.value = this.clientSignatureData;
+            }
+        },
+
+        hasClientSignature() {
+            return String(this.clientSignatureData || '').startsWith('data:image/png;base64,');
         },
 
         handleTypeChange(resetSubtype = true) {
             if (resetSubtype) {
                 this.selectedSubtype = '';
                 this.selectedDetail = '';
+                this.selectedSubtypeSearch = '';
+                this.selectedDetailSearch = '';
             }
 
             this.syncSelectedServiceProvider();
+            this.selectedTypeSearch = this.optionNameById(this.assistanceTypeOptions, this.selectedType);
+            this.selectedSubtypeSearch = this.optionNameById(this.filteredSubtypes(), this.selectedSubtype);
+            this.selectedDetailSearch = this.optionNameById(this.currentDetails(), this.selectedDetail);
         },
 
         handleSubtypeChange(resetDetail = true) {
             if (resetDetail) {
                 this.selectedDetail = '';
+                this.selectedDetailSearch = '';
             }
 
             if (!this.selectedSubtypeHasDetails()) {
                 this.selectedDetail = '';
+                this.selectedDetailSearch = '';
             }
 
             this.syncSelectedServiceProvider();
+            this.selectedSubtypeSearch = this.optionNameById(this.filteredSubtypes(), this.selectedSubtype);
+            this.selectedDetailSearch = this.optionNameById(this.currentDetails(), this.selectedDetail);
         },
 
         currentSubtype() {
@@ -779,12 +1205,7 @@ function applicationForm() {
         },
 
         isGuaranteeLetterSelection() {
-            const selectedOption = this.selectedMode
-                ? Array.from(document.querySelectorAll('select[name="mode_of_assistance_id"] option'))
-                    .find((option) => option.value === this.selectedMode)
-                : null;
-
-            return (selectedOption?.textContent || '').trim().toLowerCase() === 'guarantee letter';
+            return this.optionNameById(this.modeOptions, this.selectedMode).trim().toLowerCase() === 'guarantee letter';
         },
 
         serviceProviderHelperText() {
@@ -808,7 +1229,10 @@ function applicationForm() {
         syncSelectedServiceProvider() {
             if (this.selectedServiceProvider && !this.filteredServiceProviders().some((provider) => provider.id === this.selectedServiceProvider)) {
                 this.selectedServiceProvider = '';
+                this.selectedServiceProviderSearch = '';
             }
+
+            this.selectedServiceProviderSearch = this.optionNameById(this.filteredServiceProviders(), this.selectedServiceProvider);
         },
 
         selectedSubtypeHasDetails() {
@@ -896,6 +1320,8 @@ function applicationForm() {
             } else if (this.relationship !== '') {
                 this.familyRows = [this.emptyFamilyRow()];
             }
+
+            this.relationshipSearch = this.optionNameById(this.relationshipOptions, this.relationship);
         },
 
         async goToFamilyStep() {
@@ -986,6 +1412,7 @@ function applicationForm() {
                 middle_name: '',
                 extension_name: '',
                 relationship: '',
+                relationship_search: '',
                 birthdate: '',
             };
         },
@@ -1002,6 +1429,7 @@ function applicationForm() {
                 middle_name: row.middle_name ?? '',
                 extension_name: row.extension_name ?? '',
                 relationship: row.relationship ? String(row.relationship) : '',
+                relationship_search: this.optionNameById(this.familyRelationshipOptions, row.relationship),
                 birthdate: row.birthdate ?? '',
             }));
         },
@@ -1079,7 +1507,8 @@ function applicationForm() {
                     && (!requiresAmount || String(amountNeeded || '').trim() !== '')
                     && (!requiresServiceProvider || String(serviceProvider || '').trim() !== '')
                     && (!needsDetail || String(assistanceDetail || '').trim() !== '')
-                    && requirementInputsValid;
+                    && requirementInputsValid
+                    && this.hasClientSignature();
 
                 if (valid && requiresServiceProvider && !this.filteredServiceProviders().some((provider) => provider.id === serviceProvider)) {
                     this.errors.step4 = 'The selected service provider does not match the current assistance category.';
@@ -1087,8 +1516,8 @@ function applicationForm() {
                 }
 
                 this.errors.step4 = valid ? '' : (requiresAmount
-                    ? 'Complete the assistance fields, enter the amount needed, and upload the required document checklist before submitting.'
-                    : 'Complete the assistance fields and upload the required document checklist before submitting.');
+                    ? 'Complete the assistance fields, enter the amount needed, upload the required document checklist, and provide the client signature before submitting.'
+                    : 'Complete the assistance fields, upload the required document checklist, and provide the client signature before submitting.');
                 return valid;
             }
 

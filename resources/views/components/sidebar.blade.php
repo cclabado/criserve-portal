@@ -89,7 +89,7 @@
 
 
         <!-- ================= SOCIAL WORKER ================= -->
-        @if(auth()->user()?->canAccessSocialWorkerModule())
+        @if($role === 'social_worker')
 
         <a href="/social-worker/dashboard"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/dashboard') }}">
@@ -165,6 +165,36 @@
             </span>
 
             <span class="text-sm tracking-wide">Approvals Queue</span>
+        </a>
+
+        <a href="/referral-officer/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('referral-officer/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('referral-officer/dashboard*') }}">
+                hub
+            </span>
+
+            <span class="text-sm tracking-wide">Referral Desk</span>
+        </a>
+
+        <a href="{{ route('referral-institution.applications.create') }}"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass(['referral-institution/dashboard*', 'referral-institution/application*']) }}">
+
+            <span class="material-symbols-outlined {{ $iconClass(['referral-institution/dashboard*', 'referral-institution/application*']) }}">
+                handshake
+            </span>
+
+            <span class="text-sm tracking-wide">Institution Referrals</span>
+        </a>
+
+        <a href="/gl-payment-processor/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('gl-payment-processor/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('gl-payment-processor/dashboard*') }}">
+                receipt_long
+            </span>
+
+            <span class="text-sm tracking-wide">GL Processing</span>
         </a>
 
         @php
@@ -368,10 +398,34 @@
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('service-provider/dashboard') }}">
 
             <span class="material-symbols-outlined {{ $iconClass('service-provider/dashboard') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/service-provider/guarantee-letters"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('service-provider/guarantee-letters*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('service-provider/guarantee-letters*') }}">
                 local_hospital
             </span>
 
             <span class="text-sm tracking-wide">Guarantee Letters</span>
+        </a>
+
+        @endif
+
+        @if($role === 'gl_payment_processor')
+
+        <a href="/gl-payment-processor/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('gl-payment-processor/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('gl-payment-processor/dashboard*') }}">
+                receipt_long
+            </span>
+
+            <span class="text-sm tracking-wide">GL Processing</span>
         </a>
 
         @endif
@@ -388,6 +442,16 @@
             <span class="text-sm tracking-wide">Referral Desk</span>
         </a>
 
+        <a href="{{ route('referral-institution.applications.create') }}"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('referral-institution/application*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('referral-institution/application*') }}">
+                note_add
+            </span>
+
+            <span class="text-sm tracking-wide">Submit Referred Application</span>
+        </a>
+
         @endif
 
         @if($role === 'referral_officer')
@@ -401,6 +465,54 @@
 
             <span class="text-sm tracking-wide">Referral Dashboard</span>
         </a>
+
+        @if(auth()->user()?->canAccessSocialWorkerModule())
+
+        <div class="px-4 pt-3 pb-1">
+            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Social Worker Modules</p>
+        </div>
+
+        <a href="/social-worker/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/dashboard') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('social-worker/dashboard') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">SW Dashboard</span>
+        </a>
+
+        <a href="/social-worker/applications"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/applications*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('social-worker/applications*') }}">
+                description
+            </span>
+
+            <span class="text-sm tracking-wide">SW Applications</span>
+        </a>
+
+        <a href="/social-worker/my-cases"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/my-cases*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('social-worker/my-cases*') }}">
+                assignment_ind
+            </span>
+
+            <span class="text-sm tracking-wide">SW My Cases</span>
+        </a>
+
+        <a href="/social-worker/schedule"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/schedule*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('social-worker/schedule*') }}">
+                calendar_month
+            </span>
+
+            <span class="text-sm tracking-wide">SW Schedule</span>
+        </a>
+
+        @endif
 
         @endif
     </nav>

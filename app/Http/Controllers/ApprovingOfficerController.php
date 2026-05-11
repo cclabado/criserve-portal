@@ -308,6 +308,7 @@ class ApprovingOfficerController extends Controller
             'assistanceRecommendations.assistanceDetail',
             'assistanceRecommendations.referralInstitution',
             'socialWorker',
+            'approvingOfficer',
         ])->findOrFail($id);
 
         if (! in_array($application->status, ['approved', 'released'], true)) {

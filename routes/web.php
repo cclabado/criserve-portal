@@ -10,6 +10,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\ServiceProviderController;
+use App\Http\Controllers\GlPaymentProcessorController;
 use App\Http\Controllers\BulkDeduplicationController;
 use App\Http\Controllers\ReferralController;
 
@@ -236,8 +237,27 @@ Route::middleware(['auth', 'role:social_worker'])->group(function () {
 Route::middleware(['auth', 'role:service_provider'])->group(function () {
     Route::get('/service-provider/dashboard', [ServiceProviderController::class, 'dashboard'])
         ->name('service-provider.dashboard');
+    Route::get('/service-provider/guarantee-letters', [ServiceProviderController::class, 'letters'])
+        ->name('service-provider.letters');
+    Route::get('/service-provider/guarantee-letters/{application}', [ServiceProviderController::class, 'show'])
+        ->name('service-provider.show');
+    Route::get('/service-provider/guarantee-letters/{application}/print', [ServiceProviderController::class, 'guaranteeLetter'])
+        ->name('service-provider.guarantee-letter');
     Route::post('/service-provider/guarantee-letters/{application}/statement', [ServiceProviderController::class, 'uploadUpdatedStatement'])
         ->name('service-provider.statement.upload');
+});
+
+Route::middleware(['auth', 'role:gl_payment_processor'])->prefix('gl-payment-processor')->group(function () {
+    Route::get('/dashboard', [GlPaymentProcessorController::class, 'dashboard'])
+        ->name('gl-payment-processor.dashboard');
+    Route::get('/guarantee-letters/{application}', [GlPaymentProcessorController::class, 'show'])
+        ->name('gl-payment-processor.show');
+    Route::get('/guarantee-letters/{application}/print', [GlPaymentProcessorController::class, 'guaranteeLetter'])
+        ->name('gl-payment-processor.guarantee-letter');
+    Route::patch('/guarantee-letters/{application}/soa-review', [GlPaymentProcessorController::class, 'updateSoaReview'])
+        ->name('gl-payment-processor.soa-review.update');
+    Route::patch('/guarantee-letters/{application}/payment-status', [GlPaymentProcessorController::class, 'updatePaymentStatus'])
+        ->name('gl-payment-processor.payment-status.update');
 });
 /*
 |--------------------------------------------------------------------------

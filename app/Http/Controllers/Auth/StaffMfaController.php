@@ -124,6 +124,7 @@ class StaffMfaController extends Controller
             'social_worker' => redirect('/social-worker/dashboard'),
             'approving_officer' => redirect()->route('approving.dashboard'),
             'service_provider' => redirect()->route('service-provider.dashboard'),
+            'gl_payment_processor' => redirect()->route('gl-payment-processor.dashboard'),
             'referral_institution' => redirect()->route('referral-institution.dashboard'),
             'referral_officer' => redirect()->route('referral-officer.dashboard'),
             default => redirect()->route('client.dashboard'),

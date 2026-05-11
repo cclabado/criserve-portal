@@ -29,7 +29,7 @@
         @csrf
     </form>
 
-    <form method="post" action="{{ route('profile.update') }}" class="mt-6 space-y-6">
+    <form method="post" action="{{ route('profile.update') }}" enctype="multipart/form-data" class="mt-6 space-y-6">
         @csrf
         @method('patch')
 
@@ -146,6 +146,29 @@
                               class="mt-1 block w-full"
                               :value="old('license_number', $user->license_number)" />
                 <x-input-error class="mt-2" :messages="$errors->get('license_number')" />
+            </div>
+        </div>
+
+        <div x-show="isStaffRole" x-cloak class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div>
+                <h3 class="text-base font-semibold text-slate-900">E-Signature</h3>
+                <p class="mt-1 text-sm text-slate-500">Upload a PNG signature that will appear on generated staff documents.</p>
+            </div>
+
+            @if($user->signatureDataUrl())
+                <div>
+                    <p class="text-sm font-medium text-slate-700">Current signature</p>
+                    <div class="mt-3 rounded-xl border border-slate-200 bg-white p-4">
+                        <img src="{{ $user->signatureDataUrl() }}" alt="Current e-signature" class="max-h-24 w-auto object-contain">
+                    </div>
+                </div>
+            @endif
+
+            <div>
+                <x-input-label for="signature_file" :value="__('Upload PNG Signature')" />
+                <input id="signature_file" name="signature_file" type="file" accept="image/png" class="input mt-1 block w-full bg-white">
+                <p class="mt-2 text-xs text-slate-500">PNG only. Recommended transparent background for clean print output.</p>
+                <x-input-error class="mt-2" :messages="$errors->get('signature_file')" />
             </div>
         </div>
 

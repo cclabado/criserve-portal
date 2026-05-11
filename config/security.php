@@ -28,7 +28,7 @@ return [
         'cookie_name' => env('MFA_REMEMBER_COOKIE', 'criserve_mfa_remember'),
         'required_roles' => array_values(array_filter(array_map(
             'trim',
-            explode(',', (string) env('MFA_REQUIRED_ROLES', 'admin,social_worker,approving_officer,reporting_officer,service_provider,referral_institution,referral_officer'))
+            explode(',', (string) env('MFA_REQUIRED_ROLES', 'admin,social_worker,approving_officer,reporting_officer,service_provider,gl_payment_processor,referral_institution,referral_officer'))
         ))),
     ],
 ];

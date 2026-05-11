@@ -322,6 +322,15 @@
         $application->socialWorker?->last_name,
         $application->socialWorker?->extension_name,
     ]))) ?: ($application->socialWorker?->name ?? 'Social Worker');
+    $approvingOfficerName = trim(implode(' ', array_filter([
+        $application->approvingOfficer?->first_name,
+        $application->approvingOfficer?->middle_name,
+        $application->approvingOfficer?->last_name,
+        $application->approvingOfficer?->extension_name,
+    ]))) ?: ($application->approvingOfficer?->name ?? '');
+    $socialWorkerSignature = $application->socialWorker?->signatureDataUrl();
+    $approvingOfficerSignature = $application->approvingOfficer?->signatureDataUrl();
+    $clientSignature = $application->clientSignatureDataUrl();
     $documentText = $application->documents
         ->map(fn ($doc) => Str::lower(trim(($doc->file_name ?? '').' '.($doc->remarks ?? ''))))
         ->implode(' | ');
@@ -512,11 +521,17 @@
 
     <div class="sign-grid">
         <div class="sign-box">
+            @if($socialWorkerSignature)
+                <img src="{{ $socialWorkerSignature }}" alt="Social worker signature" class="signature-image">
+            @endif
             <div class="sign-line">{{ $socialWorkerName }}</div>
             <div class="sign-caption">Prepared and certified by / Social Worker</div>
         </div>
         <div class="sign-box">
-            <div class="sign-line">&nbsp;</div>
+            @if($approvingOfficerSignature)
+                <img src="{{ $approvingOfficerSignature }}" alt="Approving officer signature" class="signature-image">
+            @endif
+            <div class="sign-line">{{ $approvingOfficerName ?: "\u{00A0}" }}</div>
             <div class="sign-caption">Approved by / Approving Authority</div>
         </div>
     </div>
@@ -529,6 +544,9 @@
         </div>
         <div class="sign-grid" style="margin-top:18px;">
             <div class="sign-box">
+                @if($clientSignature)
+                    <img src="{{ $clientSignature }}" alt="Client signature" class="signature-image">
+                @endif
                 <div class="sign-line">{{ $servedName ?: '&nbsp;' }}</div>
                 <div class="sign-caption">Received by (Signature over Printed Name)</div>
             </div>
@@ -549,3 +567,10 @@
 </div>
 </body>
 </html>
+    .signature-image{
+        display:block;
+        margin:0 auto 4px;
+        max-height:42px;
+        max-width:180px;
+        object-fit:contain;
+    }

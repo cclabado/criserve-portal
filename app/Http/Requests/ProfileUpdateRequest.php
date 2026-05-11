@@ -40,6 +40,12 @@ class ProfileUpdateRequest extends FormRequest
                 Rule::exists('positions', 'id')->where(fn ($query) => $query->where('is_active', true)),
             ],
             'license_number' => ['nullable', 'string', 'max:255'],
+            'signature_file' => [
+                'nullable',
+                'file',
+                'mimes:png',
+                'max:2048',
+            ],
         ];
     }
 

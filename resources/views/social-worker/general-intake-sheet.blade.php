@@ -36,6 +36,7 @@
     .signature-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:12px;font-size:10.5px}
     .signature{text-align:center}
     .signature-line{border-bottom:1px solid #111;height:26px;padding-top:8px;font-weight:700}
+    .signature-image{display:block;margin:0 auto 4px;max-height:38px;max-width:160px;object-fit:contain}
     .footer{position:absolute;left:9mm;right:9mm;bottom:5mm;text-align:center;font-size:8.5px;line-height:1.3}
     .page-no{position:absolute;right:9mm;bottom:5mm;font-size:9px;font-weight:700}
     .muted{color:#333}
@@ -67,6 +68,12 @@
         $beneficiary?->last_name,
         $beneficiary?->extension_name,
     ])));
+    $approvingOfficerName = trim(implode(' ', array_filter([
+        $application->approvingOfficer?->first_name,
+        $application->approvingOfficer?->middle_name,
+        $application->approvingOfficer?->last_name,
+        $application->approvingOfficer?->extension_name,
+    ]))) ?: ($application->approvingOfficer?->name ?? '');
     $fullNameParts = function ($person) {
         return [
             $person?->last_name ?: '',
@@ -78,6 +85,8 @@
     $clientParts = $fullNameParts($client);
     $beneficiaryParts = $fullNameParts($beneficiary);
     $amountNeeded = (float) ($application->amount_needed ?? 0);
+    $socialWorkerSignature = $application->socialWorker?->signatureDataUrl();
+    $approvingOfficerSignature = $application->approvingOfficer?->signatureDataUrl();
     $purpose = $application->problem_statement ?: $application->crisis_type ?: ($application->assistanceSubtype?->name ?? '');
     $modeName = $application->modeOfAssistance?->name ?? $application->mode_of_assistance;
     $visitOptions = \App\Models\ServicePoint::where('is_active', true)
@@ -371,12 +380,18 @@
 
     <div class="signature-grid">
         <div class="signature">
+            @if($socialWorkerSignature)
+                <img src="{{ $socialWorkerSignature }}" alt="Social worker signature" class="signature-image">
+            @endif
             <div class="signature-line">{{ $socialWorkerName }}</div>
             <div>Interviewed by / Social Worker</div>
             <div class="muted">License no.: _____________</div>
         </div>
         <div class="signature">
-            <div class="signature-line">&nbsp;</div>
+            @if($approvingOfficerSignature)
+                <img src="{{ $approvingOfficerSignature }}" alt="Approving officer signature" class="signature-image">
+            @endif
+            <div class="signature-line">{{ $approvingOfficerName ?: "\u{00A0}" }}</div>
             <div>Reviewed and Approved by / Approving Authority</div>
         </div>
     </div>

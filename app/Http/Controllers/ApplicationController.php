@@ -22,6 +22,8 @@ use App\Services\FamilyNetworkService;
 use App\Services\FrequencyEligibilityService;
 use App\Services\IdentityMappingService;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ApplicationController extends Controller
@@ -38,6 +40,24 @@ class ApplicationController extends Controller
     public function create()
     {
         $user = auth()->user();
+
+        $client = Client::firstOrCreate(
+            ['user_id' => $user->id],
+            [
+                'last_name' => $user->last_name,
+                'first_name' => $user->first_name,
+                'middle_name' => $user->middle_name,
+                'extension_name' => $user->extension_name,
+                'contact_number' => $user->contact_number,
+                'birthdate' => $user->birthdate,
+                'sex' => $user->sex,
+                'civil_status' => $user->civil_status,
+                'full_address' => $user->full_address ?? $user->address,
+            ]
+        );
+
+        $this->restoreClientFamilyMembersFromLatestApplication($client);
+
         $client = Client::with([
                 'familyMembers' => function ($query) {
                     $query->whereNull('application_id')
@@ -46,8 +66,7 @@ class ApplicationController extends Controller
                 },
                 'beneficiaryProfiles.familyMembers.relationshipData',
             ])
-            ->where('user_id', $user->id)
-            ->first();
+            ->find($client->id);
 
         return view('client.application-form', compact('user', 'client'));
     }
@@ -140,6 +159,7 @@ class ApplicationController extends Controller
             'required_documents' => ['nullable', 'array'],
             'required_documents.*' => ['nullable', 'array'],
             'required_documents.*.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,doc,docx'],
+            'client_signature_data' => ['required', 'string'],
         ]);
 
         $this->validateAssistanceSelection(
@@ -268,6 +288,8 @@ class ApplicationController extends Controller
             'status' => 'submitted'
         ]);
 
+        $this->storeClientSignature($application, (string) $validated['client_signature_data']);
+
         // ================= BENEFICIARY =================
         if ($request->relationship_id == 1) {
 
@@ -325,6 +347,77 @@ class ApplicationController extends Controller
         return redirect('/client/dashboard')
             ->with('success', 'Application submitted successfully!')
             ->with('frequency_warning', $frequencyEvaluation['status'] === 'review_required' ? $frequencyEvaluation['message'] : null);
+    }
+
+    protected function storeClientSignature(Application $application, string $signatureData): void
+    {
+        if (! preg_match('/^data:image\/png;base64,/', $signatureData)) {
+            throw ValidationException::withMessages([
+                'client_signature_data' => 'Please provide a valid client signature before submitting.',
+            ]);
+        }
+
+        $binary = base64_decode(preg_replace('/^data:image\/png;base64,/', '', $signatureData), true);
+
+        if ($binary === false || $binary === '') {
+            throw ValidationException::withMessages([
+                'client_signature_data' => 'Unable to save the client signature. Please sign again.',
+            ]);
+        }
+
+        $disk = config('filesystems.default', 'local');
+        $path = 'signatures/client/'.Str::uuid().'.png';
+
+        Storage::disk($disk)->put($path, $binary);
+
+        $application->update([
+            'client_signature_path' => $path,
+            'client_signature_disk' => $disk,
+            'client_signature_mime_type' => 'image/png',
+        ]);
+    }
+
+    protected function restoreClientFamilyMembersFromLatestApplication(Client $client): void
+    {
+        $hasMasterRows = $client->familyMembers()
+            ->whereNull('beneficiary_profile_id')
+            ->whereNull('application_id')
+            ->exists();
+
+        if ($hasMasterRows) {
+            return;
+        }
+
+        $latestApplication = Application::with([
+                'applicationFamilyMembers' => fn ($query) => $query
+                    ->whereNull('beneficiary_profile_id')
+                    ->orderBy('id'),
+            ])
+            ->where('client_id', $client->id)
+            ->latest('id')
+            ->first();
+
+        if (! $latestApplication || $latestApplication->applicationFamilyMembers->isEmpty()) {
+            return;
+        }
+
+        foreach ($latestApplication->applicationFamilyMembers as $snapshotMember) {
+            $member = $client->familyMembers()->create([
+                'application_id' => null,
+                'client_id' => $client->id,
+                'linked_user_id' => $snapshotMember->linked_user_id,
+                'person_id' => $snapshotMember->person_id,
+                'beneficiary_profile_id' => null,
+                'last_name' => $snapshotMember->last_name,
+                'first_name' => $snapshotMember->first_name,
+                'middle_name' => $snapshotMember->middle_name,
+                'extension_name' => $snapshotMember->extension_name,
+                'relationship' => $snapshotMember->relationship,
+                'birthdate' => $snapshotMember->birthdate,
+            ]);
+
+            $this->identityMapping->syncFamilyMember($member);
+        }
     }
 
     protected function upsertBeneficiaryProfile(Client $client, Request $request): BeneficiaryProfile

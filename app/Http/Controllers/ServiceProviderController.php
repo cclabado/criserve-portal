@@ -24,19 +24,7 @@ class ServiceProviderController extends Controller
 
         abort_unless($provider, 403, 'No service provider account is linked to this login.');
 
-        $applications = Application::with([
-                'client',
-                'beneficiary.relationshipData',
-                'assistanceType',
-                'assistanceSubtype',
-                'assistanceDetail',
-                'documents',
-                'socialWorker',
-                'approvingOfficer',
-            ])
-            ->where('service_provider_id', $provider->id)
-            ->whereHas('modeOfAssistance', fn ($query) => $query->where('name', 'Guarantee Letter'))
-            ->whereIn('status', ['approved', 'released'])
+        $applications = $this->providerApplicationQuery($provider->id)
             ->latest('updated_at')
             ->get();
 
@@ -44,11 +32,88 @@ class ServiceProviderController extends Controller
             return ! $application->documents->contains(fn ($document) => $document->document_type === 'Updated Statement of Account');
         })->count();
 
+        $pendingReviewCount = $applications->where('gl_soa_status', 'pending_review')->count();
+        $returnedCount = $applications->where('gl_soa_status', 'returned_for_compliance')->count();
+        $processedCount = $applications->where('gl_soa_status', 'processed')->count();
+        $paidCount = $applications->where('gl_payment_status', 'paid')->count();
+        $releasedCount = $applications->where('status', 'released')->count();
+        $totalFinalAmount = $applications->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0));
+
+        $priorityApplications = $applications
+            ->filter(fn (Application $application) => in_array($application->gl_soa_status, ['awaiting_upload', 'returned_for_compliance', 'pending_review'], true))
+            ->sortBy(function (Application $application) {
+                return match ($application->gl_soa_status) {
+                    'returned_for_compliance' => 0,
+                    'awaiting_upload' => 1,
+                    'pending_review' => 2,
+                    default => 3,
+                };
+            })
+            ->values();
+
+        $recentlyProcessed = $applications
+            ->filter(fn (Application $application) => $application->gl_soa_status === 'processed')
+            ->take(5)
+            ->values();
+
         return view('service-provider.dashboard', [
             'provider' => $provider,
             'applications' => $applications,
             'pendingStatementCount' => $pendingStatementCount,
+            'pendingReviewCount' => $pendingReviewCount,
+            'returnedCount' => $returnedCount,
+            'processedCount' => $processedCount,
+            'paidCount' => $paidCount,
+            'releasedCount' => $releasedCount,
+            'totalFinalAmount' => $totalFinalAmount,
+            'priorityApplications' => $priorityApplications,
+            'recentlyProcessed' => $recentlyProcessed,
         ]);
+    }
+
+    public function letters(Request $request)
+    {
+        $provider = $request->user()->serviceProvider;
+
+        abort_unless($provider, 403, 'No service provider account is linked to this login.');
+
+        $applications = $this->providerApplicationQuery($provider->id)
+            ->latest('updated_at')
+            ->get();
+
+        return view('service-provider.letters', [
+            'provider' => $provider,
+            'applications' => $applications,
+        ]);
+    }
+
+    public function show(Request $request, Application $application)
+    {
+        $provider = $request->user()->serviceProvider;
+
+        abort_unless($provider, 403, 'No service provider account is linked to this login.');
+
+        $application = $this->providerApplicationQuery($provider->id)
+            ->whereKey($application->id)
+            ->firstOrFail();
+
+        return view('service-provider/show', [
+            'provider' => $provider,
+            'application' => $application,
+        ]);
+    }
+
+    public function guaranteeLetter(Request $request, Application $application)
+    {
+        $provider = $request->user()->serviceProvider;
+
+        abort_unless($provider, 403, 'No service provider account is linked to this login.');
+
+        $application = $this->providerApplicationQuery($provider->id)
+            ->whereKey($application->id)
+            ->firstOrFail();
+
+        return view('social-worker.guarantee-letter', compact('application'));
     }
 
     public function uploadUpdatedStatement(Request $request, Application $application): RedirectResponse
@@ -77,6 +142,13 @@ class ServiceProviderController extends Controller
             'remarks' => 'Uploaded by service provider '.$provider->name,
         ]);
 
+        $application->update([
+            'gl_soa_status' => 'pending_review',
+            'gl_soa_review_notes' => null,
+            'gl_soa_reviewed_by' => null,
+            'gl_soa_reviewed_at' => null,
+        ]);
+
         $application->loadMissing('socialWorker', 'approvingOfficer');
 
         if ($application->socialWorker) {
@@ -93,7 +165,31 @@ class ServiceProviderController extends Controller
         ]);
 
         return redirect()
-            ->route('service-provider.dashboard')
+            ->to(url()->previous() ?: route('service-provider.dashboard'))
             ->with('success', 'Updated statement of account uploaded successfully.');
+    }
+
+    protected function providerApplicationQuery(int $providerId)
+    {
+        return Application::with([
+                'client',
+                'beneficiary.relationshipData',
+                'assistanceType',
+                'assistanceSubtype',
+                'assistanceDetail',
+                'modeOfAssistance',
+                'serviceProvider',
+                'documents',
+                'socialWorker',
+                'approvingOfficer',
+                'assistanceRecommendations.assistanceType',
+                'assistanceRecommendations.assistanceSubtype',
+                'assistanceRecommendations.assistanceDetail',
+                'assistanceRecommendations.modeOfAssistance',
+                'assistanceRecommendations.referralInstitution',
+            ])
+            ->where('service_provider_id', $providerId)
+            ->whereHas('modeOfAssistance', fn ($query) => $query->where('name', 'Guarantee Letter'))
+            ->whereIn('status', ['approved', 'released']);
     }
 }

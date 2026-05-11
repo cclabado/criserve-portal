@@ -838,6 +838,7 @@ class SocialWorkerController extends Controller
             'assistanceRecommendations.assistanceDetail',
             'assistanceRecommendations.referralInstitution',
             'socialWorker',
+            'approvingOfficer',
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
 
@@ -866,6 +867,7 @@ class SocialWorkerController extends Controller
             'assistanceRecommendations.modeOfAssistance',
             'assistanceRecommendations.referralInstitution',
             'socialWorker',
+            'approvingOfficer',
         ])->findOrFail($id);
         $this->claimOrEnsureOwnership($application);
 
