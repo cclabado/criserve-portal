@@ -17,6 +17,11 @@ class Document extends Model
         'file_size',
         'file_hash',
         'remarks',
+        'requires_client_resubmission',
+    ];
+
+    protected $casts = [
+        'requires_client_resubmission' => 'boolean',
     ];
 
     public function application()

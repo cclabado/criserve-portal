@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use Carbon\Carbon;
 use App\Models\Application;
 use App\Models\AssistanceDetail;
 use App\Models\AssistanceSubtype;
@@ -12,21 +11,25 @@ use App\Models\ClientType;
 use App\Models\Document;
 use App\Models\FamilyMember;
 use App\Models\ModeOfAssistance;
-use App\Models\Relationship;
 use App\Models\ReferralInstitution;
+use App\Models\Relationship;
 use App\Models\ServicePoint;
 use App\Models\ServiceProvider;
+use App\Notifications\ClientDocumentComplianceRequestedNotification;
 use App\Notifications\InitialAssessmentScheduledNotification;
-use App\Services\AuditLogService;
 use App\Services\AiRecommendationService;
+use App\Services\AuditLogService;
 use App\Services\FamilyNetworkService;
 use App\Services\FrequencyEligibilityService;
 use App\Services\GoogleCalendarService;
+use Carbon\Carbon;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class SocialWorkerController extends Controller
 {
@@ -35,8 +38,7 @@ class SocialWorkerController extends Controller
         protected FrequencyEligibilityService $frequencyEligibility,
         protected FamilyNetworkService $familyNetwork,
         protected AuditLogService $auditLogs
-    ) {
-    }
+    ) {}
 
     public function dashboard()
     {
@@ -44,7 +46,7 @@ class SocialWorkerController extends Controller
             ->selectRaw('COUNT(*) as total_handled')
             ->selectRaw("SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) as total_pending")
             ->selectRaw("SUM(CASE WHEN status = 'under_review' THEN 1 ELSE 0 END) as urgent")
-            ->selectRaw("SUM(CASE WHEN social_worker_id = ? THEN 1 ELSE 0 END) as my_handled", [auth()->id()])
+            ->selectRaw('SUM(CASE WHEN social_worker_id = ? THEN 1 ELSE 0 END) as my_handled', [auth()->id()])
             ->selectRaw("SUM(CASE WHEN status = 'released' AND YEAR(updated_at) = ? AND MONTH(updated_at) = ? THEN 1 ELSE 0 END) as released_this_month", [now()->year, now()->month])
             ->first();
 
@@ -157,25 +159,10 @@ class SocialWorkerController extends Controller
 
     public function myCases(Request $request)
     {
-        $query = Application::with(['client', 'assistanceType', 'modeOfAssistance'])
-            ->where('social_worker_id', auth()->id())
-            ->latest();
+        $query = $this->buildMyCasesQuery($request);
 
-        if ($request->status && $request->status !== 'all') {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->search) {
-            $search = $request->search;
-
-            $query->where(function ($q) use ($search) {
-                $q->where('reference_no', 'like', "%$search%")
-                    ->orWhereHas('client', function ($c) use ($search) {
-                        $c->where('first_name', 'like', "%$search%")
-                            ->orWhere('last_name', 'like', "%$search%")
-                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
-                    });
-            });
+        if ($request->get('export') === 'xlsx') {
+            return $this->downloadMyCasesExcel(clone $query);
         }
 
         $applications = $query->paginate(8)->withQueryString();
@@ -188,11 +175,11 @@ class SocialWorkerController extends Controller
         $activeScheduleStatuses = ['submitted', 'under_review'];
 
         $query = Application::with([
-                'client',
-                'beneficiary.relationshipData',
-                'assistanceType',
-                'assistanceSubtype',
-            ])
+            'client',
+            'beneficiary.relationshipData',
+            'assistanceType',
+            'assistanceSubtype',
+        ])
             ->where('social_worker_id', auth()->id())
             ->whereIn('status', $activeScheduleStatuses)
             ->whereNotNull('schedule_date')
@@ -237,8 +224,8 @@ class SocialWorkerController extends Controller
         $schedules = $query->paginate(10)->withQueryString();
         $scheduleStats = Application::query()
             ->selectRaw('COUNT(*) as total_scheduled')
-            ->selectRaw("SUM(CASE WHEN schedule_date >= ? THEN 1 ELSE 0 END) as upcoming_count", [now()])
-            ->selectRaw("SUM(CASE WHEN DATE(schedule_date) = ? THEN 1 ELSE 0 END) as today_count", [today()->toDateString()])
+            ->selectRaw('SUM(CASE WHEN schedule_date >= ? THEN 1 ELSE 0 END) as upcoming_count', [now()])
+            ->selectRaw('SUM(CASE WHEN DATE(schedule_date) = ? THEN 1 ELSE 0 END) as today_count', [today()->toDateString()])
             ->where('social_worker_id', auth()->id())
             ->whereIn('status', $activeScheduleStatuses)
             ->whereNotNull('schedule_date')
@@ -256,6 +243,115 @@ class SocialWorkerController extends Controller
             'todayCount',
             'googleConnected'
         ));
+    }
+
+    protected function buildMyCasesQuery(Request $request)
+    {
+        $query = Application::with(['client', 'beneficiary.relationshipData', 'assistanceType', 'assistanceSubtype', 'modeOfAssistance'])
+            ->where('social_worker_id', auth()->id())
+            ->latest();
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+
+            $query->where(function ($q) use ($search) {
+                $q->where('reference_no', 'like', "%$search%")
+                    ->orWhereHas('client', function ($c) use ($search) {
+                        $c->where('first_name', 'like', "%$search%")
+                            ->orWhere('last_name', 'like', "%$search%")
+                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
+                    })
+                    ->orWhereHas('beneficiary', function ($b) use ($search) {
+                        $b->where('first_name', 'like', "%$search%")
+                            ->orWhere('last_name', 'like', "%$search%")
+                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
+                    });
+            });
+        }
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        return $query;
+    }
+
+    protected function downloadMyCasesExcel($query)
+    {
+        $filename = 'social-worker-my-cases-'.now()->format('Ymd-His').'.xlsx';
+
+        return response()->streamDownload(function () use ($query) {
+            $spreadsheet = new Spreadsheet;
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('My Cases');
+
+            $sheet->fromArray([
+                [
+                    'Reference No',
+                    'Created Date',
+                    'Updated Date',
+                    'Client',
+                    'Status',
+                    'Assistance Type',
+                    'Assistance Subtype',
+                    'Mode of Assistance',
+                    'Service Point',
+                    'Amount Needed',
+                    'Recommended Amount',
+                    'Final Amount',
+                ],
+            ], null, 'A1');
+
+            $row = 2;
+
+            $query->with(['client', 'assistanceType', 'assistanceSubtype', 'modeOfAssistance'])
+                ->orderBy('created_at')
+                ->chunk(200, function ($applications) use ($sheet, &$row) {
+                    foreach ($applications as $application) {
+                        $sheet->fromArray([
+                            [
+                                $application->reference_no,
+                                optional($application->created_at)->format('Y-m-d H:i:s'),
+                                optional($application->updated_at)->format('Y-m-d H:i:s'),
+                                trim(implode(' ', array_filter([
+                                    $application->client?->first_name,
+                                    $application->client?->middle_name,
+                                    $application->client?->last_name,
+                                    $application->client?->extension_name,
+                                ]))),
+                                str_replace('_', ' ', (string) $application->status),
+                                $application->assistanceType?->name,
+                                $application->assistanceSubtype?->name,
+                                $application->modeOfAssistance?->name ?? $application->mode_of_assistance,
+                                $application->gis_visit_type,
+                                $application->amount_needed,
+                                $application->recommended_amount,
+                                $application->final_amount,
+                            ],
+                        ], null, 'A'.$row);
+
+                        $row++;
+                    }
+                });
+
+            foreach (range('A', 'L') as $column) {
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+            }
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 
     public function show($id)
@@ -333,9 +429,9 @@ class SocialWorkerController extends Controller
         $relationships = Relationship::where('is_active', true)->orderBy('name')->get();
         $assistanceTypes = AssistanceType::where('is_active', true)->orderBy('name')->get();
         $assistanceSubtypes = AssistanceSubtype::with([
-                'frequencyRule',
-                'details' => fn ($query) => $query->where('is_active', true)->with('frequencyRule'),
-            ])
+            'frequencyRule',
+            'details' => fn ($query) => $query->where('is_active', true)->with('frequencyRule'),
+        ])
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
@@ -376,8 +472,11 @@ class SocialWorkerController extends Controller
             'service_provider_id' => ['nullable', 'exists:service_providers,id'],
             'frequency_case_key' => ['nullable', 'string', 'max:255'],
             'frequency_override_reason' => ['nullable', 'string'],
-            'assessment_action' => ['nullable', 'in:save,cancel_due_to_frequency'],
+            'assessment_action' => ['nullable', 'in:save,cancel_due_to_frequency,request_document_compliance'],
             'cancellation_reason' => ['nullable', 'string'],
+            'client_compliance_notes' => ['nullable', 'string', 'max:2000'],
+            'compliance_document_ids' => ['nullable', 'array'],
+            'compliance_document_ids.*' => ['integer'],
         ]);
 
         $this->validateAssistanceSelection(
@@ -410,6 +509,21 @@ class SocialWorkerController extends Controller
                 'serviceProvider',
             ])->findOrFail($id);
             $this->claimOrEnsureOwnership($application);
+
+            $applicationDocumentIds = $application->documents->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $selectedComplianceDocumentIds = collect($request->input('compliance_document_ids', []))
+                ->filter(fn ($id) => filled($id))
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values();
+
+            foreach ($selectedComplianceDocumentIds as $documentId) {
+                if (! in_array($documentId, $applicationDocumentIds, true)) {
+                    throw ValidationException::withMessages([
+                        'compliance_document_ids' => 'One or more selected compliance documents do not belong to this application.',
+                    ]);
+                }
+            }
 
             $application->client->update([
                 'first_name' => $request->client_first_name,
@@ -593,8 +707,31 @@ class SocialWorkerController extends Controller
 
             if ($request->remarks) {
                 foreach ($request->remarks as $docId => $remark) {
+                    if (! in_array((int) $docId, $applicationDocumentIds, true)) {
+                        continue;
+                    }
+
                     Document::where('id', $docId)->update([
                         'remarks' => $remark,
+                        'requires_client_resubmission' => $selectedComplianceDocumentIds->contains((int) $docId),
+                    ]);
+                }
+            }
+
+            $documentsWithoutRemarks = $selectedComplianceDocumentIds->filter(function (int $documentId) use ($request) {
+                return blank($request->input("remarks.{$documentId}"));
+            });
+
+            if ($request->assessment_action === 'request_document_compliance') {
+                if ($selectedComplianceDocumentIds->isEmpty() && blank($request->client_compliance_notes)) {
+                    throw ValidationException::withMessages([
+                        'client_compliance_notes' => 'Add compliance instructions or mark at least one document for client resubmission.',
+                    ]);
+                }
+
+                if ($documentsWithoutRemarks->isNotEmpty()) {
+                    throw ValidationException::withMessages([
+                        'client_compliance_notes' => 'Add review remarks for every document marked for client compliance.',
                     ]);
                 }
             }
@@ -607,6 +744,24 @@ class SocialWorkerController extends Controller
                 'google_calendar_event_link' => null,
                 'status' => 'under_review',
             ];
+
+            if ($request->assessment_action === 'request_document_compliance') {
+                $scheduleData['client_compliance_status'] = 'requested';
+                $scheduleData['client_compliance_notes'] = filled($request->client_compliance_notes)
+                    ? trim((string) $request->client_compliance_notes)
+                    : null;
+                $scheduleData['client_compliance_requested_at'] = now();
+                $scheduleData['client_compliance_responded_at'] = null;
+            } elseif (
+                filled($application->client_compliance_status)
+                && $selectedComplianceDocumentIds->isEmpty()
+                && blank($request->client_compliance_notes)
+            ) {
+                $scheduleData['client_compliance_status'] = null;
+                $scheduleData['client_compliance_notes'] = null;
+                $scheduleData['client_compliance_requested_at'] = null;
+                $scheduleData['client_compliance_responded_at'] = null;
+            }
 
             if (filled($request->schedule_date)) {
                 $googleEvent = $this->googleCalendar->syncAssessmentSchedule(
@@ -628,17 +783,23 @@ class SocialWorkerController extends Controller
             DB::commit();
 
             $application->refresh();
-            $application->loadMissing('client');
+            $application->load('client.user', 'documents');
 
             $clientUser = $application->client?->user;
 
-            if ($clientUser && filled($application->schedule_date)) {
+            if ($clientUser && $request->assessment_action === 'request_document_compliance') {
+                $clientUser->notify(new ClientDocumentComplianceRequestedNotification($application));
+            }
+
+            if ($clientUser && filled($application->schedule_date) && $request->assessment_action !== 'request_document_compliance') {
                 $clientUser->notify(new InitialAssessmentScheduledNotification($application));
             }
 
             return redirect()
                 ->route('socialworker.applications')
-                ->with('success', 'Assessment saved successfully.')
+                ->with('success', $request->assessment_action === 'request_document_compliance'
+                    ? 'Client has been notified to comply with the flagged document requirements.'
+                    : 'Assessment saved successfully.')
                 ->with('frequency_warning', in_array($frequencyStatus, ['review_required', 'overridden'], true) ? $frequencyMessage : null);
         } catch (ValidationException $e) {
             DB::rollback();
@@ -677,11 +838,11 @@ class SocialWorkerController extends Controller
         $this->claimOrEnsureOwnership($application);
 
         $assistanceTypes = AssistanceType::with([
-                'subtypes' => fn ($query) => $query->where('is_active', true)->with([
-                    'frequencyRule',
-                    'details' => fn ($detailQuery) => $detailQuery->where('is_active', true)->with('frequencyRule'),
-                ]),
-            ])
+            'subtypes' => fn ($query) => $query->where('is_active', true)->with([
+                'frequencyRule',
+                'details' => fn ($detailQuery) => $detailQuery->where('is_active', true)->with('frequencyRule'),
+            ]),
+        ])
             ->where('is_active', true)
             ->orderBy('name')
             ->get();

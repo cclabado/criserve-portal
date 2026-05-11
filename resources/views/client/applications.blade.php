@@ -102,6 +102,19 @@
                                 ">
                                     {{ str_replace('_',' ', $application->status) }}
                                 </span>
+                                @if($application->client_compliance_status === 'requested')
+                                    <div class="mt-2">
+                                        <span class="px-3 py-1 text-[10px] font-bold rounded-full uppercase bg-amber-100 text-amber-800">
+                                            For Compliance
+                                        </span>
+                                    </div>
+                                @elseif($application->client_compliance_status === 'resubmitted')
+                                    <div class="mt-2">
+                                        <span class="px-3 py-1 text-[10px] font-bold rounded-full uppercase bg-sky-100 text-sky-800">
+                                            Compliance Uploaded
+                                        </span>
+                                    </div>
+                                @endif
                             </td>
 
                             <td class="px-6 py-5">

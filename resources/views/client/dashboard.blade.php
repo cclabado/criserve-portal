@@ -329,6 +329,15 @@
                                 {{ str_replace('_', ' ', $app->status) }}
                             </span>
                         </div>
+                        @if($app->client_compliance_status === 'requested')
+                            <p class="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-[10px] font-bold uppercase text-amber-800">
+                                For Compliance
+                            </p>
+                        @elseif($app->client_compliance_status === 'resubmitted')
+                            <p class="mt-2 inline-flex rounded-full bg-sky-100 px-3 py-1 text-[10px] font-bold uppercase text-sky-800">
+                                Compliance Uploaded
+                            </p>
+                        @endif
                         <p class="mt-3 text-xs text-slate-500">Submitted {{ $app->created_at->format('M d, Y') }}</p>
                     </a>
                 @empty
@@ -424,6 +433,19 @@
                                 ">
                                     {{ str_replace('_',' ', $app->status) }}
                                 </span>
+                                @if($app->client_compliance_status === 'requested')
+                                    <div class="mt-2">
+                                        <span class="px-3 py-1 text-[10px] font-bold rounded-full uppercase bg-amber-100 text-amber-800">
+                                            For Compliance
+                                        </span>
+                                    </div>
+                                @elseif($app->client_compliance_status === 'resubmitted')
+                                    <div class="mt-2">
+                                        <span class="px-3 py-1 text-[10px] font-bold rounded-full uppercase bg-sky-100 text-sky-800">
+                                            Compliance Uploaded
+                                        </span>
+                                    </div>
+                                @endif
                             </td>
 
                             <td class="px-6 py-5">

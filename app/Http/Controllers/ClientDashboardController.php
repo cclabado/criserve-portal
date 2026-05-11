@@ -2,25 +2,29 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AssistanceType;
-use Carbon\Carbon;
-use Illuminate\Http\Request;
 use App\Models\Application;
+use App\Models\AssistanceType;
 use App\Models\Client;
+use App\Models\Document;
 use App\Models\FamilyMember;
 use App\Models\Relationship;
 use App\Models\User;
+use App\Services\AuditLogService;
+use App\Services\DocumentSecurityService;
 use App\Services\FamilyNetworkService;
 use App\Services\IdentityMappingService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ClientDashboardController extends Controller
 {
     public function __construct(
-        protected FamilyNetworkService $familyNetwork
-    ) {
-    }
+        protected FamilyNetworkService $familyNetwork,
+        protected DocumentSecurityService $documentSecurity,
+        protected AuditLogService $auditLogs
+    ) {}
 
     protected function ensureClientProfile(): Client
     {
@@ -132,6 +136,7 @@ class ClientDashboardController extends Controller
         ];
 
         $types = AssistanceType::where('is_active', true)->get();
+
         return view('client.dashboard', compact(
             'applications',
             'latestApplication',
@@ -280,6 +285,56 @@ class ClientDashboardController extends Controller
         ])->findOrFail($id);
 
         return view('client.application-details', compact('application'));
+    }
+
+    public function uploadComplianceDocuments(Request $request, $id)
+    {
+        $application = $this->applicationQuery()
+            ->with('documents')
+            ->findOrFail($id);
+
+        abort_unless(in_array($application->client_compliance_status, ['requested', 'resubmitted'], true), 403);
+
+        $validated = $request->validate([
+            'documents' => ['required', 'array', 'min:1'],
+            'documents.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,doc,docx'],
+            'compliance_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        DB::transaction(function () use ($application, $request, $validated) {
+            foreach ($request->file('documents', []) as $file) {
+                $storedDocument = $this->documentSecurity->secureStore($file);
+
+                Document::create([
+                    'application_id' => $application->id,
+                    'document_type' => 'Compliance Resubmission',
+                    'file_name' => $storedDocument['file_name'],
+                    'file_path' => $storedDocument['path'],
+                    'storage_disk' => $storedDocument['disk'],
+                    'mime_type' => $storedDocument['mime_type'],
+                    'file_size' => $storedDocument['file_size'],
+                    'file_hash' => $storedDocument['file_hash'],
+                    'remarks' => filled($validated['compliance_note'] ?? null)
+                        ? 'Client resubmission note: '.trim((string) $validated['compliance_note'])
+                        : 'Client resubmitted this file for compliance review.',
+                ]);
+            }
+
+            $application->update([
+                'client_compliance_status' => 'resubmitted',
+                'client_compliance_responded_at' => now(),
+                'status' => 'under_review',
+            ]);
+        });
+
+        $this->auditLogs->log($request, 'application.client_compliance_resubmitted', $application, [
+            'reference_no' => $application->reference_no,
+            'uploaded_files' => count($request->file('documents', [])),
+        ]);
+
+        return redirect()
+            ->route('client.application.show', $application->id)
+            ->with('success', 'Corrected documents uploaded successfully. Your social worker will review them shortly.');
     }
 
     protected function buildFamilySuggestions(Client $client, $relationships)

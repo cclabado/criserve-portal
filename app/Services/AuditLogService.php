@@ -3,10 +3,10 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class AuditLogService
@@ -22,6 +22,10 @@ class AuditLogService
 
     public function log(?Request $request, string $action, ?Model $auditable = null, array $metadata = [], $user = null): void
     {
+        if (! Schema::hasTable('audit_logs')) {
+            return;
+        }
+
         AuditLog::create([
             'user_id' => $user?->id ?? $request?->user()?->id,
             'action' => $action,

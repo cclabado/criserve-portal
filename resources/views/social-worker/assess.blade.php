@@ -561,11 +561,18 @@
                             <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                                 Review Remarks
                             </label>
-                            <input type="text"
+                            <textarea
                                 name="remarks[{{ $file->id }}]"
-                                value="{{ $file->remarks ?? '' }}"
-                                class="input w-full rounded-xl border-slate-200 bg-white"
-                                placeholder="Add remarks for this document">
+                                class="input w-full rounded-xl border-slate-200 bg-white h-24"
+                                placeholder="Explain if the file is wrong, incomplete, blurred, unreadable, or needs replacement">{{ old('remarks.'.$file->id, $file->remarks ?? '') }}</textarea>
+                            <label class="mt-3 inline-flex items-start gap-3 text-sm text-slate-700">
+                                <input type="checkbox"
+                                    name="compliance_document_ids[]"
+                                    value="{{ $file->id }}"
+                                    class="mt-1 rounded border-slate-300 text-[#234E70] focus:ring-[#234E70]"
+                                    @checked(collect(old('compliance_document_ids', $file->requires_client_resubmission ? [$file->id] : []))->contains($file->id))>
+                                <span>Mark this document for client compliance follow-up.</span>
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -603,6 +610,17 @@
                 <label class="label">Assessment Notes</label>
                 <textarea name="notes"
                     class="input w-full h-32">{{ $application->notes }}</textarea>
+            </div>
+
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <label class="label text-amber-900">Client Compliance Instructions</label>
+                <textarea
+                    name="client_compliance_notes"
+                    class="input mt-2 w-full h-28 border-amber-200 bg-white"
+                    placeholder="Summarize what the client must replace or re-upload based on the document remarks.">{{ old('client_compliance_notes', $application->client_compliance_notes) }}</textarea>
+                <p class="mt-2 text-xs text-amber-800">
+                    Use this when the uploaded attachment is wrong, unreadable, incomplete, or not viewable. The client will receive these instructions together with the flagged document remarks.
+                </p>
             </div>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -665,11 +683,19 @@
                 ← Back
             </button>
 
-            <button type="button"
-                id="nextBtn"
-                class="px-6 py-3 bg-[#234E70] text-white rounded-lg shadow hover:bg-[#18384f]">
-                Next →
-            </button>
+            <div class="flex items-center gap-3">
+                <button type="button"
+                    id="requestComplianceBtn"
+                    class="hidden px-6 py-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 shadow-sm hover:bg-amber-100">
+                    Request Document Compliance
+                </button>
+
+                <button type="button"
+                    id="nextBtn"
+                    class="px-6 py-3 bg-[#234E70] text-white rounded-lg shadow hover:bg-[#18384f]">
+                    Next →
+                </button>
+            </div>
 
         </div>
 
@@ -820,6 +846,12 @@ function updateSteps() {
 
     document.getElementById('nextBtn').innerText =
         currentStep === totalSteps ? 'Save Assessment' : 'Next →';
+
+    const requestComplianceBtn = document.getElementById('requestComplianceBtn');
+
+    if (requestComplianceBtn) {
+        requestComplianceBtn.classList.toggle('hidden', currentStep !== totalSteps);
+    }
 }
 
 function goToStep(step) {
@@ -846,6 +878,7 @@ updateSteps();
 
 const assessmentActionInput = document.getElementById('assessmentActionInput');
 const cancelFrequencyBtn = document.getElementById('cancelFrequencyBtn');
+const requestComplianceBtn = document.getElementById('requestComplianceBtn');
 const previousAssistanceModal = document.getElementById('previousAssistanceModal');
 const openPreviousAssistanceModalBtn = document.getElementById('openPreviousAssistanceModalBtn');
 const closePreviousAssistanceModalBtn = document.getElementById('closePreviousAssistanceModalBtn');
@@ -1108,6 +1141,21 @@ cancelFrequencyBtn?.addEventListener('click', function () {
     }
 
     if (confirm('Cancel this application based on the previous released assistance record?')) {
+        document.getElementById('assessmentForm').submit();
+        return;
+    }
+
+    if (assessmentActionInput) {
+        assessmentActionInput.value = 'save';
+    }
+});
+
+requestComplianceBtn?.addEventListener('click', function () {
+    if (assessmentActionInput) {
+        assessmentActionInput.value = 'request_document_compliance';
+    }
+
+    if (confirm('Notify the client to replace or re-upload the flagged documents?')) {
         document.getElementById('assessmentForm').submit();
         return;
     }

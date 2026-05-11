@@ -13,18 +13,10 @@
 </header>
 
 <form method="GET" action="{{ route('socialworker.my-cases') }}"
-      class="bg-white rounded-2xl shadow p-5 grid gap-4 md:grid-cols-[1.3fr,.7fr,auto] items-end">
+      class="bg-white rounded-xl shadow p-4 flex justify-between items-center flex-wrap gap-4">
+    <div class="flex gap-4 flex-wrap">
     <div>
-        <label class="label">Search case or applicant</label>
-        <input type="text"
-               name="search"
-               value="{{ request('search') }}"
-               placeholder="Reference no. or client name"
-               class="input">
-    </div>
-
-    <div>
-        <label class="label">Status</label>
+        <p class="text-xs text-gray-500 mb-1">STATUS FILTER</p>
         <select name="status" class="input">
             <option value="all">All Statuses</option>
             <option value="submitted" @selected(request('status') === 'submitted')>Submitted</option>
@@ -37,65 +29,164 @@
         </select>
     </div>
 
-    <div class="flex gap-2">
-        <a href="{{ route('socialworker.my-cases') }}" class="btn-secondary text-center">Reset</a>
-        <button type="submit" class="btn-primary">Filter</button>
+    <div>
+        <p class="text-xs text-gray-500 mb-1">APPLICATION SEARCH</p>
+        <input type="text"
+               name="search"
+               value="{{ request('search') }}"
+               placeholder="Reference no., client, or beneficiary"
+               class="input min-w-[280px]">
+    </div>
+
+    <div>
+        <p class="text-xs text-gray-500 mb-1">DATE FROM</p>
+        <input type="date"
+               name="date_from"
+               value="{{ request('date_from') }}"
+               class="input">
+    </div>
+
+    <div>
+        <p class="text-xs text-gray-500 mb-1">DATE TO</p>
+        <input type="date"
+               name="date_to"
+               value="{{ request('date_to') }}"
+               class="input">
+    </div>
+    </div>
+
+    <div class="flex gap-2 flex-wrap">
+        <a href="{{ route('socialworker.my-cases') }}"
+           class="px-4 py-2 bg-gray-200 rounded-lg text-sm">
+            Clear
+        </a>
+        <button type="submit"
+                class="px-4 py-2 bg-[#0B3C5D] text-white rounded-lg text-sm">
+            Filter
+        </button>
+        <button type="submit"
+                name="export"
+                value="xlsx"
+                class="px-4 py-2 bg-emerald-100 text-emerald-800 rounded-lg text-sm font-semibold">
+            Export Excel
+        </button>
     </div>
 </form>
 
-<section class="bg-white rounded-2xl shadow overflow-hidden">
-    <table class="w-full text-left">
-        <thead class="bg-slate-100 text-xs uppercase text-slate-500">
+<section class="bg-white rounded-xl shadow overflow-hidden">
+    <div class="overflow-x-auto">
+    <table class="w-full min-w-[980px] text-left">
+        <thead class="bg-gray-100 text-xs uppercase text-gray-500">
             <tr>
-                <th class="px-6 py-4">Applicant</th>
-                <th class="px-6 py-4">Reference</th>
-                <th class="px-6 py-4">Assistance</th>
-                <th class="px-6 py-4">Status</th>
-                <th class="px-6 py-4">Updated</th>
-                <th class="px-6 py-4 text-right">Action</th>
+                <th class="px-6 py-4">Applicant Identity</th>
+                <th class="px-6 py-4">Service Category</th>
+                <th class="px-6 py-4">Current Status</th>
+                <th class="px-6 py-4">Submission Date</th>
+                <th class="px-6 py-4 text-right">Actions</th>
             </tr>
         </thead>
+
         <tbody class="divide-y">
             @forelse($applications as $app)
-                <tr class="hover:bg-slate-50 transition">
+                <tr class="hover:bg-gray-50 transition">
                     <td class="px-6 py-4">
-                        <p class="font-semibold text-sm text-slate-900">
-                            {{ $app->client->first_name }} {{ $app->client->last_name }}
-                        </p>
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold text-[#0B3C5D]">
+                                {{ strtoupper(substr($app->client->first_name, 0, 1)) }}
+                            </div>
+
+                            <div>
+                                <p class="font-semibold text-sm">
+                                    {{ $app->client->first_name }} {{ $app->client->last_name }}
+                                </p>
+                                @if($app->beneficiary && strcasecmp($app->beneficiary->relationshipData?->name ?? '', 'Self') !== 0)
+                                    <p class="text-xs text-slate-600">
+                                        Beneficiary:
+                                        {{ trim(collect([
+                                            $app->beneficiary->first_name,
+                                            $app->beneficiary->middle_name,
+                                            $app->beneficiary->last_name,
+                                            $app->beneficiary->extension_name,
+                                        ])->filter()->implode(' ')) }}
+                                        @if($app->beneficiary->relationshipData?->name)
+                                            ({{ $app->beneficiary->relationshipData->name }})
+                                        @endif
+                                    </p>
+                                @endif
+                                <p class="text-xs text-gray-500">
+                                    ID: {{ $app->reference_no }}
+                                </p>
+                            </div>
+                        </div>
                     </td>
-                    <td class="px-6 py-4 text-sm text-slate-600">{{ $app->reference_no }}</td>
-                    <td class="px-6 py-4 text-sm text-slate-600">{{ $app->assistanceType->name ?? 'N/A' }}</td>
+
+                    <td class="px-6 py-4 text-sm">
+                        <div class="font-medium text-slate-800">
+                            {{ $app->assistanceType->name ?? 'N/A' }}
+                        </div>
+                        <div class="text-xs text-slate-500 mt-1">
+                            {{ $app->assistanceSubtype->name ?? 'Subtype not set' }}
+                        </div>
+                        @if($app->frequency_status && $app->frequency_status !== 'review_required')
+                            <div class="mt-2">
+                                <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase
+                                    @if($app->frequency_status === 'eligible') bg-emerald-100 text-emerald-800
+                                    @elseif($app->frequency_status === 'blocked') bg-rose-100 text-rose-800
+                                    @elseif($app->frequency_status === 'overridden') bg-sky-100 text-sky-800
+                                    @else bg-slate-100 text-slate-700
+                                    @endif">
+                                    {{ str_replace('_', ' ', $app->frequency_status) }}
+                                </span>
+                            </div>
+                        @endif
+                    </td>
+
                     <td class="px-6 py-4">
+                        @php $status = $app->status; @endphp
+
                         <span class="px-3 py-1 text-xs font-bold rounded-full
-                            @if($app->status === 'submitted') bg-yellow-100 text-yellow-700
-                            @elseif($app->status === 'under_review') bg-blue-100 text-blue-700
-                            @elseif($app->status === 'for_approval') bg-indigo-100 text-indigo-700
-                            @elseif($app->status === 'approved') bg-green-100 text-green-700
-                            @elseif($app->status === 'released') bg-emerald-100 text-emerald-700
-                            @elseif($app->status === 'denied') bg-red-100 text-red-700
-                            @elseif($app->status === 'cancelled') bg-slate-200 text-slate-700
-                            @else bg-slate-100 text-slate-600
+                            @if($status == 'submitted') bg-yellow-100 text-yellow-700
+                            @elseif($status == 'under_review') bg-blue-100 text-blue-700
+                            @elseif($status == 'approved') bg-green-100 text-green-700
+                            @elseif($status == 'denied') bg-red-100 text-red-700
+                            @elseif($status == 'released') bg-emerald-100 text-emerald-700
+                            @elseif($status == 'cancelled') bg-slate-200 text-slate-700
+                            @else bg-gray-100 text-gray-600
                             @endif">
-                            {{ strtoupper(str_replace('_', ' ', $app->status)) }}
+                            {{ strtoupper(str_replace('_', ' ', $status)) }}
                         </span>
                     </td>
-                    <td class="px-6 py-4 text-sm text-slate-500">{{ $app->updated_at->format('M d, Y') }}</td>
-                    <td class="px-6 py-4 text-right">
-                        <a href="{{ route('socialworker.show', $app->id) }}"
-                           class="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
-                            View
-                        </a>
+
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        {{ $app->created_at->format('M d, Y') }}
+                    </td>
+
+                    <td class="px-6 py-4 text-sm">
+                        <div class="flex justify-end items-center h-full">
+                            <a href="{{ route('socialworker.show', $app->id) }}"
+                               class="group relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 shadow-sm transition"
+                               aria-label="View application details">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12Z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                                <span class="pointer-events-none absolute -top-11 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow transition-opacity duration-150 group-hover:opacity-100">
+                                    View details
+                                </span>
+                            </a>
+                        </div>
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" class="px-6 py-10 text-center text-slate-500">
+                    <td colspan="5" class="px-6 py-10 text-center text-slate-500">
                         No handled applications found yet.
                     </td>
                 </tr>
             @endforelse
         </tbody>
     </table>
+    </div>
 
     <div class="px-6 py-4 border-t">
         {{ $applications->links() }}

@@ -1,18 +1,18 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\ApplicationController;
-use App\Http\Controllers\ClientDashboardController;
 use App\Http\Controllers\AdminController;
-use App\Http\Controllers\SocialWorkerGoogleController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\DocumentController;
-use App\Http\Controllers\SupportTicketController;
-use App\Http\Controllers\ServiceProviderController;
-use App\Http\Controllers\GlPaymentProcessorController;
+use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\BulkDeduplicationController;
+use App\Http\Controllers\ClientDashboardController;
+use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\GlPaymentProcessorController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReferralController;
+use App\Http\Controllers\ServiceProviderController;
+use App\Http\Controllers\SocialWorkerGoogleController;
+use App\Http\Controllers\SupportTicketController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
@@ -44,7 +44,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
 });
 
-
 /*
 |--------------------------------------------------------------------------
 | CLIENT ROUTES
@@ -69,8 +68,9 @@ Route::middleware(['auth', 'role:client'])->group(function () {
 
     Route::get('/client/application/{id}', [ClientDashboardController::class, 'show'])
         ->name('client.application.show');
+    Route::post('/client/application/{id}/compliance-documents', [ClientDashboardController::class, 'uploadComplianceDocuments'])
+        ->name('client.application.compliance-documents.upload');
 });
-
 
 /*
 |--------------------------------------------------------------------------
@@ -185,7 +185,7 @@ Route::middleware(['auth', 'role:referral_officer'])->prefix('referral-officer')
 
 /*
 |--------------------------------------------------------------------------
-| SOCIAL WORKER ROUTES 
+| SOCIAL WORKER ROUTES
 |--------------------------------------------------------------------------
 */
 use App\Http\Controllers\SocialWorkerController;
@@ -200,7 +200,7 @@ Route::middleware(['auth', 'role:social_worker'])->group(function () {
     Route::delete('/social-worker/google/disconnect', [SocialWorkerGoogleController::class, 'disconnect'])
         ->name('socialworker.google.disconnect');
     Route::get('/social-worker/applications', [SocialWorkerController::class, 'applications'])
-    ->name('socialworker.applications');
+        ->name('socialworker.applications');
     Route::get('/social-worker/my-cases', [SocialWorkerController::class, 'myCases'])
         ->name('socialworker.my-cases');
     Route::get('/social-worker/schedule', [SocialWorkerController::class, 'schedule'])
@@ -208,9 +208,9 @@ Route::middleware(['auth', 'role:social_worker'])->group(function () {
     Route::get('/social-worker/application/{id}', [SocialWorkerController::class, 'show']);
     Route::get('/social-worker/application/{id}/assess', [SocialWorkerController::class, 'assess']);
     Route::post('/social-worker/application/{id}/assess', [SocialWorkerController::class, 'updateAssessment'])
-    ->name('socialworker.assess.update');
+        ->name('socialworker.assess.update');
     Route::get('/social-worker/application/{id}/intake', [SocialWorkerController::class, 'intake'])
-    ->name('socialworker.intake');
+        ->name('socialworker.intake');
     Route::post('/social-worker/application/{id}/recommendation', [SocialWorkerController::class, 'generateRecommendation'])
         ->name('socialworker.recommendation.generate');
     Route::post('/social-worker/application/{id}/assistance-frequency', [SocialWorkerController::class, 'checkAdditionalAssistanceFrequency'])
@@ -218,20 +218,20 @@ Route::middleware(['auth', 'role:social_worker'])->group(function () {
     Route::post('/social-worker/application/{id}/intake', [SocialWorkerController::class, 'saveIntake'])
         ->name('socialworker.intake.save');
     Route::get('/social-worker/application/{id}/show',
-    [SocialWorkerController::class, 'show'])
-    ->name('socialworker.show');
+        [SocialWorkerController::class, 'show'])
+        ->name('socialworker.show');
     Route::get('/social-worker/application/{id}/certificate',
-    [SocialWorkerController::class, 'certificate'])
-    ->name('socialworker.certificate');
+        [SocialWorkerController::class, 'certificate'])
+        ->name('socialworker.certificate');
     Route::get('/social-worker/application/{id}/general-intake-sheet',
-    [SocialWorkerController::class, 'generalIntakeSheet'])
-    ->name('socialworker.general-intake-sheet');
+        [SocialWorkerController::class, 'generalIntakeSheet'])
+        ->name('socialworker.general-intake-sheet');
     Route::get('/social-worker/application/{id}/guarantee-letter',
-    [SocialWorkerController::class, 'guaranteeLetter'])
-    ->name('socialworker.guarantee-letter');
-     Route::post('/social-worker/application/{id}/release',
-    [SocialWorkerController::class, 'release'])
-    ->name('socialworker.release');
+        [SocialWorkerController::class, 'guaranteeLetter'])
+        ->name('socialworker.guarantee-letter');
+    Route::post('/social-worker/application/{id}/release',
+        [SocialWorkerController::class, 'release'])
+        ->name('socialworker.release');
 });
 
 Route::middleware(['auth', 'role:service_provider'])->group(function () {
@@ -261,7 +261,7 @@ Route::middleware(['auth', 'role:gl_payment_processor'])->prefix('gl-payment-pro
 });
 /*
 |--------------------------------------------------------------------------
-| APPROVING OFFICER ROUTES 
+| APPROVING OFFICER ROUTES
 |--------------------------------------------------------------------------
 */
 use App\Http\Controllers\ApprovingOfficerController;
@@ -269,35 +269,35 @@ use App\Http\Controllers\ApprovingOfficerController;
 Route::middleware(['auth', 'role:approving_officer'])->group(function () {
     Route::prefix('approving-officer')->group(function () {
 
-    Route::get('/dashboard', [App\Http\Controllers\ApprovingOfficerController::class, 'dashboard'])
-        ->name('approving.dashboard');
+        Route::get('/dashboard', [ApprovingOfficerController::class, 'dashboard'])
+            ->name('approving.dashboard');
 
-    Route::get('/applications', [App\Http\Controllers\ApprovingOfficerController::class, 'applications'])
-        ->name('approving.applications');
+        Route::get('/applications', [ApprovingOfficerController::class, 'applications'])
+            ->name('approving.applications');
 
-    Route::get('/my-approvals', [App\Http\Controllers\ApprovingOfficerController::class, 'myApprovals'])
-        ->name('approving.my-approvals');
+        Route::get('/my-approvals', [ApprovingOfficerController::class, 'myApprovals'])
+            ->name('approving.my-approvals');
 
-    Route::get('/application/{id}', [App\Http\Controllers\ApprovingOfficerController::class, 'show'])
-        ->name('approving.show');
+        Route::get('/application/{id}', [ApprovingOfficerController::class, 'show'])
+            ->name('approving.show');
 
-    Route::get('/application/{id}/certificate', [App\Http\Controllers\ApprovingOfficerController::class, 'certificate'])
-        ->name('approving.certificate');
+        Route::get('/application/{id}/certificate', [ApprovingOfficerController::class, 'certificate'])
+            ->name('approving.certificate');
 
-    Route::get('/application/{id}/guarantee-letter', [App\Http\Controllers\ApprovingOfficerController::class, 'guaranteeLetter'])
-        ->name('approving.guarantee-letter');
+        Route::get('/application/{id}/guarantee-letter', [ApprovingOfficerController::class, 'guaranteeLetter'])
+            ->name('approving.guarantee-letter');
 
-    Route::post('/application/{applicationId}/recommendation/{recommendationId}', [App\Http\Controllers\ApprovingOfficerController::class, 'updateRecommendation'])
-        ->name('approving.recommendations.update');
+        Route::post('/application/{applicationId}/recommendation/{recommendationId}', [ApprovingOfficerController::class, 'updateRecommendation'])
+            ->name('approving.recommendations.update');
 
-    Route::delete('/application/{applicationId}/recommendation/{recommendationId}', [App\Http\Controllers\ApprovingOfficerController::class, 'destroyRecommendation'])
-        ->name('approving.recommendations.destroy');
+        Route::delete('/application/{applicationId}/recommendation/{recommendationId}', [ApprovingOfficerController::class, 'destroyRecommendation'])
+            ->name('approving.recommendations.destroy');
 
-    Route::post('/application/{id}/approve', [App\Http\Controllers\ApprovingOfficerController::class, 'approve'])
-        ->name('approving.approve');
+        Route::post('/application/{id}/approve', [ApprovingOfficerController::class, 'approve'])
+            ->name('approving.approve');
 
-    Route::post('/application/{id}/deny', [App\Http\Controllers\ApprovingOfficerController::class, 'deny'])
-        ->name('approving.deny');
+        Route::post('/application/{id}/deny', [ApprovingOfficerController::class, 'deny'])
+            ->name('approving.deny');
 
     });
 });

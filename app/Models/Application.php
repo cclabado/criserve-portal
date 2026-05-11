@@ -13,7 +13,7 @@ class Application extends Model
         'user_id',
         'social_worker_id',
         'approving_officer_id',
-        'reference_no', 
+        'reference_no',
         'assistance_type_id',
         'assistance_subtype_id',
         'assistance_detail_id',
@@ -55,6 +55,10 @@ class Application extends Model
         'google_calendar_event_id',
         'google_calendar_event_link',
         'status',
+        'client_compliance_status',
+        'client_compliance_notes',
+        'client_compliance_requested_at',
+        'client_compliance_responded_at',
         'monthly_income',
         'household_members',
         'working_members',
@@ -127,7 +131,10 @@ class Application extends Model
         'ai_recommendation_generated_at' => 'datetime',
         'frequency_reference_date' => 'date',
         'frequency_checked_at' => 'datetime',
+        'client_compliance_requested_at' => 'datetime',
+        'client_compliance_responded_at' => 'datetime',
     ];
+
     public function assistanceType()
     {
         return $this->belongsTo(AssistanceType::class, 'assistance_type_id');
@@ -162,6 +169,7 @@ class Application extends Model
     {
         return $this->belongsTo(self::class, 'frequency_basis_application_id');
     }
+
     public function client()
     {
         return $this->belongsTo(Client::class);
@@ -294,4 +302,3 @@ class Application extends Model
         return 'data:'.$mimeType.';base64,'.base64_encode($disk->get($this->client_signature_path));
     }
 }
-    

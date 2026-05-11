@@ -39,6 +39,15 @@
         <span class="mt-3 inline-flex w-fit items-center rounded-full px-4 py-2 text-xs font-bold uppercase {{ $statusBadgeClasses }}">
             {{ str_replace('_', ' ', $application->status) }}
         </span>
+        @if($application->client_compliance_status === 'requested')
+            <span class="mt-3 ml-2 inline-flex w-fit items-center rounded-full bg-amber-100 px-4 py-2 text-xs font-bold uppercase text-amber-800 border border-amber-200">
+                For Compliance
+            </span>
+        @elseif($application->client_compliance_status === 'resubmitted')
+            <span class="mt-3 ml-2 inline-flex w-fit items-center rounded-full bg-sky-100 px-4 py-2 text-xs font-bold uppercase text-sky-800 border border-sky-200">
+                Compliance Uploaded
+            </span>
+        @endif
     </div>
 </div>
 
@@ -193,13 +202,47 @@
         <div class="section-card">
             <h2 class="title">Attachments</h2>
 
+            @if(in_array($application->client_compliance_status, ['requested', 'resubmitted'], true))
+                <div class="mb-5 rounded-2xl border {{ $application->client_compliance_status === 'requested' ? 'border-amber-200 bg-amber-50' : 'border-sky-200 bg-sky-50' }} p-5">
+                    <h3 class="text-base font-bold {{ $application->client_compliance_status === 'requested' ? 'text-amber-900' : 'text-sky-900' }}">
+                        {{ $application->client_compliance_status === 'requested' ? 'Document compliance required' : 'Corrected documents uploaded' }}
+                    </h3>
+                    <p class="mt-2 text-sm {{ $application->client_compliance_status === 'requested' ? 'text-amber-800' : 'text-sky-800' }}">
+                        {{ $application->client_compliance_notes ?: 'Please review the flagged document remarks below and upload corrected attachments.' }}
+                    </p>
+
+                    @if($application->client_compliance_status === 'requested')
+                        <form method="POST"
+                              action="{{ route('client.application.compliance-documents.upload', $application->id) }}"
+                              enctype="multipart/form-data"
+                              class="mt-4 space-y-3">
+                            @csrf
+                            <div>
+                                <label class="muted">Upload corrected files</label>
+                                <input type="file" name="documents[]" multiple class="mt-1 block w-full rounded-lg border border-amber-200 bg-white p-3 text-sm">
+                            </div>
+                            <div>
+                                <label class="muted">Client note</label>
+                                <textarea name="compliance_note" class="mt-1 block w-full rounded-lg border border-amber-200 bg-white p-3 text-sm" rows="3" placeholder="Optional note about the corrected attachments.">{{ old('compliance_note') }}</textarea>
+                            </div>
+                            <button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
+                                Submit Corrected Documents
+                            </button>
+                        </form>
+                    @endif
+                </div>
+            @endif
+
             <div class="space-y-3">
                 @forelse($application->documents as $doc)
-                    <div class="flex items-center justify-between rounded-xl bg-gray-50 px-5 py-3">
+                    <div class="flex items-center justify-between rounded-xl {{ $doc->requires_client_resubmission ? 'border border-amber-200 bg-amber-50' : 'bg-gray-50' }} px-5 py-3">
                         <div>
                             <p class="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">{{ $doc->document_type ?: 'Supporting Document' }}</p>
                             <p class="text-sm font-semibold">{{ $doc->file_name ?? $doc->filename }}</p>
-                            <p class="text-xs text-gray-500">{{ $doc->remarks }}</p>
+                            @if($doc->requires_client_resubmission)
+                                <p class="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">Needs replacement</p>
+                            @endif
+                            <p class="text-xs text-gray-500 mt-1">{{ $doc->remarks }}</p>
                         </div>
 
                         <a href="{{ route('documents.show', $doc->id) }}"
