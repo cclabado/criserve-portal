@@ -111,6 +111,11 @@
         <label class="label">Service Point Name</label>
         <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Online">
     </div>
+@elseif($definition['key'] === 'finance-fund-sources')
+    <div>
+        <label class="label">Finance Fund Source Name</label>
+        <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Regular Fund">
+    </div>
 @elseif($definition['key'] === 'service-providers')
     <div class="modal-grid two">
         <div>

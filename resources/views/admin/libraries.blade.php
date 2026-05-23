@@ -20,6 +20,7 @@
         'document-requirements' => route('admin.libraries.document-requirements.store'),
         'modes-of-assistance' => route('admin.libraries.modes-of-assistance.store'),
         'service-points' => route('admin.libraries.service-points.store'),
+        'finance-fund-sources' => route('admin.libraries.finance-fund-sources.store'),
         'service-providers' => route('admin.libraries.service-providers.store'),
         'positions' => route('admin.libraries.positions.store'),
         'relationships' => route('admin.libraries.relationships.store'),

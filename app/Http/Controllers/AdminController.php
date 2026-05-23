@@ -12,6 +12,7 @@ use App\Models\AssistanceType;
 use App\Models\AuditLog;
 use App\Models\Client;
 use App\Models\ClientType;
+use App\Models\FinanceFundSource;
 use App\Models\ModeOfAssistance;
 use App\Models\Position;
 use App\Models\Relationship;
@@ -44,6 +45,13 @@ class AdminController extends Controller
         'social_worker',
         'approving_officer',
         'reporting_officer',
+        'technical_staff',
+        'admin_staff',
+        'budget_officer',
+        'accounting_officer',
+        'accounting_approver',
+        'cash_officer',
+        'cash_approver',
         'service_provider',
         'gl_payment_processor',
         'referral_institution',
@@ -668,6 +676,11 @@ class AdminController extends Controller
         return $this->storeLibraryRecord($request, 'service-points');
     }
 
+    public function storeFinanceFundSource(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'finance-fund-sources');
+    }
+
     public function storeServiceProvider(Request $request): RedirectResponse
     {
         return $this->storeLibraryRecord($request, 'service-providers');
@@ -760,6 +773,9 @@ class AdminController extends Controller
             'modes-of-assistance' => $this->validateModeOfAssistancePayload($request, $ignoreId),
             'service-points' => $request->validate([
                 'name' => ['required', 'string', 'max:255', Rule::unique('service_points', 'name')->ignore($ignoreId)],
+            ]),
+            'finance-fund-sources' => $request->validate([
+                'name' => ['required', 'string', 'max:255', Rule::unique('finance_fund_sources', 'name')->ignore($ignoreId)],
             ]),
             'service-providers' => $this->validateServiceProviderPayload($request, $ignoreId),
             'positions' => $this->validatePositionPayload($request, $ignoreId),
@@ -1346,6 +1362,16 @@ class AdminController extends Controller
                 'search_columns' => ['name'],
                 'with' => [],
                 'icon' => 'location_on',
+            ],
+            'finance-fund-sources' => [
+                'title' => 'Finance Fund Sources',
+                'singular' => 'Finance fund source',
+                'description' => 'Manage the finance fund source options used during guarantee letter payment processing and program approval routing.',
+                'model' => FinanceFundSource::class,
+                'order_by' => 'name',
+                'search_columns' => ['name'],
+                'with' => [],
+                'icon' => 'account_balance_wallet',
             ],
             'service-providers' => [
                 'title' => 'Service Providers',

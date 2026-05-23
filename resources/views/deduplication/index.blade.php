@@ -2,91 +2,104 @@
 
 @section('content')
 
-@php
-    $summary = $selectedRun?->summary ?? [
-        'total_rows' => 0,
-        'clean_count' => 0,
-        'duplicate_count' => 0,
-        'finding_count' => 0,
-        'skipped_count' => 0,
-    ];
-@endphp
+<main x-data="{}" class="space-y-6">
 
-<main
-    x-data="{
+    <section class="dedupe-hero">
+        <div>
+            <p class="dedupe-kicker">{{ $isReportingOfficer ? 'Reporting Officer' : 'Administrator' }}</p>
+            <h1 class="dedupe-title">Bulk Deduplication Workspace</h1>
+            <p class="dedupe-copy">
+                Upload an Excel or CSV file, compare the rows against the client and beneficiary databases,
+                surface likely duplicate findings, and keep only eligible rows in the clean output.
+            </p>
+        </div>
+
+        <a href="{{ $dashboardRoute }}" class="dedupe-back">
+            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+            Back to Dashboard
+        </a>
+    </section>
+
+    @if(session('success'))
+        <div class="dedupe-alert dedupe-alert--success">{{ session('success') }}</div>
+    @endif
+
+    @if($errors->any())
+        <div class="dedupe-alert dedupe-alert--error">
+            <p class="font-semibold">Please review the upload.</p>
+            <ul class="mt-2 space-y-1 text-sm">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <section class="action-grid">
+        <article class="upload-spotlight">
+            <div>
+                <p class="panel-kicker">New Run</p>
+                <h2 class="panel-title">Launch Deduplication Upload</h2>
+                <p class="panel-copy">Start a fresh comparison without occupying the full workspace. Use the modal to upload the file, choose the comparison source, and apply frequency rules when needed.</p>
+            </div>
+
+            <div class="upload-spotlight__actions">
+                <button type="button"
+                        class="btn-primary"
+                        x-on:click="$dispatch('open-modal', 'dedupe-upload-modal')">
+                    Upload New Run
+                </button>
+                <p class="text-xs text-slate-500">Excel and CSV files supported.</p>
+            </div>
+        </article>
+
+        <article class="guidance-card">
+            <p class="panel-kicker">Template Guide</p>
+            <h2 class="panel-title">Prepare the Sheet</h2>
+            <p class="panel-copy">
+                Required columns: `last_name`, `first_name`, `birthdate`.
+                Optional: `middle_name`, `extension_name`, `assistance_subtype` or `assistance_subtype_id`,
+                `assistance_detail` or `assistance_detail_id`, `frequency_subject`, `frequency_case_key`,
+                `reference_no`, `remarks`.
+            </p>
+        </article>
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
+        <div class="panel-card history-panel">
+            <div class="panel-head">
+                <div>
+                    <p class="panel-kicker">History</p>
+                    <h2 class="panel-title">Recent Runs</h2>
+                </div>
+            </div>
+
+            <div class="mt-5 space-y-2 history-panel__list">
+                @forelse($runs as $run)
+                    <a href="{{ route($showRoute, $run, false) }}" class="run-card">
+                        <div class="run-card__top">
+                            <p class="run-card__title">Run #{{ $run->id }}</p>
+                            <span class="run-status-chip run-status-chip--{{ $run->status }}">{{ \Illuminate\Support\Str::headline($run->status) }}</span>
+                        </div>
+                        <p class="run-card__meta">{{ $run->original_filename }}</p>
+                        <p class="run-card__meta">{{ $run->created_at?->format('M d, Y h:i A') }}</p>
+                    </a>
+                @empty
+                    <p class="text-sm text-slate-500">No deduplication runs yet.</p>
+                @endforelse
+            </div>
+        </div>
+
+    </section>
+
+</main>
+
+<x-modal name="dedupe-upload-modal" :show="$errors->any()" max-width="2xl" focusable>
+    <div class="dedupe-modal" x-data="{
         compareSource: @js(old('compare_source', 'system')),
-        selectedRunId: @js($selectedRun?->id),
-        statusBaseRoute: @js($statusBaseRoute),
-        runStatus: @js($selectedRun?->status),
-        runProgress: @js((int) ($selectedRun?->progress_percentage ?? 0)),
-        runMessage: @js($selectedRun?->progress_message ?? ''),
-        runError: @js($selectedRun?->error_message ?? ''),
-        pollTimer: null,
         isUploading: false,
         uploadProgress: 0,
         uploadStatus: '',
-        isWorking() {
-            return ['queued', 'processing'].includes(this.runStatus);
-        },
-        runStatusLabel() {
-            return ({
-                queued: 'Queued',
-                processing: 'Processing',
-                completed: 'Completed',
-                failed: 'Failed',
-            })[this.runStatus] || 'Not started';
-        },
-        runStatusClass() {
-            return ({
-                queued: 'run-status-chip--queued',
-                processing: 'run-status-chip--processing',
-                completed: 'run-status-chip--completed',
-                failed: 'run-status-chip--failed',
-            })[this.runStatus] || '';
-        },
-        startPolling() {
-            if (!this.selectedRunId || !this.isWorking()) {
-                return;
-            }
-
-            this.stopPolling();
-            this.pollTimer = window.setInterval(() => this.fetchRunStatus(), 3000);
-        },
-        stopPolling() {
-            if (this.pollTimer) {
-                window.clearInterval(this.pollTimer);
-                this.pollTimer = null;
-            }
-        },
-        async fetchRunStatus() {
-            if (!this.selectedRunId) {
-                return;
-            }
-
-            const response = await fetch(this.statusBaseRoute.replace('__RUN__', this.selectedRunId), {
-                headers: {
-                    Accept: 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'same-origin',
-            });
-
-            if (!response.ok) {
-                return;
-            }
-
-            const payload = await response.json();
-
-            this.runStatus = payload.status;
-            this.runProgress = payload.progress_percentage || 0;
-            this.runMessage = payload.progress_message || '';
-            this.runError = payload.error_message || '';
-
-            if (['completed', 'failed'].includes(this.runStatus)) {
-                this.stopPolling();
-                window.location.reload();
-            }
-        },
         submitUpload() {
             if (this.isUploading) {
                 return;
@@ -137,52 +150,19 @@
 
             xhr.send(new FormData(form));
         },
-        init() {
-            this.startPolling();
-            window.addEventListener('beforeunload', () => this.stopPolling(), { once: true });
-        },
-    }"
-    class="space-y-6"
->
-
-    <section class="dedupe-hero">
-        <div>
-            <p class="dedupe-kicker">{{ $isReportingOfficer ? 'Reporting Officer' : 'Administrator' }}</p>
-            <h1 class="dedupe-title">Bulk Deduplication Workspace</h1>
-            <p class="dedupe-copy">
-                Upload an Excel or CSV file, compare the rows against the client and beneficiary databases,
-                surface likely duplicate findings, and keep only eligible rows in the clean output.
-            </p>
-        </div>
-
-        <a href="{{ $dashboardRoute }}" class="dedupe-back">
-            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
-            Back to Dashboard
-        </a>
-    </section>
-
-    @if(session('success'))
-        <div class="dedupe-alert dedupe-alert--success">{{ session('success') }}</div>
-    @endif
-
-    @if($errors->any())
-        <div class="dedupe-alert dedupe-alert--error">
-            <p class="font-semibold">Please review the upload.</p>
-            <ul class="mt-2 space-y-1 text-sm">
-                @foreach($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
-
-    <section class="panel-card">
-        <div class="panel-head">
+    }">
+        <div class="dedupe-modal__header">
             <div>
                 <p class="panel-kicker">Upload</p>
                 <h2 class="panel-title">Run Deduplication</h2>
-                <p class="panel-copy">Required columns: `last_name`, `first_name`, `birthdate`. Optional: `middle_name`, `extension_name`, `assistance_subtype` or `assistance_subtype_id`, `assistance_detail` or `assistance_detail_id`, `frequency_subject`, `frequency_case_key`, `reference_no`, `remarks`.</p>
+                <p class="panel-copy">Upload the working list and configure how it should be compared before the background processor starts.</p>
             </div>
+
+            <button type="button"
+                    class="modal-close"
+                    x-on:click="$dispatch('close-modal', 'dedupe-upload-modal')">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
         </div>
 
         <form
@@ -228,10 +208,16 @@
                 </div>
             </div>
 
-            <div class="flex justify-end">
+            <div class="dedupe-modal__footer">
+                <button type="button"
+                        class="btn-secondary"
+                        x-on:click="$dispatch('close-modal', 'dedupe-upload-modal')"
+                        :disabled="isUploading">
+                    Cancel
+                </button>
+
                 <button type="submit" class="btn-primary" :disabled="isUploading" :class="{ 'btn-primary--disabled': isUploading }">
-                    <span x-show="!isUploading">Upload and Deduplicate</span>
-                    <span x-show="isUploading" x-cloak>Uploading...</span>
+                    Upload and Deduplicate
                 </button>
             </div>
 
@@ -246,227 +232,8 @@
                 <p class="upload-progress-copy" x-text="uploadStatus"></p>
             </div>
         </form>
-    </section>
-
-    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <article class="metric-card">
-            <p class="metric-label">Uploaded Rows</p>
-            <p class="metric-value">{{ number_format($summary['total_rows']) }}</p>
-        </article>
-        <article class="metric-card">
-            <p class="metric-label">Clean Rows</p>
-            <p class="metric-value">{{ number_format($summary['clean_count']) }}</p>
-        </article>
-        <article class="metric-card">
-            <p class="metric-label">Duplicates</p>
-            <p class="metric-value">{{ number_format($summary['duplicate_count']) }}</p>
-        </article>
-        <article class="metric-card">
-            <p class="metric-label">Findings</p>
-            <p class="metric-value">{{ number_format($summary['finding_count']) }}</p>
-        </article>
-        <article class="metric-card">
-            <p class="metric-label">Skipped</p>
-            <p class="metric-value">{{ number_format($summary['skipped_count']) }}</p>
-        </article>
-    </section>
-
-    <section class="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
-        <div class="panel-card">
-            <div class="panel-head">
-                <div>
-                    <p class="panel-kicker">History</p>
-                    <h2 class="panel-title">Recent Runs</h2>
-                </div>
-            </div>
-
-            <div class="mt-5 space-y-3">
-                @forelse($runs as $run)
-                    <a href="{{ $indexRoute }}?run={{ $run->id }}" class="run-card {{ $selectedRun?->id === $run->id ? 'run-card--active' : '' }}">
-                        <div class="run-card__top">
-                            <p class="run-card__title">Run #{{ $run->id }}</p>
-                            <span class="run-status-chip run-status-chip--{{ $run->status }}">{{ \Illuminate\Support\Str::headline($run->status) }}</span>
-                        </div>
-                        <p class="run-card__meta">{{ $run->original_filename }}</p>
-                        <p class="run-card__meta">{{ $run->created_at?->format('M d, Y h:i A') }}</p>
-                    </a>
-                @empty
-                    <p class="text-sm text-slate-500">No deduplication runs yet.</p>
-                @endforelse
-            </div>
-        </div>
-
-        <div class="space-y-6">
-            @if($selectedRun)
-                <section class="panel-card">
-                    <div class="panel-head">
-                        <div>
-                            <p class="panel-kicker">Selected Run</p>
-                            <h2 class="panel-title">{{ $selectedRun->original_filename }}</h2>
-                            <p class="panel-copy">Generated {{ $selectedRun->created_at?->format('M d, Y h:i A') }}</p>
-                            <div class="mt-3 flex flex-wrap items-center gap-2">
-                                <span class="run-status-chip" :class="runStatusClass()" x-text="runStatusLabel()"></span>
-                                <span class="text-sm text-slate-500" x-show="runMessage" x-text="runMessage"></span>
-                            </div>
-                            <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
-                                <span class="run-meta-chip">
-                                    Compare: {{ ($selectedRun->summary['compare_source'] ?? 'system') === 'uploaded_list' ? 'Uploaded list' : 'System database' }}
-                                </span>
-                                <span class="run-meta-chip">
-                                    Frequency: {{ !empty($selectedRun->summary['apply_frequency_rules']) ? 'Applied' : 'Not applied' }}
-                                </span>
-                                @if(!empty($selectedRun->summary['reference_filename']))
-                                    <span class="run-meta-chip">
-                                        Reference file: {{ $selectedRun->summary['reference_filename'] }}
-                                    </span>
-                                @endif
-                            </div>
-                        </div>
-
-                        <div class="flex flex-wrap gap-2">
-                            @if($selectedRun->status === 'completed')
-                                <a href="{{ route($downloadBaseRoute, [$selectedRun, 'clean']) }}" class="btn-primary">Download Clean List</a>
-                                <a href="{{ route($downloadBaseRoute, [$selectedRun, 'duplicates']) }}" class="btn-secondary">Download Duplicates</a>
-                                <a href="{{ route($downloadBaseRoute, [$selectedRun, 'findings']) }}" class="btn-secondary">Download Findings</a>
-                            @else
-                                <span class="btn-secondary btn-secondary--disabled">Downloads unlock after completion</span>
-                            @endif
-                        </div>
-                    </div>
-
-                    <div class="run-progress-card mt-5" x-show="selectedRunId" x-cloak>
-                        <div class="upload-progress-head">
-                            <p class="upload-progress-title">Background Progress</p>
-                            <p class="upload-progress-percent" x-text="`${runProgress}%`"></p>
-                        </div>
-                        <div class="upload-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="runProgress" :aria-valuetext="`${runProgress}%`">
-                            <div class="upload-progress-fill" :style="`width: ${runProgress}%`"></div>
-                        </div>
-                        <p class="upload-progress-copy" x-text="runMessage || 'Waiting for processor update...'"></p>
-                        <p class="run-progress-error" x-show="runStatus === 'failed' && runError" x-text="runError"></p>
-                    </div>
-                </section>
-
-                <section class="panel-card">
-                    <div class="panel-head">
-                        <div>
-                            <p class="panel-kicker">Clean List</p>
-                            <h2 class="panel-title">Eligible Rows</h2>
-                        </div>
-                    </div>
-
-                    <div class="table-wrap mt-5">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Row</th>
-                                    <th>Name</th>
-                                    <th>Birthdate</th>
-                                    <th>Frequency</th>
-                                    <th>Assistance</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse(($selectedRun->clean_rows ?? []) as $row)
-                                    <tr>
-                                        <td>{{ $row['row_number'] }}</td>
-                                        <td>{{ trim($row['last_name'].' '.$row['first_name'].' '.$row['middle_name'].' '.$row['extension_name']) }}</td>
-                                        <td>{{ $row['birthdate'] }}</td>
-                                        <td>{{ $row['frequency_message'] }}</td>
-                                        <td>{{ trim(($row['assistance_subtype'] ?? '').' '.($row['assistance_detail'] ?? '')) ?: '-' }}</td>
-                                    </tr>
-                                @empty
-                                    <tr><td colspan="5" class="text-center text-slate-500">No eligible rows yet.</td></tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-
-                <section class="panel-card">
-                    <div class="panel-head">
-                        <div>
-                            <p class="panel-kicker">Duplicates</p>
-                            <h2 class="panel-title">Excluded Rows</h2>
-                        </div>
-                    </div>
-
-                    <div class="table-wrap mt-5">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Row</th>
-                                    <th>Name</th>
-                                    <th>Reason</th>
-                                    <th>Source</th>
-                                    <th>Reference</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse(($selectedRun->duplicate_rows ?? []) as $row)
-                                    <tr>
-                                        <td>{{ $row['row_number'] }}</td>
-                                        <td>{{ trim($row['last_name'].' '.$row['first_name'].' '.$row['middle_name'].' '.$row['extension_name']) }}</td>
-                                        <td>{{ $row['duplicate_reason'] }}</td>
-                                        <td>{{ $row['matched_source'] ?: '-' }}</td>
-                                        <td>{{ $row['basis_reference_no'] ?: '-' }}</td>
-                                    </tr>
-                                @empty
-                                    <tr><td colspan="5" class="text-center text-slate-500">No duplicate rows recorded.</td></tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-
-                <section class="panel-card">
-                    <div class="panel-head">
-                        <div>
-                            <p class="panel-kicker">Findings</p>
-                            <h2 class="panel-title">Possible Duplicates</h2>
-                        </div>
-                    </div>
-
-                    <div class="table-wrap mt-5">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Row</th>
-                                    <th>Name</th>
-                                    <th>Birthdate</th>
-                                    <th>Finding</th>
-                                    <th>Possible Matches</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse(($selectedRun->finding_rows ?? []) as $row)
-                                    <tr>
-                                        <td>{{ $row['row_number'] }}</td>
-                                        <td>{{ trim($row['last_name'].' '.$row['first_name'].' '.$row['middle_name'].' '.$row['extension_name']) }}</td>
-                                        <td>{{ $row['birthdate'] }}</td>
-                                        <td>{{ $row['finding_message'] }}</td>
-                                        <td>
-                                            @foreach(($row['matches'] ?? []) as $match)
-                                                <div class="match-chip">{{ $match['matched_name'] }} | {{ $match['source'] }} | {{ $match['similarity_score'] }}</div>
-                                            @endforeach
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr><td colspan="5" class="text-center text-slate-500">No possible duplicate findings yet.</td></tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            @else
-                <section class="panel-card">
-                    <p class="text-sm text-slate-500">Upload a file to generate the first deduplication run.</p>
-                </section>
-            @endif
-        </div>
-    </section>
-
-</main>
+    </div>
+</x-modal>
 
 <style>
 .dedupe-hero,.panel-card,.metric-card{
@@ -558,7 +325,48 @@
 }
 .dedupe-alert--success{ background:#ecfdf5; color:#166534; border-color:#bbf7d0; }
 .dedupe-alert--error{ background:#fef2f2; color:#991b1b; border-color:#fecaca; }
+.action-grid{
+    display:grid;
+    gap:24px;
+    grid-template-columns:minmax(0, 1.3fr) minmax(320px, .7fr);
+}
+.upload-spotlight,.guidance-card{
+    background:#fff;
+    border:1px solid #e2e8f0;
+    border-radius:24px;
+    box-shadow:0 14px 28px rgba(15, 23, 42, .04);
+    padding:24px;
+}
+.upload-spotlight{
+    display:flex;
+    gap:20px;
+    align-items:flex-end;
+    justify-content:space-between;
+    background:
+        radial-gradient(circle at top right, rgba(191, 219, 254, .45), transparent 30%),
+        linear-gradient(135deg, #ffffff 0%, #f8fbfe 100%);
+}
+.upload-spotlight__actions{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap:10px;
+    flex-shrink:0;
+    min-width:220px;
+}
+.upload-spotlight__actions .btn-primary{
+    width:100%;
+    min-width:220px;
+}
 .table-wrap{ overflow:auto; }
+.history-panel{
+    padding:18px;
+}
+.history-panel__list{
+    max-height:520px;
+    overflow:auto;
+    padding-right:4px;
+}
 .data-table{
     width:100%;
     border-collapse:collapse;
@@ -579,8 +387,8 @@
 .run-card{
     display:block;
     border:1px solid #d9e6f0;
-    border-radius:18px;
-    padding:14px 16px;
+    border-radius:16px;
+    padding:11px 12px;
     color:#163750;
     background:#f8fbfe;
 }
@@ -697,11 +505,37 @@
 }
 .run-card__title{
     font-weight:800;
+    font-size:13px;
 }
 .run-card__meta{
     margin-top:4px;
-    font-size:12px;
+    font-size:11px;
     color:#64748b;
+}
+.dedupe-modal{
+    padding:24px;
+}
+.dedupe-modal__header{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+}
+.dedupe-modal__footer{
+    display:flex;
+    justify-content:flex-end;
+    gap:12px;
+    flex-wrap:wrap;
+}
+.modal-close{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:40px;
+    height:40px;
+    border-radius:999px;
+    background:#f8fafc;
+    color:#475569;
 }
 .match-chip{
     margin-bottom:6px;
@@ -712,9 +546,20 @@
     color:#475569;
 }
 @media (max-width: 960px){
-    .dedupe-hero,.panel-head{
+    .dedupe-hero,.panel-head,.upload-spotlight,.dedupe-modal__header{
         flex-direction:column;
         align-items:flex-start;
+    }
+    .action-grid{
+        grid-template-columns:1fr;
+    }
+    .upload-spotlight__actions{
+        align-items:flex-start;
+        width:100%;
+        min-width:0;
+    }
+    .upload-spotlight__actions .btn-primary{
+        min-width:0;
     }
 }
 </style>

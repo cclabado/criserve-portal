@@ -3,23 +3,44 @@
 @section('content')
 
 @php
-    $latestStatement = $application->documents->where('document_type', 'Updated Statement of Account')->sortByDesc('created_at')->first();
+    $latestStatement = $statementDocuments->first();
     $totalRecommendedAmount = $application->assistanceRecommendations->isNotEmpty()
         ? $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount)
         : (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
+    $paymentStatusLabel = match ($application->gl_payment_status) {
+        'paid' => 'Paid',
+        'for_processing_cash' => 'For Processing (Cash)',
+        'for_processing_accounting_certification' => 'For Processing (Accounting Certification)',
+        'for_processing_program_amount_approval' => 'For Processing (Program Amount Approval)',
+        'for_processing_accounting' => 'For Processing (Accounting)',
+        'for_processing_budget' => 'For Processing (Budget)',
+        'for_processing_program_approval' => 'For Processing (Program Approval)',
+        default => $latestStatement ? 'For Processing' : 'Awaiting SOA',
+    };
+    $paymentStatusBadgeClass = match ($paymentStatusLabel) {
+        'Paid' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        'For Processing (Cash)' => 'border-blue-200 bg-blue-50 text-blue-700',
+        'For Processing (Accounting Certification)' => 'border-blue-200 bg-blue-50 text-blue-700',
+        'For Processing (Program Amount Approval)' => 'border-sky-200 bg-sky-50 text-sky-700',
+        'For Processing (Accounting)' => 'border-amber-200 bg-amber-50 text-amber-700',
+        'For Processing (Budget)' => 'border-violet-200 bg-violet-50 text-violet-700',
+        'For Processing (Program Approval)' => 'border-indigo-200 bg-indigo-50 text-indigo-700',
+        'For Processing' => 'border-blue-200 bg-blue-50 text-blue-700',
+        default => 'border-amber-200 bg-amber-50 text-amber-700',
+    };
 @endphp
 
-<main class="space-y-6">
+<main class="space-y-6" x-data="{ activeTab: 'client' }">
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                <a href="{{ route('gl-payment-processor.dashboard') }}" class="text-sm text-slate-500 hover:text-[#234E70]">
-                    &larr; Back to GL Processing Queue
+                <a href="{{ route('gl-payment-processor.queue') }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                    &larr; Back to GL Queue
                 </a>
                 <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">GL Payment Processor</p>
                 <h1 class="mt-2 text-3xl font-black text-sky-950">{{ $application->reference_no }}</h1>
                 <p class="mt-2 text-sm text-slate-500">
-                    Review the updated SOA, return the case for compliance when needed, or tag it as processed once complete.
+                    Review the service provider attachments, return the case for compliance when needed, or submit it to the approving officer with a selected fund source.
                 </p>
             </div>
 
@@ -49,15 +70,37 @@
         </div>
     @endif
 
-    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Application</p><p class="mt-3 text-lg font-black text-slate-900">{{ strtoupper(str_replace('_', ' ', $application->status)) }}</p></article>
-        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">SOA Status</p><p class="mt-3 text-lg font-black text-slate-900">{{ ucwords(str_replace('_', ' ', $application->gl_soa_status ?? 'awaiting_upload')) }}</p></article>
-        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Payment</p><p class="mt-3 text-lg font-black text-slate-900">{{ ucwords(str_replace('_', ' ', $application->gl_payment_status ?? 'unpaid')) }}</p></article>
+    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Application</p>
+            <div class="mt-3">
+                <span class="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-slate-700">{{ strtoupper(str_replace('_', ' ', $application->status)) }}</span>
+            </div>
+        </article>
+        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Payment</p>
+            <div class="mt-3">
+                <span class="inline-flex rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] {{ $paymentStatusBadgeClass }}">{{ $paymentStatusLabel }}</span>
+            </div>
+        </article>
         <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Provider</p><p class="mt-3 text-lg font-black text-slate-900">{{ $application->serviceProvider?->name ?? '-' }}</p></article>
         <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Final Amount</p><p class="mt-3 text-lg font-black text-slate-900">PHP {{ number_format((float) ($application->final_amount ?? $totalRecommendedAmount), 2) }}</p></article>
     </section>
 
-    <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <section class="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div class="flex flex-wrap gap-2">
+            <button type="button" x-on:click="activeTab = 'client'" x-bind:class="activeTab === 'client' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Client Information</button>
+            @if($application->beneficiary)
+                <button type="button" x-on:click="activeTab = 'beneficiary'" x-bind:class="activeTab === 'beneficiary' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Beneficiary Information</button>
+            @endif
+            <button type="button" x-on:click="activeTab = 'assessment'" x-bind:class="activeTab === 'assessment' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Initial Assessment</button>
+            <button type="button" x-on:click="activeTab = 'recommendation'" x-bind:class="activeTab === 'recommendation' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Recommendation</button>
+            <button type="button" x-on:click="activeTab = 'attachments'" x-bind:class="activeTab === 'attachments' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Attachments</button>
+            <button type="button" x-on:click="activeTab = 'actions'" x-bind:class="activeTab === 'actions' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Review Actions</button>
+        </div>
+    </section>
+
+    <section x-show="activeTab === 'client'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="space-y-6">
             <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 class="text-2xl font-black text-sky-950">Client Information</h2>
@@ -69,131 +112,177 @@
                 </div>
                 <div class="mt-4 text-sm"><span class="font-semibold text-slate-500">Address</span><br>{{ $application->client?->full_address ?? '-' }}</div>
             </section>
+        </div>
+    </section>
 
-            @if($application->beneficiary)
-                <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h2 class="text-2xl font-black text-sky-950">Beneficiary Information</h2>
-                    <div class="mt-6 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
-                        <div><span class="font-semibold text-slate-500">Last Name</span><br>{{ $application->beneficiary?->last_name ?? '-' }}</div>
-                        <div><span class="font-semibold text-slate-500">First Name</span><br>{{ $application->beneficiary?->first_name ?? '-' }}</div>
-                        <div><span class="font-semibold text-slate-500">Middle Name</span><br>{{ $application->beneficiary?->middle_name ?? '-' }}</div>
-                        <div><span class="font-semibold text-slate-500">Relationship</span><br>{{ $application->beneficiary?->relationshipData?->name ?? '-' }}</div>
-                    </div>
-                    <div class="mt-4 text-sm"><span class="font-semibold text-slate-500">Address</span><br>{{ $application->beneficiary?->full_address ?? '-' }}</div>
-                </section>
-            @endif
+    @if($application->beneficiary)
+        <section x-show="activeTab === 'beneficiary'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 class="text-2xl font-black text-sky-950">Beneficiary Information</h2>
+            <div class="mt-6 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+                <div><span class="font-semibold text-slate-500">Last Name</span><br>{{ $application->beneficiary?->last_name ?? '-' }}</div>
+                <div><span class="font-semibold text-slate-500">First Name</span><br>{{ $application->beneficiary?->first_name ?? '-' }}</div>
+                <div><span class="font-semibold text-slate-500">Middle Name</span><br>{{ $application->beneficiary?->middle_name ?? '-' }}</div>
+                <div><span class="font-semibold text-slate-500">Relationship</span><br>{{ $application->beneficiary?->relationshipData?->name ?? '-' }}</div>
+            </div>
+            <div class="mt-4 text-sm"><span class="font-semibold text-slate-500">Address</span><br>{{ $application->beneficiary?->full_address ?? '-' }}</div>
+        </section>
+    @endif
 
-            <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 class="text-2xl font-black text-sky-950">Initial Assessment</h2>
-                <div class="mt-6 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
-                    <div><span class="font-semibold text-slate-500">Assistance Type</span><br>{{ $application->assistanceType?->name ?? '-' }}</div>
-                    <div><span class="font-semibold text-slate-500">Subtype</span><br>{{ $application->assistanceSubtype?->name ?? '-' }}</div>
-                    <div><span class="font-semibold text-slate-500">Detail</span><br>{{ $application->assistanceDetail?->name ?? '-' }}</div>
-                    <div><span class="font-semibold text-slate-500">Mode</span><br>{{ $application->modeOfAssistance?->name ?? '-' }}</div>
-                </div>
-                <div class="mt-4 text-sm"><span class="font-semibold text-slate-500">Assessment Notes</span><br>{{ $application->notes ?: '-' }}</div>
-                <div class="mt-4 text-sm"><span class="font-semibold text-slate-500">Social Worker Assessment</span><br>{{ $application->social_worker_assessment ?: '-' }}</div>
-            </section>
+    <section x-show="activeTab === 'assessment'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 class="text-2xl font-black text-sky-950">Initial Assessment</h2>
+        <div class="mt-6 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+            <div><span class="font-semibold text-slate-500">Assistance Type</span><br>{{ $application->assistanceType?->name ?? '-' }}</div>
+            <div><span class="font-semibold text-slate-500">Subtype</span><br>{{ $application->assistanceSubtype?->name ?? '-' }}</div>
+            <div><span class="font-semibold text-slate-500">Detail</span><br>{{ $application->assistanceDetail?->name ?? '-' }}</div>
+            <div><span class="font-semibold text-slate-500">Mode</span><br>{{ $application->modeOfAssistance?->name ?? '-' }}</div>
+        </div>
+        <div class="mt-4 text-sm"><span class="font-semibold text-slate-500">Assessment Notes</span><br>{{ $application->notes ?: '-' }}</div>
+        <div class="mt-4 text-sm"><span class="font-semibold text-slate-500">Social Worker Assessment</span><br>{{ $application->social_worker_assessment ?: '-' }}</div>
+    </section>
 
-            <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 class="text-2xl font-black text-sky-950">Recommendation</h2>
-                <div class="mt-6 space-y-3">
-                    @forelse($application->assistanceRecommendations as $recommendation)
-                        <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                <div>
-                                    <p class="font-semibold text-sky-900">
-                                        {{ $recommendation->assistanceType?->name ?? '-' }}
-                                        @if($recommendation->assistanceSubtype)
-                                            / {{ $recommendation->assistanceSubtype->name }}
-                                        @endif
-                                        @if($recommendation->assistanceDetail)
-                                            / {{ $recommendation->assistanceDetail->name }}
-                                        @endif
-                                    </p>
-                                    <p class="mt-1 text-sm text-slate-500">Mode: {{ $recommendation->modeOfAssistance?->name ?? '-' }}</p>
-                                    @if($recommendation->notes)
-                                        <p class="mt-2 text-sm text-slate-600">{{ $recommendation->notes }}</p>
-                                    @endif
-                                </div>
-                                <div class="text-left md:text-right">
-                                    <p class="text-xs text-slate-500">Final Amount</p>
-                                    <p class="text-lg font-black text-slate-900">PHP {{ number_format((float) $recommendation->final_amount, 2) }}</p>
-                                </div>
-                            </div>
-                        </article>
-                    @empty
-                        <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm text-slate-500">
-                            No recommendation items were recorded for this case.
+    <section x-show="activeTab === 'recommendation'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 class="text-2xl font-black text-sky-950">Recommendation</h2>
+        <div class="mt-6 space-y-3">
+            @forelse($application->assistanceRecommendations as $recommendation)
+                <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <p class="font-semibold text-sky-900">
+                                {{ $recommendation->assistanceType?->name ?? '-' }}
+                                @if($recommendation->assistanceSubtype)
+                                    / {{ $recommendation->assistanceSubtype->name }}
+                                @endif
+                                @if($recommendation->assistanceDetail)
+                                    / {{ $recommendation->assistanceDetail->name }}
+                                @endif
+                            </p>
+                            <p class="mt-1 text-sm text-slate-500">Mode: {{ $recommendation->modeOfAssistance?->name ?? '-' }}</p>
+                            @if($recommendation->notes)
+                                <p class="mt-2 text-sm text-slate-600">{{ $recommendation->notes }}</p>
+                            @endif
                         </div>
-                    @endforelse
+                        <div class="text-left md:text-right">
+                            <p class="text-xs text-slate-500">Final Amount</p>
+                            <p class="text-lg font-black text-slate-900">PHP {{ number_format((float) $recommendation->final_amount, 2) }}</p>
+                        </div>
+                    </div>
+                </article>
+            @empty
+                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm text-slate-500">
+                    No recommendation items were recorded for this case.
+                </div>
+            @endforelse
+        </div>
+    </section>
+
+    <section x-show="activeTab === 'attachments'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="space-y-6">
+            <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 class="text-2xl font-black text-sky-950">Uploaded Attachments</h2>
+
+                <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                    <p class="font-semibold text-slate-800">Updated Statement of Account</p>
+                    <div class="mt-4 space-y-3">
+                        @forelse($statementDocuments as $document)
+                            <article class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-semibold text-slate-900">{{ $document->file_name }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">Uploaded {{ $document->created_at?->format('M d, Y h:i A') ?? '-' }}</p>
+                                        @if($document->remarks)
+                                            <p class="mt-1 text-xs text-slate-500">{{ $document->remarks }}</p>
+                                        @endif
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <a href="{{ route('documents.show', $document->id) }}" class="inline-flex items-center rounded-xl bg-[#234E70] px-3 py-2 text-xs font-semibold text-white hover:bg-[#18384f]">Review</a>
+                                        <a href="{{ route('documents.download', $document->id) }}" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">Download</a>
+                                    </div>
+                                </div>
+                            </article>
+                        @empty
+                            <p class="text-slate-600">No updated statement of account has been uploaded yet.</p>
+                        @endforelse
+                    </div>
+                </div>
+
+                <div class="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                    <p class="font-semibold text-slate-800">Other Supporting Documents</p>
+                    <div class="mt-4 space-y-3">
+                        @forelse($supportingDocuments as $document)
+                            <article class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-semibold text-slate-900">{{ $document->file_name }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">Uploaded {{ $document->created_at?->format('M d, Y h:i A') ?? '-' }}</p>
+                                        @if($document->remarks)
+                                            <p class="mt-1 text-xs text-slate-500">{{ $document->remarks }}</p>
+                                        @endif
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <a href="{{ route('documents.show', $document->id) }}" class="inline-flex items-center rounded-xl bg-[#234E70] px-3 py-2 text-xs font-semibold text-white hover:bg-[#18384f]">Review</a>
+                                        <a href="{{ route('documents.download', $document->id) }}" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">Download</a>
+                                    </div>
+                                </div>
+                            </article>
+                        @empty
+                            <p class="text-slate-600">No supporting documents uploaded yet.</p>
+                        @endforelse
+                    </div>
                 </div>
             </section>
         </div>
+    </section>
 
+    <section x-show="activeTab === 'actions'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="space-y-6">
             <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 class="text-2xl font-black text-sky-950">Updated SOA Review</h2>
-                <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
-                    <p class="font-semibold text-slate-800">Latest uploaded statement</p>
-                    @if($latestStatement)
-                        <p class="mt-2 text-slate-600">{{ $latestStatement->file_name }}</p>
-                        <p class="mt-1 text-xs text-slate-500">Uploaded {{ $latestStatement->created_at?->diffForHumans() }}</p>
-                        <div class="mt-4 flex flex-wrap gap-3">
-                            <a href="{{ route('documents.show', $latestStatement->id) }}" class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#18384f]">
-                                Review Attachment
-                            </a>
-                            <a href="{{ route('documents.download', $latestStatement->id) }}" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
-                                Download
-                            </a>
-                        </div>
-                    @else
-                        <p class="mt-2 text-slate-600">No updated statement of account has been uploaded yet.</p>
-                    @endif
-                </div>
-
+                <h2 class="text-2xl font-black text-sky-950">Return for Compliance</h2>
                 <form method="POST" action="{{ route('gl-payment-processor.soa-review.update', $application->id) }}" class="mt-5 space-y-4">
                     @csrf
                     @method('PATCH')
                     <div>
-                        <label class="label">SOA Review Status</label>
-                        <select name="gl_soa_status" class="input">
-                            <option value="pending_review" @selected(($application->gl_soa_status ?? '') === 'pending_review')>Pending Review</option>
-                            <option value="returned_for_compliance" @selected(($application->gl_soa_status ?? '') === 'returned_for_compliance')>Returned for Compliance</option>
-                            <option value="processed" @selected(($application->gl_soa_status ?? '') === 'processed')>Processed</option>
-                        </select>
+                        <label class="label">Compliance Remarks</label>
+                        <textarea name="gl_soa_review_notes" class="input h-32" placeholder="State missing attachments, incorrect files, or required corrections.">{{ old('gl_soa_review_notes', $application->gl_soa_review_notes) }}</textarea>
+                        <p class="mt-2 text-xs text-slate-500">These remarks will be shown when the case is returned to the service provider.</p>
                     </div>
-                    <div>
-                        <label class="label">Review Notes</label>
-                        <textarea name="gl_soa_review_notes" class="input h-32" placeholder="State missing documents, incorrect files, or any processor notes.">{{ old('gl_soa_review_notes', $application->gl_soa_review_notes) }}</textarea>
-                        <p class="mt-2 text-xs text-slate-500">Required when returning the case for compliance.</p>
-                    </div>
-                    <button type="submit" class="btn-primary">Save SOA Review</button>
+                    <button type="submit" class="inline-flex items-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100">
+                        Return for Compliance
+                    </button>
                 </form>
             </section>
 
             <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 class="text-2xl font-black text-sky-950">Payment Status</h2>
-                <form method="POST" action="{{ route('gl-payment-processor.payment-status.update', $application->id) }}" class="mt-5 space-y-4">
+                <h2 class="text-2xl font-black text-sky-950">Submit for Approving Officer Review</h2>
+                <form method="POST" action="{{ route('gl-payment-processor.budget-processing.submit', $application->id) }}" class="mt-5 space-y-4">
                     @csrf
                     @method('PATCH')
                     <div>
-                        <label class="label">Guarantee Letter Payment</label>
-                        <select name="gl_payment_status" class="input">
-                            <option value="unpaid" @selected(($application->gl_payment_status ?? '') === 'unpaid')>Unpaid</option>
-                            <option value="paid" @selected(($application->gl_payment_status ?? '') === 'paid')>Paid</option>
+                        <label class="label">Finance Fund Source</label>
+                        <select name="gl_finance_fund_source" class="input">
+                            <option value="">Select fund source</option>
+                            @foreach($financeFundSources as $fundSource)
+                                <option value="{{ $fundSource }}" @selected(old('gl_finance_fund_source', $application->gl_finance_fund_source) === $fundSource)>{{ $fundSource }}</option>
+                            @endforeach
                         </select>
                     </div>
-                    <button type="submit" class="btn-primary">Update Payment Status</button>
+                    <div>
+                        <label class="label">Remarks</label>
+                        <textarea name="gl_budget_remarks" class="input h-32" placeholder="Optional processor remarks for approving officer or budget routing.">{{ old('gl_budget_remarks', $application->gl_budget_remarks) }}</textarea>
+                    </div>
+                    <button type="submit" class="btn-primary">Submit</button>
                 </form>
             </section>
 
-            @if($application->glSoaReviewer || $application->gl_soa_reviewed_at)
+            @if($application->glSoaReviewer || $application->gl_soa_reviewed_at || $application->glBudgetReviewer || $application->gl_budget_reviewed_at)
                 <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h2 class="text-2xl font-black text-sky-950">Last Review</h2>
+                    <h2 class="text-2xl font-black text-sky-950">Review History</h2>
                     <div class="mt-4 text-sm text-slate-600 space-y-2">
                         <p><span class="font-semibold text-slate-800">Reviewed By:</span> {{ $application->glSoaReviewer?->name ?? 'Unknown reviewer' }}</p>
                         <p><span class="font-semibold text-slate-800">Reviewed At:</span> {{ $application->gl_soa_reviewed_at?->format('M d, Y h:i A') ?? '-' }}</p>
+                        <p><span class="font-semibold text-slate-800">Finance Fund Source:</span> {{ $application->gl_finance_fund_source ?? '-' }}</p>
+                        <p><span class="font-semibold text-slate-800">Budget Reviewed By:</span> {{ $application->glBudgetReviewer?->name ?? '-' }}</p>
+                        <p><span class="font-semibold text-slate-800">Budget Reviewed At:</span> {{ $application->gl_budget_reviewed_at?->format('M d, Y h:i A') ?? '-' }}</p>
+                        <p><span class="font-semibold text-slate-800">Budget Remarks:</span> {{ $application->gl_budget_remarks ?? '-' }}</p>
                     </div>
                 </section>
             @endif

@@ -2,9 +2,9 @@
 
 @section('content')
 
-<main class="p-8 space-y-6 max-w-6xl mx-auto">
+<main class="mx-auto max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
 
-<header class="rounded-2xl bg-gradient-to-br from-[#234E70] to-[#2f6a91] p-8 text-white shadow">
+<header class="rounded-2xl bg-gradient-to-br from-[#234E70] to-[#2f6a91] px-6 py-8 text-white shadow sm:px-8">
     <p class="text-xs uppercase tracking-[0.2em] opacity-80">Social Worker Module</p>
     <h1 class="text-3xl font-bold mt-3">My Catered / Assessed Applications</h1>
     <p class="text-sm opacity-80 mt-2 max-w-2xl">
@@ -13,10 +13,10 @@
 </header>
 
 <form method="GET" action="{{ route('socialworker.my-cases') }}"
-      class="bg-white rounded-xl shadow p-4 flex justify-between items-center flex-wrap gap-4">
-    <div class="flex gap-4 flex-wrap">
+      class="grid gap-4 rounded-xl bg-white p-4 shadow lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
     <div>
-        <p class="text-xs text-gray-500 mb-1">STATUS FILTER</p>
+        <p class="mb-2 text-xs text-gray-500">STATUS FILTER</p>
         <select name="status" class="input">
             <option value="all">All Statuses</option>
             <option value="submitted" @selected(request('status') === 'submitted')>Submitted</option>
@@ -30,16 +30,16 @@
     </div>
 
     <div>
-        <p class="text-xs text-gray-500 mb-1">APPLICATION SEARCH</p>
+        <p class="mb-2 text-xs text-gray-500">APPLICATION SEARCH</p>
         <input type="text"
                name="search"
                value="{{ request('search') }}"
                placeholder="Reference no., client, or beneficiary"
-               class="input min-w-[280px]">
+               class="input min-w-0">
     </div>
 
     <div>
-        <p class="text-xs text-gray-500 mb-1">DATE FROM</p>
+        <p class="mb-2 text-xs text-gray-500">DATE FROM</p>
         <input type="date"
                name="date_from"
                value="{{ request('date_from') }}"
@@ -47,7 +47,7 @@
     </div>
 
     <div>
-        <p class="text-xs text-gray-500 mb-1">DATE TO</p>
+        <p class="mb-2 text-xs text-gray-500">DATE TO</p>
         <input type="date"
                name="date_to"
                value="{{ request('date_to') }}"
@@ -55,19 +55,19 @@
     </div>
     </div>
 
-    <div class="flex gap-2 flex-wrap">
+    <div class="flex flex-wrap gap-2 lg:justify-end">
         <a href="{{ route('socialworker.my-cases') }}"
-           class="px-4 py-2 bg-gray-200 rounded-lg text-sm">
+           class="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-gray-200 px-5 py-2 text-sm">
             Clear
         </a>
         <button type="submit"
-                class="px-4 py-2 bg-[#0B3C5D] text-white rounded-lg text-sm">
+                class="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-[#0B3C5D] px-5 py-2 text-sm text-white">
             Filter
         </button>
         <button type="submit"
                 name="export"
                 value="xlsx"
-                class="px-4 py-2 bg-emerald-100 text-emerald-800 rounded-lg text-sm font-semibold">
+                class="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-emerald-100 px-5 py-2 text-sm font-semibold text-emerald-800">
             Export Excel
         </button>
     </div>

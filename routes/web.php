@@ -1,12 +1,15 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\BulkDeduplicationController;
+use App\Http\Controllers\CashController;
 use App\Http\Controllers\ClientDashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\GlPaymentProcessorController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PayoutController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReferralController;
 use App\Http\Controllers\ServiceProviderController;
@@ -91,6 +94,26 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.deduplication.status');
     Route::get('/admin/deduplication/{run}/{type}', [BulkDeduplicationController::class, 'download'])
         ->name('admin.deduplication.download');
+    Route::get('/admin/deduplication/{run}', [BulkDeduplicationController::class, 'show'])
+        ->name('admin.deduplication.show');
+    Route::get('/admin/payouts', [PayoutController::class, 'index'])
+        ->name('admin.payouts.index');
+    Route::post('/admin/payouts', [PayoutController::class, 'store'])
+        ->name('admin.payouts.store');
+    Route::patch('/admin/payouts/{batch}/activation', [PayoutController::class, 'updateActivation'])
+        ->name('admin.payouts.activation.update');
+    Route::get('/admin/payouts/{batch}/report', [PayoutController::class, 'exportReport'])
+        ->name('admin.payouts.report');
+    Route::get('/admin/payouts/{batch}', [PayoutController::class, 'show'])
+        ->name('admin.payouts.show');
+    Route::post('/admin/payouts/{batch}/entries/{entry}/claim', [PayoutController::class, 'claimEntry'])
+        ->name('admin.payouts.entries.claim');
+    Route::post('/admin/payouts/{batch}/entries/{entry}/release', [PayoutController::class, 'releaseEntry'])
+        ->name('admin.payouts.entries.release');
+    Route::patch('/admin/payouts/{batch}/entries/{entry}', [PayoutController::class, 'updateEntry'])
+        ->name('admin.payouts.entries.update');
+    Route::get('/admin/payouts/{batch}/entries/{entry}/proof-photo', [PayoutController::class, 'proofPhoto'])
+        ->name('admin.payouts.entries.proof');
     Route::get('/admin/libraries', [AdminController::class, 'libraries'])
         ->name('admin.libraries');
     Route::get('/admin/libraries/{library}', [AdminController::class, 'showLibrary'])
@@ -123,6 +146,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.libraries.modes-of-assistance.store');
     Route::post('/admin/libraries/service-points', [AdminController::class, 'storeServicePoint'])
         ->name('admin.libraries.service-points.store');
+    Route::post('/admin/libraries/finance-fund-sources', [AdminController::class, 'storeFinanceFundSource'])
+        ->name('admin.libraries.finance-fund-sources.store');
     Route::post('/admin/libraries/service-providers', [AdminController::class, 'storeServiceProvider'])
         ->name('admin.libraries.service-providers.store');
     Route::post('/admin/libraries/positions', [AdminController::class, 'storePosition'])
@@ -161,6 +186,24 @@ Route::middleware(['auth', 'role:reporting_officer'])->prefix('reporting-officer
         ->name('reporting.deduplication.status');
     Route::get('/deduplication/{run}/{type}', [BulkDeduplicationController::class, 'download'])
         ->name('reporting.deduplication.download');
+    Route::get('/deduplication/{run}', [BulkDeduplicationController::class, 'show'])
+        ->name('reporting.deduplication.show');
+    Route::get('/payouts', [PayoutController::class, 'index'])
+        ->name('reporting.payouts.index');
+    Route::post('/payouts', [PayoutController::class, 'store'])
+        ->name('reporting.payouts.store');
+    Route::get('/payouts/{batch}/report', [PayoutController::class, 'exportReport'])
+        ->name('reporting.payouts.report');
+    Route::get('/payouts/{batch}', [PayoutController::class, 'show'])
+        ->name('reporting.payouts.show');
+    Route::post('/payouts/{batch}/entries/{entry}/claim', [PayoutController::class, 'claimEntry'])
+        ->name('reporting.payouts.entries.claim');
+    Route::post('/payouts/{batch}/entries/{entry}/release', [PayoutController::class, 'releaseEntry'])
+        ->name('reporting.payouts.entries.release');
+    Route::patch('/payouts/{batch}/entries/{entry}', [PayoutController::class, 'updateEntry'])
+        ->name('reporting.payouts.entries.update');
+    Route::get('/payouts/{batch}/entries/{entry}/proof-photo', [PayoutController::class, 'proofPhoto'])
+        ->name('reporting.payouts.entries.proof');
 });
 
 Route::middleware(['auth', 'role:referral_institution'])->prefix('referral-institution')->group(function () {
@@ -177,10 +220,52 @@ Route::middleware(['auth', 'role:referral_institution'])->prefix('referral-insti
 Route::middleware(['auth', 'role:referral_officer'])->prefix('referral-officer')->group(function () {
     Route::get('/dashboard', [ReferralController::class, 'officerDashboard'])
         ->name('referral-officer.dashboard');
+    Route::get('/payouts', [PayoutController::class, 'index'])
+        ->name('referral-officer.payouts.index');
+    Route::get('/payouts/{batch}', [PayoutController::class, 'show'])
+        ->name('referral-officer.payouts.show');
+    Route::post('/payouts/{batch}/entries/{entry}/claim', [PayoutController::class, 'claimEntry'])
+        ->name('referral-officer.payouts.entries.claim');
+    Route::post('/payouts/{batch}/entries/{entry}/release', [PayoutController::class, 'releaseEntry'])
+        ->name('referral-officer.payouts.entries.release');
+    Route::patch('/payouts/{batch}/entries/{entry}', [PayoutController::class, 'updateEntry'])
+        ->name('referral-officer.payouts.entries.update');
+    Route::get('/payouts/{batch}/entries/{entry}/proof-photo', [PayoutController::class, 'proofPhoto'])
+        ->name('referral-officer.payouts.entries.proof');
     Route::patch('/referrals/{recommendation}', [ReferralController::class, 'updateReferral'])
         ->name('referral-officer.referrals.update');
     Route::patch('/institution-referrals/{institutionReferral}', [ReferralController::class, 'updateInstitutionReferral'])
         ->name('referral-officer.institution-referrals.update');
+});
+
+Route::middleware(['auth', 'role:technical_staff'])->prefix('technical-staff')->group(function () {
+    Route::get('/payouts', [PayoutController::class, 'index'])
+        ->name('technical-staff.payouts.index');
+    Route::get('/payouts/{batch}', [PayoutController::class, 'show'])
+        ->name('technical-staff.payouts.show');
+    Route::post('/payouts/{batch}/entries/{entry}/claim', [PayoutController::class, 'claimEntry'])
+        ->name('technical-staff.payouts.entries.claim');
+    Route::post('/payouts/{batch}/entries/{entry}/release', [PayoutController::class, 'releaseEntry'])
+        ->name('technical-staff.payouts.entries.release');
+    Route::patch('/payouts/{batch}/entries/{entry}', [PayoutController::class, 'updateEntry'])
+        ->name('technical-staff.payouts.entries.update');
+    Route::get('/payouts/{batch}/entries/{entry}/proof-photo', [PayoutController::class, 'proofPhoto'])
+        ->name('technical-staff.payouts.entries.proof');
+});
+
+Route::middleware(['auth', 'role:admin_staff'])->prefix('admin-staff')->group(function () {
+    Route::get('/payouts', [PayoutController::class, 'index'])
+        ->name('admin-staff.payouts.index');
+    Route::get('/payouts/{batch}', [PayoutController::class, 'show'])
+        ->name('admin-staff.payouts.show');
+    Route::post('/payouts/{batch}/entries/{entry}/claim', [PayoutController::class, 'claimEntry'])
+        ->name('admin-staff.payouts.entries.claim');
+    Route::post('/payouts/{batch}/entries/{entry}/release', [PayoutController::class, 'releaseEntry'])
+        ->name('admin-staff.payouts.entries.release');
+    Route::patch('/payouts/{batch}/entries/{entry}', [PayoutController::class, 'updateEntry'])
+        ->name('admin-staff.payouts.entries.update');
+    Route::get('/payouts/{batch}/entries/{entry}/proof-photo', [PayoutController::class, 'proofPhoto'])
+        ->name('admin-staff.payouts.entries.proof');
 });
 
 /*
@@ -193,6 +278,18 @@ use App\Http\Controllers\SocialWorkerController;
 Route::middleware(['auth', 'role:social_worker'])->group(function () {
 
     Route::get('/social-worker/dashboard', [SocialWorkerController::class, 'dashboard']);
+    Route::get('/social-worker/payouts', [PayoutController::class, 'index'])
+        ->name('socialworker.payouts.index');
+    Route::get('/social-worker/payouts/{batch}', [PayoutController::class, 'show'])
+        ->name('socialworker.payouts.show');
+    Route::post('/social-worker/payouts/{batch}/entries/{entry}/claim', [PayoutController::class, 'claimEntry'])
+        ->name('socialworker.payouts.entries.claim');
+    Route::post('/social-worker/payouts/{batch}/entries/{entry}/release', [PayoutController::class, 'releaseEntry'])
+        ->name('socialworker.payouts.entries.release');
+    Route::patch('/social-worker/payouts/{batch}/entries/{entry}', [PayoutController::class, 'updateEntry'])
+        ->name('socialworker.payouts.entries.update');
+    Route::get('/social-worker/payouts/{batch}/entries/{entry}/proof-photo', [PayoutController::class, 'proofPhoto'])
+        ->name('socialworker.payouts.entries.proof');
     Route::get('/social-worker/google/connect', [SocialWorkerGoogleController::class, 'redirect'])
         ->name('socialworker.google.connect');
     Route::get('/social-worker/google/callback', [SocialWorkerGoogleController::class, 'callback'])
@@ -245,19 +342,37 @@ Route::middleware(['auth', 'role:service_provider'])->group(function () {
         ->name('service-provider.guarantee-letter');
     Route::post('/service-provider/guarantee-letters/{application}/statement', [ServiceProviderController::class, 'uploadUpdatedStatement'])
         ->name('service-provider.statement.upload');
+    Route::post('/service-provider/guarantee-letters/{application}/supporting-documents', [ServiceProviderController::class, 'uploadSupportingDocument'])
+        ->name('service-provider.supporting-documents.upload');
+    Route::post('/service-provider/guarantee-letters/{application}/attachments', [ServiceProviderController::class, 'submitAttachments'])
+        ->name('service-provider.attachments.submit');
 });
 
 Route::middleware(['auth', 'role:gl_payment_processor'])->prefix('gl-payment-processor')->group(function () {
     Route::get('/dashboard', [GlPaymentProcessorController::class, 'dashboard'])
         ->name('gl-payment-processor.dashboard');
+    Route::get('/guarantee-letters', [GlPaymentProcessorController::class, 'queue'])
+        ->name('gl-payment-processor.queue');
+    Route::get('/payouts', [PayoutController::class, 'index'])
+        ->name('gl-payment-processor.payouts.index');
+    Route::get('/payouts/{batch}', [PayoutController::class, 'show'])
+        ->name('gl-payment-processor.payouts.show');
+    Route::post('/payouts/{batch}/entries/{entry}/claim', [PayoutController::class, 'claimEntry'])
+        ->name('gl-payment-processor.payouts.entries.claim');
+    Route::post('/payouts/{batch}/entries/{entry}/release', [PayoutController::class, 'releaseEntry'])
+        ->name('gl-payment-processor.payouts.entries.release');
+    Route::patch('/payouts/{batch}/entries/{entry}', [PayoutController::class, 'updateEntry'])
+        ->name('gl-payment-processor.payouts.entries.update');
+    Route::get('/payouts/{batch}/entries/{entry}/proof-photo', [PayoutController::class, 'proofPhoto'])
+        ->name('gl-payment-processor.payouts.entries.proof');
     Route::get('/guarantee-letters/{application}', [GlPaymentProcessorController::class, 'show'])
         ->name('gl-payment-processor.show');
     Route::get('/guarantee-letters/{application}/print', [GlPaymentProcessorController::class, 'guaranteeLetter'])
         ->name('gl-payment-processor.guarantee-letter');
     Route::patch('/guarantee-letters/{application}/soa-review', [GlPaymentProcessorController::class, 'updateSoaReview'])
         ->name('gl-payment-processor.soa-review.update');
-    Route::patch('/guarantee-letters/{application}/payment-status', [GlPaymentProcessorController::class, 'updatePaymentStatus'])
-        ->name('gl-payment-processor.payment-status.update');
+    Route::patch('/guarantee-letters/{application}/budget-processing', [GlPaymentProcessorController::class, 'submitBudgetProcessing'])
+        ->name('gl-payment-processor.budget-processing.submit');
 });
 /*
 |--------------------------------------------------------------------------
@@ -271,12 +386,37 @@ Route::middleware(['auth', 'role:approving_officer'])->group(function () {
 
         Route::get('/dashboard', [ApprovingOfficerController::class, 'dashboard'])
             ->name('approving.dashboard');
+        Route::get('/payouts', [PayoutController::class, 'index'])
+            ->name('approving.payouts.index');
+        Route::get('/payouts/{batch}', [PayoutController::class, 'show'])
+            ->name('approving.payouts.show');
+        Route::post('/payouts/{batch}/entries/{entry}/claim', [PayoutController::class, 'claimEntry'])
+            ->name('approving.payouts.entries.claim');
+        Route::post('/payouts/{batch}/entries/{entry}/release', [PayoutController::class, 'releaseEntry'])
+            ->name('approving.payouts.entries.release');
+        Route::patch('/payouts/{batch}/entries/{entry}', [PayoutController::class, 'updateEntry'])
+            ->name('approving.payouts.entries.update');
+        Route::get('/payouts/{batch}/entries/{entry}/proof-photo', [PayoutController::class, 'proofPhoto'])
+            ->name('approving.payouts.entries.proof');
 
         Route::get('/applications', [ApprovingOfficerController::class, 'applications'])
             ->name('approving.applications');
 
         Route::get('/my-approvals', [ApprovingOfficerController::class, 'myApprovals'])
             ->name('approving.my-approvals');
+
+        Route::get('/gl-payment-approvals', [ApprovingOfficerController::class, 'glPaymentApprovals'])
+            ->name('approving.gl-payment-approvals');
+        Route::get('/gl-payment-approvals/{id}', [ApprovingOfficerController::class, 'showGlPaymentApproval'])
+            ->name('approving.gl-payment-approvals.show');
+        Route::patch('/gl-payment-approvals/{id}', [ApprovingOfficerController::class, 'updateGlPaymentApproval'])
+            ->name('approving.gl-payment-approvals.update');
+        Route::get('/gl-program-amount-approvals', [ApprovingOfficerController::class, 'glProgramAmountApprovals'])
+            ->name('approving.gl-program-amount-approvals');
+        Route::get('/gl-program-amount-approvals/{id}', [ApprovingOfficerController::class, 'showGlProgramAmountApproval'])
+            ->name('approving.gl-program-amount-approvals.show');
+        Route::patch('/gl-program-amount-approvals/{id}', [ApprovingOfficerController::class, 'updateGlProgramAmountApproval'])
+            ->name('approving.gl-program-amount-approvals.update');
 
         Route::get('/application/{id}', [ApprovingOfficerController::class, 'show'])
             ->name('approving.show');
@@ -300,6 +440,67 @@ Route::middleware(['auth', 'role:approving_officer'])->group(function () {
             ->name('approving.deny');
 
     });
+});
+
+Route::middleware(['auth', 'role:budget_officer'])->prefix('budget-officer')->group(function () {
+    Route::get('/dashboard', [ApprovingOfficerController::class, 'budgetOfficerDashboard'])
+        ->name('budget-officer.dashboard');
+    Route::get('/gl-payment-approvals', [ApprovingOfficerController::class, 'glPaymentApprovals'])
+        ->name('budget-officer.gl-payment-approvals');
+    Route::get('/gl-payment-approvals/{id}', [ApprovingOfficerController::class, 'showGlPaymentApproval'])
+        ->name('budget-officer.gl-payment-approvals.show');
+    Route::patch('/gl-payment-approvals/{id}', [ApprovingOfficerController::class, 'updateGlPaymentApproval'])
+        ->name('budget-officer.gl-payment-approvals.update');
+});
+
+Route::middleware(['auth', 'role:accounting_officer'])->prefix('accounting-officer')->group(function () {
+    Route::get('/dashboard', [AccountingController::class, 'accountingOfficerDashboard'])
+        ->name('accounting-officer.dashboard');
+    Route::get('/gl-payment-reviews', [AccountingController::class, 'accountingOfficerQueue'])
+        ->name('accounting-officer.gl-payment-reviews');
+    Route::get('/gl-payment-reviews/{application}', [AccountingController::class, 'showAccountingOfficer'])
+        ->name('accounting-officer.gl-payment-reviews.show');
+    Route::patch('/gl-payment-reviews/{application}', [AccountingController::class, 'submitAccountingOfficerReview'])
+        ->name('accounting-officer.gl-payment-reviews.update');
+});
+
+Route::middleware(['auth', 'role:accounting_approver'])->prefix('accounting-approver')->group(function () {
+    Route::get('/dashboard', [AccountingController::class, 'accountingApproverDashboard'])
+        ->name('accounting-approver.dashboard');
+    Route::get('/gl-payment-approvals', [AccountingController::class, 'accountingApproverQueue'])
+        ->name('accounting-approver.gl-payment-approvals');
+    Route::get('/gl-payment-approvals/{application}', [AccountingController::class, 'showAccountingApprover'])
+        ->name('accounting-approver.gl-payment-approvals.show');
+    Route::patch('/gl-payment-approvals/{application}', [AccountingController::class, 'submitAccountingApproverDecision'])
+        ->name('accounting-approver.gl-payment-approvals.update');
+    Route::get('/cash-certifications', [AccountingController::class, 'cashCertificationQueue'])
+        ->name('accounting-approver.cash-certifications');
+    Route::get('/cash-certifications/{application}', [AccountingController::class, 'showCashCertification'])
+        ->name('accounting-approver.cash-certifications.show');
+    Route::patch('/cash-certifications/{application}', [AccountingController::class, 'submitCashCertificationDecision'])
+        ->name('accounting-approver.cash-certifications.update');
+});
+
+Route::middleware(['auth', 'role:cash_officer'])->prefix('cash-officer')->group(function () {
+    Route::get('/dashboard', [CashController::class, 'cashOfficerDashboard'])
+        ->name('cash-officer.dashboard');
+    Route::get('/gl-payment-reviews', [CashController::class, 'cashOfficerQueue'])
+        ->name('cash-officer.gl-payment-reviews');
+    Route::get('/gl-payment-reviews/{application}', [CashController::class, 'showCashOfficer'])
+        ->name('cash-officer.gl-payment-reviews.show');
+    Route::patch('/gl-payment-reviews/{application}', [CashController::class, 'submitCashOfficerReview'])
+        ->name('cash-officer.gl-payment-reviews.update');
+});
+
+Route::middleware(['auth', 'role:cash_approver'])->prefix('cash-approver')->group(function () {
+    Route::get('/dashboard', [CashController::class, 'cashApproverDashboard'])
+        ->name('cash-approver.dashboard');
+    Route::get('/gl-payment-approvals', [CashController::class, 'cashApproverQueue'])
+        ->name('cash-approver.gl-payment-approvals');
+    Route::get('/gl-payment-approvals/{application}', [CashController::class, 'showCashApprover'])
+        ->name('cash-approver.gl-payment-approvals.show');
+    Route::patch('/gl-payment-approvals/{application}', [CashController::class, 'submitCashApproverDecision'])
+        ->name('cash-approver.gl-payment-approvals.update');
 });
 
 require __DIR__.'/auth.php';

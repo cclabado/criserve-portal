@@ -64,6 +64,10 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('approving.dashboard');
         }
 
+        if ($user->role === 'reporting_officer') {
+            return redirect()->route('reporting.dashboard');
+        }
+
         if ($user->role === 'service_provider') {
             return redirect()->route('service-provider.dashboard');
         }
@@ -78,6 +82,34 @@ class AuthenticatedSessionController extends Controller
 
         if ($user->role === 'referral_officer') {
             return redirect()->route('referral-officer.dashboard');
+        }
+
+        if ($user->role === 'technical_staff') {
+            return redirect()->route('technical-staff.payouts.index');
+        }
+
+        if ($user->role === 'admin_staff') {
+            return redirect()->route('admin-staff.payouts.index');
+        }
+
+        if ($user->role === 'budget_officer') {
+            return redirect()->route('budget-officer.dashboard');
+        }
+
+        if ($user->role === 'accounting_officer') {
+            return redirect()->route('accounting-officer.dashboard');
+        }
+
+        if ($user->role === 'accounting_approver') {
+            return redirect()->route('accounting-approver.dashboard');
+        }
+
+        if ($user->role === 'cash_officer') {
+            return redirect()->route('cash-officer.dashboard');
+        }
+
+        if ($user->role === 'cash_approver') {
+            return redirect()->route('cash-approver.dashboard');
         }
 
         return redirect()->route('client.dashboard');

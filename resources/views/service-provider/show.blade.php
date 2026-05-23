@@ -4,15 +4,35 @@
 
 @php
     $hasBeneficiary = (bool) $application->beneficiary;
-    $hasUpdatedStatement = $application->documents->contains(fn ($document) => $document->document_type === 'Updated Statement of Account');
+    $hasUpdatedStatement = $statementDocuments->isNotEmpty();
     $totalRecommendedAmount = $application->assistanceRecommendations->isNotEmpty()
         ? $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount)
         : (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
-    $soaStatusLabel = ucwords(str_replace('_', ' ', $application->gl_soa_status ?? 'awaiting_upload'));
-    $paymentStatusLabel = ucwords(str_replace('_', ' ', $application->gl_payment_status ?? 'unpaid'));
+    $paymentStatusLabel = match ($application->gl_payment_status) {
+        'paid' => 'Paid',
+        'for_processing_cash' => 'For Processing (Cash)',
+        'for_processing_accounting_certification' => 'For Processing (Accounting Certification)',
+        'for_processing_program_amount_approval' => 'For Processing (Program Amount Approval)',
+        'for_processing_accounting' => 'For Processing (Accounting)',
+        'for_processing_budget' => 'For Processing (Budget)',
+        'for_processing_program_approval' => 'For Processing (Program Approval)',
+        'processing', 'for_processing' => 'For Processing',
+        default => $hasUpdatedStatement ? 'For Processing' : 'Awaiting SOA',
+    };
+    $paymentStatusBadgeClass = match ($paymentStatusLabel) {
+        'Paid' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        'For Processing (Cash)' => 'border-blue-200 bg-blue-50 text-blue-700',
+        'For Processing (Accounting Certification)' => 'border-blue-200 bg-blue-50 text-blue-700',
+        'For Processing (Program Amount Approval)' => 'border-sky-200 bg-sky-50 text-sky-700',
+        'For Processing (Accounting)' => 'border-amber-200 bg-amber-50 text-amber-700',
+        'For Processing (Budget)' => 'border-violet-200 bg-violet-50 text-violet-700',
+        'For Processing (Program Approval)' => 'border-indigo-200 bg-indigo-50 text-indigo-700',
+        'For Processing' => 'border-blue-200 bg-blue-50 text-blue-700',
+        default => 'border-amber-200 bg-amber-50 text-amber-700',
+    };
 @endphp
 
-<main class="space-y-6">
+<main class="space-y-6" x-data="{ activeTab: 'client' }">
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -37,41 +57,41 @@
         </div>
     </section>
 
-    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
         <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Status</p>
-            <p class="mt-3 text-2xl font-black text-slate-900">{{ strtoupper(str_replace('_', ' ', $application->status)) }}</p>
-        </article>
-        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Client</p>
-            <p class="mt-3 text-lg font-black text-slate-900">{{ trim(($application->client?->first_name ?? '').' '.($application->client?->last_name ?? '')) ?: '-' }}</p>
-        </article>
-        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Final Amount</p>
-            <p class="mt-3 text-2xl font-black text-slate-900">PHP {{ number_format((float) ($application->final_amount ?? $totalRecommendedAmount), 2) }}</p>
-        </article>
-        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Statement</p>
-            <p class="mt-3 text-lg font-black {{ $hasUpdatedStatement ? 'text-emerald-700' : 'text-amber-700' }}">
-                {{ $hasUpdatedStatement ? 'Uploaded' : 'Pending' }}
-            </p>
-        </article>
-        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">SOA Review</p>
-            <p class="mt-3 text-lg font-black text-slate-900">{{ $soaStatusLabel }}</p>
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Assistance Status</p>
+            <div class="mt-3">
+                <span class="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-slate-700">
+                    {{ strtoupper(str_replace('_', ' ', $application->status)) }}
+                </span>
+            </div>
         </article>
         <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Payment</p>
-            <p class="mt-3 text-lg font-black text-slate-900">{{ $paymentStatusLabel }}</p>
+            <div class="mt-3">
+                <span class="inline-flex rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] {{ $paymentStatusBadgeClass }}">
+                    {{ $paymentStatusLabel }}
+                </span>
+            </div>
         </article>
     </section>
 
-    <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="flex items-center justify-between gap-3">
-            <div>
-                <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Case Information</p>
-                <h2 class="mt-2 text-2xl font-black text-sky-950">Client Information</h2>
-            </div>
+    <section class="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div class="flex flex-wrap gap-2">
+            <button type="button" x-on:click="activeTab = 'client'" x-bind:class="activeTab === 'client' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Client Information</button>
+            @if($hasBeneficiary)
+                <button type="button" x-on:click="activeTab = 'beneficiary'" x-bind:class="activeTab === 'beneficiary' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Beneficiary Information</button>
+            @endif
+            <button type="button" x-on:click="activeTab = 'assessment'" x-bind:class="activeTab === 'assessment' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Initial Assessment</button>
+            <button type="button" x-on:click="activeTab = 'recommendation'" x-bind:class="activeTab === 'recommendation' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Recommendation</button>
+            <button type="button" x-on:click="activeTab = 'attachments'" x-bind:class="activeTab === 'attachments' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Attachments</button>
+        </div>
+    </section>
+
+    <section x-show="activeTab === 'client'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div>
+            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Case Information</p>
+            <h2 class="mt-2 text-2xl font-black text-sky-950">Client Information</h2>
         </div>
 
         <div class="mt-6 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">
@@ -92,7 +112,7 @@
     </section>
 
     @if($hasBeneficiary)
-        <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section x-show="activeTab === 'beneficiary'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div>
                 <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Case Information</p>
                 <h2 class="mt-2 text-2xl font-black text-sky-950">Beneficiary Information</h2>
@@ -116,7 +136,7 @@
         </section>
     @endif
 
-    <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section x-show="activeTab === 'assessment'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div>
             <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Assessment</p>
             <h2 class="mt-2 text-2xl font-black text-sky-950">Initial Assessment</h2>
@@ -145,22 +165,10 @@
         </div>
     </section>
 
-    <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section x-show="activeTab === 'recommendation'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div>
             <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Recommendation</p>
-            <h2 class="mt-2 text-2xl font-black text-sky-950">Recommendation Summary</h2>
-        </div>
-
-        <div class="mt-6 space-y-4 text-sm">
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p class="font-semibold text-slate-800">Problem Statement</p>
-                <p class="mt-2 text-slate-600">{{ $application->problem_statement ?: '-' }}</p>
-            </div>
-
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p class="font-semibold text-slate-800">Social Worker Assessment</p>
-                <p class="mt-2 text-slate-600">{{ $application->social_worker_assessment ?: '-' }}</p>
-            </div>
+            <h2 class="mt-2 text-2xl font-black text-sky-950">Approved Recommendation</h2>
         </div>
 
         <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -192,9 +200,7 @@
                                     Mode: {{ $recommendation->modeOfAssistance?->name ?? '-' }}
                                 </p>
                                 @if($recommendation->referralInstitution)
-                                    <p class="mt-1 text-sm text-slate-500">
-                                        Referral: {{ $recommendation->referralInstitution->name }}
-                                    </p>
+                                    <p class="mt-1 text-sm text-slate-500">Referral: {{ $recommendation->referralInstitution->name }}</p>
                                 @endif
                                 @if($recommendation->notes)
                                     <p class="mt-3 text-sm text-slate-600">{{ $recommendation->notes }}</p>
@@ -216,40 +222,111 @@
         </div>
     </section>
 
-    <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-                <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Statement Upload</p>
-                <h2 class="mt-2 text-2xl font-black text-sky-950">Updated Statement of Account</h2>
-                <p class="mt-2 text-sm text-slate-500">
-                    Upload the latest statement for this approved guarantee letter once it is available.
-                </p>
-            </div>
+    <section x-show="activeTab === 'attachments'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div>
+            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Submission</p>
+            <h2 class="mt-2 text-2xl font-black text-sky-950">Attachments and Remarks</h2>
+            <p class="mt-2 text-sm text-slate-500">
+                Upload the updated statement, add supporting documents if needed, and include remarks before submitting.
+            </p>
         </div>
 
-        <div class="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <p class="font-semibold text-slate-800">Current status</p>
-                <p class="mt-2 text-sm text-slate-600">
-                    {{ $hasUpdatedStatement ? 'Updated statement of account already uploaded for this case.' : 'No updated statement of account has been uploaded yet.' }}
-                </p>
-                @if($application->gl_soa_review_notes)
-                    <p class="mt-3 text-sm text-rose-700">
-                        <span class="font-semibold">Return notes:</span> {{ $application->gl_soa_review_notes }}
-                    </p>
-                @endif
+        <div class="mt-6 grid gap-6 xl:grid-cols-2">
+            <div class="space-y-6">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                    <p class="font-semibold text-slate-800">Updated Statement of Account</p>
+                    @if($application->gl_soa_review_notes)
+                        <p class="mt-2 text-sm text-rose-700">
+                            <span class="font-semibold">Return notes:</span> {{ $application->gl_soa_review_notes }}
+                        </p>
+                    @endif
+
+                    <div class="mt-4 space-y-3">
+                        @forelse($statementDocuments as $document)
+                            <article class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-semibold text-slate-900">{{ $document->file_name }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">Uploaded {{ optional($document->created_at)->format('M d, Y h:i A') ?? '-' }}</p>
+                                        @if($document->remarks)
+                                            <p class="mt-1 text-xs text-slate-500">{{ $document->remarks }}</p>
+                                        @endif
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <a href="{{ route('documents.show', $document) }}" class="inline-flex items-center rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">View</a>
+                                        <a href="{{ route('documents.download', $document) }}" class="inline-flex items-center rounded-xl bg-[#234E70] px-3 py-2 text-xs font-semibold text-white hover:bg-[#18384f]">Download</a>
+                                    </div>
+                                </div>
+                            </article>
+                        @empty
+                            <p class="text-sm text-slate-500">No statement uploaded yet.</p>
+                        @endforelse
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                    <p class="font-semibold text-slate-800">Other Supporting Documents</p>
+                    <div class="mt-4 space-y-3">
+                        @forelse($supportingDocuments as $document)
+                            <article class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-semibold text-slate-900">{{ $document->file_name }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">Uploaded {{ optional($document->created_at)->format('M d, Y h:i A') ?? '-' }}</p>
+                                        @if($document->remarks)
+                                            <p class="mt-1 text-xs text-slate-500">{{ $document->remarks }}</p>
+                                        @endif
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <a href="{{ route('documents.show', $document) }}" class="inline-flex items-center rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">View</a>
+                                        <a href="{{ route('documents.download', $document) }}" class="inline-flex items-center rounded-xl bg-[#234E70] px-3 py-2 text-xs font-semibold text-white hover:bg-[#18384f]">Download</a>
+                                    </div>
+                                </div>
+                            </article>
+                        @empty
+                            <p class="text-sm text-slate-500">No supporting documents uploaded yet.</p>
+                        @endforelse
+                    </div>
+                </div>
             </div>
 
             <div class="rounded-2xl border border-slate-200 bg-white p-5">
-                <form method="POST"
-                      action="{{ route('service-provider.statement.upload', $application->id) }}"
-                      enctype="multipart/form-data"
-                      class="space-y-3">
+                <form method="POST" action="{{ route('service-provider.attachments.submit', $application->id) }}" enctype="multipart/form-data" class="space-y-5">
                     @csrf
-                    <input type="file" name="statement_file" class="block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                    <button type="submit" class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#18384f]">
-                        Upload Statement
-                    </button>
+
+                    @error('attachments')
+                        <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{{ $message }}</div>
+                    @enderror
+
+                    <div>
+                        <label for="statement_file" class="text-sm font-semibold text-slate-800">Updated Statement of Account</label>
+                        <input id="statement_file" type="file" name="statement_file" class="mt-3 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                        @error('statement_file')
+                            <p class="mt-2 text-sm text-rose-700">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <label for="supporting_document_file" class="text-sm font-semibold text-slate-800">Other Supporting Documents</label>
+                        <input id="supporting_document_file" type="file" name="supporting_document_file" class="mt-3 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                        @error('supporting_document_file')
+                            <p class="mt-2 text-sm text-rose-700">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <label for="attachment_remarks" class="text-sm font-semibold text-slate-800">Remarks</label>
+                        <textarea id="attachment_remarks" name="attachment_remarks" rows="5" class="mt-3 block w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Add remarks for this submission...">{{ old('attachment_remarks') }}</textarea>
+                        @error('attachment_remarks')
+                            <p class="mt-2 text-sm text-rose-700">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-[#234E70] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#18384f]">
+                            Submit Attachments
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>

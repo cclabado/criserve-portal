@@ -122,6 +122,26 @@ class NotificationController extends Controller
             return route('gl-payment-processor.dashboard');
         }
 
+        if ($user->role === 'budget_officer') {
+            return route('budget-officer.dashboard');
+        }
+
+        if ($user->role === 'accounting_officer') {
+            return route('accounting-officer.dashboard');
+        }
+
+        if ($user->role === 'accounting_approver') {
+            return route('accounting-approver.dashboard');
+        }
+
+        if ($user->role === 'cash_officer') {
+            return route('cash-officer.dashboard');
+        }
+
+        if ($user->role === 'cash_approver') {
+            return route('cash-approver.dashboard');
+        }
+
         if ($user->role === 'referral_institution') {
             return route('referral-institution.dashboard');
         }

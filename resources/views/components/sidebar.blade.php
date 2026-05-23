@@ -2,6 +2,7 @@
 
     @php
         $role = auth()->user()->role ?? 'client';
+        $hasActivePayouts = \App\Models\PayoutBatch::query()->where('is_active', true)->exists();
 
         $matchesPath = function ($paths) {
             foreach ((array) $paths as $path) {
@@ -131,6 +132,18 @@
             <span class="text-sm tracking-wide">My Schedule</span>
         </a>
 
+        @if($hasActivePayouts)
+        <a href="/social-worker/payouts"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('social-worker/payouts*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('social-worker/payouts*') }}">
+                payments
+            </span>
+
+            <span class="text-sm tracking-wide">Offsite Payouts</span>
+        </a>
+        @endif
+
         @endif
 
 
@@ -205,6 +218,7 @@
                 ['label' => 'Document Requirements', 'path' => 'admin/libraries/document-requirements'],
                 ['label' => 'Modes of Assistance', 'path' => 'admin/libraries/modes-of-assistance'],
                 ['label' => 'Service Points', 'path' => 'admin/libraries/service-points'],
+                ['label' => 'Finance Fund Sources', 'path' => 'admin/libraries/finance-fund-sources'],
                 ['label' => 'Relationships', 'path' => 'admin/libraries/relationships'],
                 ['label' => 'Client Types', 'path' => 'admin/libraries/client-types'],
                 ['label' => 'Referral Institutions', 'path' => 'admin/libraries/referral-institutions'],
@@ -303,6 +317,16 @@
             <span class="text-sm tracking-wide">Bulk Deduplication</span>
         </a>
 
+        <a href="/admin/payouts"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/payouts*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('admin/payouts*') }}">
+                payments
+            </span>
+
+            <span class="text-sm tracking-wide">Offsite Payouts</span>
+        </a>
+
         <a href="/admin/support-tickets"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin/support-tickets*') }}">
 
@@ -345,6 +369,16 @@
             </span>
 
             <span class="text-sm tracking-wide">Bulk Deduplication</span>
+        </a>
+
+        <a href="/reporting-officer/payouts"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('reporting-officer/payouts*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('reporting-officer/payouts*') }}">
+                payments
+            </span>
+
+            <span class="text-sm tracking-wide">Offsite Payouts</span>
         </a>
 
         @endif
@@ -390,6 +424,44 @@
                 </span>
             </a>
 
+            <a href="/approving-officer/gl-payment-approvals"
+            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('approving-officer/gl-payment-approvals*') }}">
+
+                <span class="material-symbols-outlined {{ $iconClass('approving-officer/gl-payment-approvals*') }}">
+                    account_balance
+                </span>
+
+                <span class="text-sm tracking-wide">
+                    GL Payment Approvals
+                </span>
+            </a>
+
+            <a href="/approving-officer/gl-program-amount-approvals"
+            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('approving-officer/gl-program-amount-approvals*') }}">
+
+                <span class="material-symbols-outlined {{ $iconClass('approving-officer/gl-program-amount-approvals*') }}">
+                    price_check
+                </span>
+
+                <span class="text-sm tracking-wide">
+                    Program Amount Approvals
+                </span>
+            </a>
+
+            @if($hasActivePayouts)
+            <a href="/approving-officer/payouts"
+            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('approving-officer/payouts*') }}">
+
+                <span class="material-symbols-outlined {{ $iconClass('approving-officer/payouts*') }}">
+                    payments
+                </span>
+
+                <span class="text-sm tracking-wide">
+                    Offsite Payouts
+                </span>
+            </a>
+            @endif
+
         @endif
 
         @if($role === 'service_provider')
@@ -416,16 +488,200 @@
 
         @endif
 
+        @if($role === 'technical_staff')
+
+        @if($hasActivePayouts)
+        <a href="/technical-staff/payouts"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('technical-staff/payouts*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('technical-staff/payouts*') }}">
+                payments
+            </span>
+
+            <span class="text-sm tracking-wide">Offsite Payouts</span>
+        </a>
+        @endif
+
+        @endif
+
+        @if($role === 'admin_staff')
+
+        @if($hasActivePayouts)
+        <a href="/admin-staff/payouts"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('admin-staff/payouts*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('admin-staff/payouts*') }}">
+                payments
+            </span>
+
+            <span class="text-sm tracking-wide">Offsite Payouts</span>
+        </a>
+        @endif
+
+        @endif
+
         @if($role === 'gl_payment_processor')
 
         <a href="/gl-payment-processor/dashboard"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('gl-payment-processor/dashboard*') }}">
 
             <span class="material-symbols-outlined {{ $iconClass('gl-payment-processor/dashboard*') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/gl-payment-processor/guarantee-letters"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass(['gl-payment-processor/guarantee-letters*', 'gl-payment-processor/guarantee-letters', 'gl-payment-processor/guarantee-letters/*']) }}">
+
+            <span class="material-symbols-outlined {{ $iconClass(['gl-payment-processor/guarantee-letters*', 'gl-payment-processor/guarantee-letters', 'gl-payment-processor/guarantee-letters/*']) }}">
                 receipt_long
             </span>
 
-            <span class="text-sm tracking-wide">GL Processing</span>
+            <span class="text-sm tracking-wide">GL Queue</span>
+        </a>
+
+        @if($hasActivePayouts)
+        <a href="/gl-payment-processor/payouts"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('gl-payment-processor/payouts*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('gl-payment-processor/payouts*') }}">
+                payments
+            </span>
+
+            <span class="text-sm tracking-wide">Offsite Payouts</span>
+        </a>
+        @endif
+
+        @endif
+
+        @if($role === 'budget_officer')
+
+        <a href="/budget-officer/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('budget-officer/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('budget-officer/dashboard*') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/budget-officer/gl-payment-approvals"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('budget-officer/gl-payment-approvals*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('budget-officer/gl-payment-approvals*') }}">
+                account_balance
+            </span>
+
+            <span class="text-sm tracking-wide">For Review</span>
+        </a>
+
+        @endif
+
+        @if($role === 'accounting_officer')
+
+        <a href="/accounting-officer/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('accounting-officer/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('accounting-officer/dashboard*') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/accounting-officer/gl-payment-reviews"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('accounting-officer/gl-payment-reviews*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('accounting-officer/gl-payment-reviews*') }}">
+                request_quote
+            </span>
+
+            <span class="text-sm tracking-wide">For Review</span>
+        </a>
+
+        @endif
+
+        @if($role === 'accounting_approver')
+
+        <a href="/accounting-approver/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('accounting-approver/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('accounting-approver/dashboard*') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/accounting-approver/gl-payment-approvals"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('accounting-approver/gl-payment-approvals*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('accounting-approver/gl-payment-approvals*') }}">
+                fact_check
+            </span>
+
+            <span class="text-sm tracking-wide">For Approval</span>
+        </a>
+
+        <a href="/accounting-approver/cash-certifications"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('accounting-approver/cash-certifications*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('accounting-approver/cash-certifications*') }}">
+                verified
+            </span>
+
+            <span class="text-sm tracking-wide">Cash Certifications</span>
+        </a>
+
+        @endif
+
+        @if($role === 'cash_officer')
+
+        <a href="/cash-officer/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('cash-officer/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('cash-officer/dashboard*') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/cash-officer/gl-payment-reviews"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('cash-officer/gl-payment-reviews*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('cash-officer/gl-payment-reviews*') }}">
+                point_of_sale
+            </span>
+
+            <span class="text-sm tracking-wide">For Review</span>
+        </a>
+
+        @endif
+
+        @if($role === 'cash_approver')
+
+        <a href="/cash-approver/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('cash-approver/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('cash-approver/dashboard*') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/cash-approver/gl-payment-approvals"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('cash-approver/gl-payment-approvals*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('cash-approver/gl-payment-approvals*') }}">
+                attach_money
+            </span>
+
+            <span class="text-sm tracking-wide">For Approval</span>
         </a>
 
         @endif
@@ -465,6 +721,18 @@
 
             <span class="text-sm tracking-wide">Referral Dashboard</span>
         </a>
+
+        @if($hasActivePayouts)
+        <a href="/referral-officer/payouts"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('referral-officer/payouts*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('referral-officer/payouts*') }}">
+                payments
+            </span>
+
+            <span class="text-sm tracking-wide">Offsite Payouts</span>
+        </a>
+        @endif
 
         @if(auth()->user()?->canAccessSocialWorkerModule())
 

@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -30,24 +31,42 @@ class BulkDeduplicationController extends Controller
             ->take(10)
             ->get();
 
-        $selectedRun = $request->filled('run')
-            ? $this->visibleRunsQuery($request)->find($request->integer('run'))
-            : $runs->first();
-
         $role = $request->user()?->role;
         $isReportingOfficer = $role === 'reporting_officer';
 
         return view('deduplication.index', [
             'runs' => $runs,
-            'selectedRun' => $selectedRun,
-            'uploadRoute' => $isReportingOfficer ? route('reporting.deduplication.store') : route('admin.deduplication.store'),
-            'indexRoute' => $isReportingOfficer ? route('reporting.deduplication.index') : route('admin.deduplication.index'),
-            'dashboardRoute' => $isReportingOfficer ? route('reporting.dashboard') : route('admin.dashboard'),
+            'uploadRoute' => $isReportingOfficer ? route('reporting.deduplication.store', absolute: false) : route('admin.deduplication.store', absolute: false),
+            'indexRoute' => $isReportingOfficer ? route('reporting.deduplication.index', absolute: false) : route('admin.deduplication.index', absolute: false),
+            'showRoute' => $isReportingOfficer ? 'reporting.deduplication.show' : 'admin.deduplication.show',
+            'dashboardRoute' => $isReportingOfficer ? route('reporting.dashboard', absolute: false) : route('admin.dashboard', absolute: false),
+            'isReportingOfficer' => $isReportingOfficer,
+        ]);
+    }
+
+    public function show(Request $request, BulkDeduplicationRun $run): View
+    {
+        abort_unless($this->visibleRunsQuery($request)->whereKey($run->id)->exists(), 403);
+
+        $runs = $this->visibleRunsQuery($request)
+            ->latest()
+            ->take(10)
+            ->get();
+
+        $role = $request->user()?->role;
+        $isReportingOfficer = $role === 'reporting_officer';
+
+        return view('deduplication.show', [
+            'runs' => $runs,
+            'selectedRun' => $run,
+            'indexRoute' => $isReportingOfficer ? route('reporting.deduplication.index', absolute: false) : route('admin.deduplication.index', absolute: false),
+            'showRoute' => $isReportingOfficer ? 'reporting.deduplication.show' : 'admin.deduplication.show',
+            'dashboardRoute' => $isReportingOfficer ? route('reporting.dashboard', absolute: false) : route('admin.dashboard', absolute: false),
             'downloadBaseRoute' => $isReportingOfficer ? 'reporting.deduplication.download' : 'admin.deduplication.download',
             'statusBaseRoute' => $isReportingOfficer
-                ? route('reporting.deduplication.status', ['run' => '__RUN__'])
-                : route('admin.deduplication.status', ['run' => '__RUN__']),
-            'selectedRunStatus' => $selectedRun?->status,
+                ? route('reporting.deduplication.status', ['run' => '__RUN__'], false)
+                : route('admin.deduplication.status', ['run' => '__RUN__'], false),
+            'selectedRunStatus' => $run->status,
             'isReportingOfficer' => $isReportingOfficer,
         ]);
     }
@@ -87,8 +106,8 @@ class BulkDeduplicationController extends Controller
 
         return redirect()
             ->to(route($request->user()->role === 'reporting_officer'
-                ? 'reporting.deduplication.index'
-                : 'admin.deduplication.index', ['run' => $run->id]))
+                ? 'reporting.deduplication.show'
+                : 'admin.deduplication.show', ['run' => $run->id], false))
             ->with('success', 'Bulk deduplication was queued. You can leave this page and come back while the processor continues in the background.');
     }
 
@@ -132,12 +151,15 @@ class BulkDeduplicationController extends Controller
             $headers = array_keys($flattenedRows[0] ?? ['message' => 'No rows available']);
 
             foreach ($headers as $index => $header) {
-                $sheet->setCellValueByColumnAndRow($index + 1, 1, Str::headline($header));
+                $sheet->setCellValue(Coordinate::stringFromColumnIndex($index + 1).'1', Str::headline($header));
             }
 
             foreach ($flattenedRows as $rowIndex => $row) {
                 foreach (array_values($row) as $columnIndex => $value) {
-                    $sheet->setCellValueByColumnAndRow($columnIndex + 1, $rowIndex + 2, (string) $value);
+                    $sheet->setCellValue(
+                        Coordinate::stringFromColumnIndex($columnIndex + 1).($rowIndex + 2),
+                        (string) $value
+                    );
                 }
             }
 

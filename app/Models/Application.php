@@ -86,6 +86,38 @@ class Application extends Model
         'gl_soa_review_notes',
         'gl_soa_reviewed_by',
         'gl_soa_reviewed_at',
+        'gl_finance_fund_source',
+        'gl_budget_remarks',
+        'gl_budget_reviewed_by',
+        'gl_budget_reviewed_at',
+        'gl_program_approval_status',
+        'gl_program_approval_remarks',
+        'gl_program_approved_by',
+        'gl_program_approved_at',
+        'gl_program_amount_approval_status',
+        'gl_program_amount_approval_remarks',
+        'gl_program_amount_approved_by',
+        'gl_program_amount_approved_at',
+        'gl_cash_review_status',
+        'gl_cash_remarks',
+        'gl_cash_reviewed_by',
+        'gl_cash_reviewed_at',
+        'gl_cash_approval_status',
+        'gl_cash_approval_remarks',
+        'gl_cash_approved_by',
+        'gl_cash_approved_at',
+        'gl_cash_certification_status',
+        'gl_cash_certification_remarks',
+        'gl_cash_certified_by',
+        'gl_cash_certified_at',
+        'gl_accounting_review_status',
+        'gl_accounting_remarks',
+        'gl_accounting_reviewed_by',
+        'gl_accounting_reviewed_at',
+        'gl_accounting_approval_status',
+        'gl_accounting_approval_remarks',
+        'gl_accounting_approved_by',
+        'gl_accounting_approved_at',
         'client_signature_path',
         'client_signature_disk',
         'client_signature_mime_type',
@@ -106,6 +138,14 @@ class Application extends Model
         'recommended_amount' => 'decimal:2',
         'final_amount' => 'decimal:2',
         'gl_soa_reviewed_at' => 'datetime',
+        'gl_budget_reviewed_at' => 'datetime',
+        'gl_program_approved_at' => 'datetime',
+        'gl_program_amount_approved_at' => 'datetime',
+        'gl_cash_reviewed_at' => 'datetime',
+        'gl_cash_approved_at' => 'datetime',
+        'gl_cash_certified_at' => 'datetime',
+        'gl_accounting_reviewed_at' => 'datetime',
+        'gl_accounting_approved_at' => 'datetime',
         'has_elderly' => 'boolean',
         'has_child' => 'boolean',
         'has_pwd' => 'boolean',
@@ -188,6 +228,46 @@ class Application extends Model
     public function glSoaReviewer()
     {
         return $this->belongsTo(User::class, 'gl_soa_reviewed_by');
+    }
+
+    public function glBudgetReviewer()
+    {
+        return $this->belongsTo(User::class, 'gl_budget_reviewed_by');
+    }
+
+    public function glProgramApprover()
+    {
+        return $this->belongsTo(User::class, 'gl_program_approved_by');
+    }
+
+    public function glProgramAmountApprover()
+    {
+        return $this->belongsTo(User::class, 'gl_program_amount_approved_by');
+    }
+
+    public function glCashReviewer()
+    {
+        return $this->belongsTo(User::class, 'gl_cash_reviewed_by');
+    }
+
+    public function glCashApprover()
+    {
+        return $this->belongsTo(User::class, 'gl_cash_approved_by');
+    }
+
+    public function glCashCertifier()
+    {
+        return $this->belongsTo(User::class, 'gl_cash_certified_by');
+    }
+
+    public function glAccountingReviewer()
+    {
+        return $this->belongsTo(User::class, 'gl_accounting_reviewed_by');
+    }
+
+    public function glAccountingApprover()
+    {
+        return $this->belongsTo(User::class, 'gl_accounting_approved_by');
     }
 
     public function beneficiaryProfile()
