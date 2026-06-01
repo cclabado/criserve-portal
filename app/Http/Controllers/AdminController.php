@@ -10,6 +10,7 @@ use App\Models\AssistanceFrequencyRule;
 use App\Models\AssistanceSubtype;
 use App\Models\AssistanceType;
 use App\Models\AuditLog;
+use App\Models\Bank;
 use App\Models\Client;
 use App\Models\ClientType;
 use App\Models\FinanceFundSource;
@@ -48,10 +49,12 @@ class AdminController extends Controller
         'technical_staff',
         'admin_staff',
         'budget_officer',
+        'budget_approver',
         'accounting_officer',
         'accounting_approver',
         'cash_officer',
         'cash_approver',
+        'finance_director',
         'service_provider',
         'gl_payment_processor',
         'referral_institution',
@@ -681,6 +684,11 @@ class AdminController extends Controller
         return $this->storeLibraryRecord($request, 'finance-fund-sources');
     }
 
+    public function storeBank(Request $request): RedirectResponse
+    {
+        return $this->storeLibraryRecord($request, 'banks');
+    }
+
     public function storeServiceProvider(Request $request): RedirectResponse
     {
         return $this->storeLibraryRecord($request, 'service-providers');
@@ -776,6 +784,10 @@ class AdminController extends Controller
             ]),
             'finance-fund-sources' => $request->validate([
                 'name' => ['required', 'string', 'max:255', Rule::unique('finance_fund_sources', 'name')->ignore($ignoreId)],
+            ]),
+            'banks' => $request->validate([
+                'name' => ['required', 'string', 'max:255', Rule::unique('banks', 'name')->ignore($ignoreId)],
+                'category' => ['nullable', 'string', 'max:100'],
             ]),
             'service-providers' => $this->validateServiceProviderPayload($request, $ignoreId),
             'positions' => $this->validatePositionPayload($request, $ignoreId),
@@ -1372,6 +1384,16 @@ class AdminController extends Controller
                 'search_columns' => ['name'],
                 'with' => [],
                 'icon' => 'account_balance_wallet',
+            ],
+            'banks' => [
+                'title' => 'Banks',
+                'singular' => 'Bank',
+                'description' => 'Manage the bank options that service providers can attach to statement submissions and payout processing records.',
+                'model' => Bank::class,
+                'order_by' => 'name',
+                'search_columns' => ['name', 'category'],
+                'with' => [],
+                'icon' => 'account_balance',
             ],
             'service-providers' => [
                 'title' => 'Service Providers',

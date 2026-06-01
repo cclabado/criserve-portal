@@ -96,6 +96,10 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('budget-officer.dashboard');
         }
 
+        if ($user->role === 'budget_approver') {
+            return redirect()->route('budget-approver.dashboard');
+        }
+
         if ($user->role === 'accounting_officer') {
             return redirect()->route('accounting-officer.dashboard');
         }
@@ -110,6 +114,10 @@ class AuthenticatedSessionController extends Controller
 
         if ($user->role === 'cash_approver') {
             return redirect()->route('cash-approver.dashboard');
+        }
+
+        if ($user->role === 'finance_director') {
+            return redirect()->route('finance-director.dashboard');
         }
 
         return redirect()->route('client.dashboard');

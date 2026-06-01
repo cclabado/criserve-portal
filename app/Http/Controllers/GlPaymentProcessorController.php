@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\BuildsGlFinanceDocuments;
 use App\Models\Application;
 use App\Models\FinanceFundSource;
 use App\Services\AuditLogService;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class GlPaymentProcessorController extends Controller
 {
+    use BuildsGlFinanceDocuments;
+
     public function __construct(
         protected AuditLogService $auditLogs
     ) {
@@ -104,6 +108,33 @@ class GlPaymentProcessorController extends Controller
         ]);
     }
 
+    public function ors(Application $application): View
+    {
+        $application = $this->baseQuery()
+            ->whereKey($application->id)
+            ->firstOrFail();
+
+        return $this->renderGlOrsView($application);
+    }
+
+    public function dv(Application $application): View
+    {
+        $application = $this->baseQuery()
+            ->whereKey($application->id)
+            ->firstOrFail();
+
+        return $this->renderGlDvView($application);
+    }
+
+    public function lddapAda(Application $application): View
+    {
+        $application = $this->baseQuery()
+            ->whereKey($application->id)
+            ->firstOrFail();
+
+        return $this->renderGlLddapAdaView($application);
+    }
+
     public function guaranteeLetter(Application $application): View
     {
         $application = $this->baseQuery()
@@ -132,6 +163,7 @@ class GlPaymentProcessorController extends Controller
         }
 
         $application->update([
+            'gl_payment_status' => 'for_compliance_service_provider',
             'gl_soa_status' => 'returned_for_compliance',
             'gl_soa_review_notes' => trim((string) $validated['gl_soa_review_notes']),
             'gl_soa_reviewed_by' => $request->user()->id,
@@ -139,6 +171,7 @@ class GlPaymentProcessorController extends Controller
         ]);
 
         $this->auditLogs->log($request, 'gl_soa.reviewed', $application, [
+            'payment_status' => 'for_compliance_service_provider',
             'soa_status' => 'returned_for_compliance',
             'review_notes' => $validated['gl_soa_review_notes'],
             'statement_document_id' => $latestStatement->id,
@@ -157,6 +190,11 @@ class GlPaymentProcessorController extends Controller
 
         $validated = $request->validate([
             'gl_finance_fund_source' => ['required', 'string', 'max:255'],
+            'gl_fund_cluster' => ['required', 'string', 'max:255'],
+            'gl_responsibility_center' => ['required', 'string', 'max:255'],
+            'gl_mfo_pap' => ['required', 'string', 'max:30'],
+            'gl_mode_of_payment' => ['required', 'string', 'max:50'],
+            'gl_payee_tin' => ['nullable', 'string', 'max:255'],
             'gl_budget_remarks' => ['nullable', 'string', 'max:1500'],
         ]);
 
@@ -168,12 +206,25 @@ class GlPaymentProcessorController extends Controller
             ]);
         }
 
+        $today = now()->toDateString();
+        $orsNumber = $application->gl_ors_number ?: $this->generateOrsNumber($application);
+        $dvNumber = $application->gl_dv_number ?: $this->generateDvNumber($application);
+
         $application->update([
             'gl_soa_status' => 'processed',
             'gl_soa_review_notes' => null,
             'gl_soa_reviewed_by' => $request->user()->id,
             'gl_soa_reviewed_at' => now(),
             'gl_finance_fund_source' => trim((string) $validated['gl_finance_fund_source']),
+            'gl_fund_cluster' => trim((string) $validated['gl_fund_cluster']),
+            'gl_responsibility_center' => trim((string) $validated['gl_responsibility_center']),
+            'gl_mfo_pap' => trim((string) $validated['gl_mfo_pap']),
+            'gl_mode_of_payment' => trim((string) $validated['gl_mode_of_payment']),
+            'gl_payee_tin' => filled($validated['gl_payee_tin'] ?? null) ? trim((string) $validated['gl_payee_tin']) : null,
+            'gl_ors_number' => $orsNumber,
+            'gl_ors_date' => $application->gl_ors_date ?: $today,
+            'gl_dv_number' => $dvNumber,
+            'gl_dv_date' => $application->gl_dv_date ?: $today,
             'gl_budget_remarks' => filled($validated['gl_budget_remarks'] ?? null) ? trim((string) $validated['gl_budget_remarks']) : null,
             'gl_budget_reviewed_by' => $request->user()->id,
             'gl_budget_reviewed_at' => now(),
@@ -187,6 +238,13 @@ class GlPaymentProcessorController extends Controller
         $this->auditLogs->log($request, 'gl_payment.submitted_for_budget_processing', $application, [
             'payment_status' => 'for_processing_program_approval',
             'fund_source' => $validated['gl_finance_fund_source'],
+            'fund_cluster' => $validated['gl_fund_cluster'],
+            'responsibility_center' => $validated['gl_responsibility_center'],
+            'mfo_pap' => $validated['gl_mfo_pap'],
+            'mode_of_payment' => $validated['gl_mode_of_payment'],
+            'payee_tin' => $validated['gl_payee_tin'] ?? null,
+            'ors_number' => $orsNumber,
+            'dv_number' => $dvNumber,
             'budget_remarks' => $validated['gl_budget_remarks'] ?? null,
             'statement_document_id' => $latestStatement->id,
         ]);
@@ -208,7 +266,7 @@ class GlPaymentProcessorController extends Controller
                 'serviceProvider',
                 'documents',
                 'socialWorker',
-                'approvingOfficer',
+                'approvingOfficer.position',
                 'assistanceRecommendations.assistanceType',
                 'assistanceRecommendations.assistanceSubtype',
                 'assistanceRecommendations.assistanceDetail',
@@ -216,6 +274,8 @@ class GlPaymentProcessorController extends Controller
                 'assistanceRecommendations.referralInstitution',
                 'glSoaReviewer',
                 'glBudgetReviewer',
+                'glBudgetApprover.position',
+                'glAccountingApprover.position',
             ])
             ->whereHas('modeOfAssistance', fn ($query) => $query->where('name', 'Guarantee Letter'))
             ->whereIn('status', ['approved', 'released']);
@@ -269,5 +329,19 @@ class GlPaymentProcessorController extends Controller
             ->where('document_type', $documentType)
             ->sortByDesc('created_at')
             ->values();
+    }
+
+    protected function generateOrsNumber(Application $application): string
+    {
+        $stamp = Carbon::now()->format('Y-m');
+
+        return sprintf('02-01101101-%s-%05d', $stamp, (int) $application->id);
+    }
+
+    protected function generateDvNumber(Application $application): string
+    {
+        $stamp = Carbon::now()->format('Y-m');
+
+        return sprintf('DV-%s-%05d', $stamp, (int) $application->id);
     }
 }

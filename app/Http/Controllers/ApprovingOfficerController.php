@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use App\Http\Controllers\Concerns\BuildsGlFinanceDocuments;
 use App\Models\Application;
 use App\Models\ModeOfAssistance;
 use App\Notifications\GuaranteeLetterApprovedNotification;
@@ -15,6 +16,8 @@ use Illuminate\Validation\ValidationException;
 
 class ApprovingOfficerController extends Controller
 {
+    use BuildsGlFinanceDocuments;
+
     public function __construct(
         protected FamilyNetworkService $familyNetwork,
         protected AuditLogService $auditLogs
@@ -168,13 +171,25 @@ class ApprovingOfficerController extends Controller
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
             ->where(function ($stageQuery) use ($user) {
                 if ($user->role === 'budget_officer') {
-                    $stageQuery->where('gl_payment_status', 'for_processing_budget')
-                        ->where('gl_program_approval_status', 'approved');
+                    $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                        ->where('gl_program_approval_status', 'approved')
+                        ->whereNull('gl_budget_reviewed_at');
 
                     return;
                 }
 
-                $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_processing_budget'])
+                if ($user->role === 'budget_approver') {
+                    $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                        ->whereNotNull('gl_budget_reviewed_at')
+                        ->where(function ($statusQuery) {
+                            $statusQuery->where('gl_budget_approval_status', 'pending_approval')
+                                ->orWhereNull('gl_budget_approval_status');
+                        });
+
+                    return;
+                }
+
+                $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_compliance_approving_officer', 'for_processing_budget'])
                     ->where(function ($statusQuery) {
                         $statusQuery->where('gl_program_approval_status', 'pending_approval')
                             ->orWhereNull('gl_program_approval_status');
@@ -200,7 +215,7 @@ class ApprovingOfficerController extends Controller
         }
 
         $applications = $query
-            ->latest('gl_budget_reviewed_at')
+            ->latest($user->role === 'budget_officer' ? 'gl_program_approved_at' : 'gl_budget_reviewed_at')
             ->latest('updated_at')
             ->paginate(10)
             ->withQueryString();
@@ -209,13 +224,25 @@ class ApprovingOfficerController extends Controller
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
             ->where(function ($stageQuery) use ($user) {
                 if ($user->role === 'budget_officer') {
-                    $stageQuery->where('gl_payment_status', 'for_processing_budget')
-                        ->where('gl_program_approval_status', 'approved');
+                    $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                        ->where('gl_program_approval_status', 'approved')
+                        ->whereNull('gl_budget_reviewed_at');
 
                     return;
                 }
 
-                $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_processing_budget'])
+                if ($user->role === 'budget_approver') {
+                    $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                        ->whereNotNull('gl_budget_reviewed_at')
+                        ->where(function ($statusQuery) {
+                            $statusQuery->where('gl_budget_approval_status', 'pending_approval')
+                                ->orWhereNull('gl_budget_approval_status');
+                        });
+
+                    return;
+                }
+
+                $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_compliance_approving_officer', 'for_processing_budget'])
                     ->where(function ($statusQuery) {
                         $statusQuery->where('gl_program_approval_status', 'pending_approval')
                             ->orWhereNull('gl_program_approval_status');
@@ -231,13 +258,25 @@ class ApprovingOfficerController extends Controller
                 ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
                 ->where(function ($stageQuery) use ($user) {
                     if ($user->role === 'budget_officer') {
-                        $stageQuery->where('gl_payment_status', 'for_processing_budget')
-                            ->where('gl_program_approval_status', 'approved');
+                        $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                            ->where('gl_program_approval_status', 'approved')
+                            ->whereNull('gl_budget_reviewed_at');
 
                         return;
                     }
 
-                    $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_processing_budget'])
+                    if ($user->role === 'budget_approver') {
+                        $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                            ->whereNotNull('gl_budget_reviewed_at')
+                            ->where(function ($statusQuery) {
+                                $statusQuery->where('gl_budget_approval_status', 'pending_approval')
+                                    ->orWhereNull('gl_budget_approval_status');
+                            });
+
+                        return;
+                    }
+
+                    $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_compliance_approving_officer', 'for_processing_budget'])
                         ->where(function ($statusQuery) {
                             $statusQuery->where('gl_program_approval_status', 'pending_approval')
                                 ->orWhereNull('gl_program_approval_status');
@@ -248,13 +287,25 @@ class ApprovingOfficerController extends Controller
                 ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
                 ->where(function ($stageQuery) use ($user) {
                     if ($user->role === 'budget_officer') {
-                        $stageQuery->where('gl_payment_status', 'for_processing_budget')
-                            ->where('gl_program_approval_status', 'approved');
+                        $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                            ->where('gl_program_approval_status', 'approved')
+                            ->whereNull('gl_budget_reviewed_at');
 
                         return;
                     }
 
-                    $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_processing_budget'])
+                    if ($user->role === 'budget_approver') {
+                        $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                            ->whereNotNull('gl_budget_reviewed_at')
+                            ->where(function ($statusQuery) {
+                                $statusQuery->where('gl_budget_approval_status', 'pending_approval')
+                                    ->orWhereNull('gl_budget_approval_status');
+                            });
+
+                        return;
+                    }
+
+                    $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_compliance_approving_officer', 'for_processing_budget'])
                         ->where(function ($statusQuery) {
                             $statusQuery->where('gl_program_approval_status', 'pending_approval')
                                 ->orWhereNull('gl_program_approval_status');
@@ -300,7 +351,7 @@ class ApprovingOfficerController extends Controller
                 'glProgramAmountApprover',
             ])
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
-            ->where('gl_payment_status', 'for_processing_program_amount_approval')
+            ->whereIn('gl_payment_status', ['for_processing_program_amount_approval', 'for_compliance_accounting_officer'])
             ->where(function ($statusQuery) {
                 $statusQuery->where('gl_program_amount_approval_status', 'pending_approval')
                     ->orWhereNull('gl_program_amount_approval_status');
@@ -332,7 +383,7 @@ class ApprovingOfficerController extends Controller
 
         $fundSources = Application::query()
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
-            ->where('gl_payment_status', 'for_processing_program_amount_approval')
+            ->whereIn('gl_payment_status', ['for_processing_program_amount_approval', 'for_compliance_accounting_officer'])
             ->where(function ($statusQuery) {
                 $statusQuery->where('gl_program_amount_approval_status', 'pending_approval')
                     ->orWhereNull('gl_program_amount_approval_status');
@@ -345,7 +396,7 @@ class ApprovingOfficerController extends Controller
         $queueStats = [
             'total' => Application::query()
                 ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
-                ->where('gl_payment_status', 'for_processing_program_amount_approval')
+                ->whereIn('gl_payment_status', ['for_processing_program_amount_approval', 'for_compliance_accounting_officer'])
                 ->where(function ($statusQuery) {
                     $statusQuery->where('gl_program_amount_approval_status', 'pending_approval')
                         ->orWhereNull('gl_program_amount_approval_status');
@@ -353,7 +404,7 @@ class ApprovingOfficerController extends Controller
                 ->count(),
             'with_remarks' => Application::query()
                 ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
-                ->where('gl_payment_status', 'for_processing_program_amount_approval')
+                ->whereIn('gl_payment_status', ['for_processing_program_amount_approval', 'for_compliance_accounting_officer'])
                 ->where(function ($statusQuery) {
                     $statusQuery->where('gl_program_amount_approval_status', 'pending_approval')
                         ->orWhereNull('gl_program_amount_approval_status');
@@ -377,15 +428,24 @@ class ApprovingOfficerController extends Controller
 
     public function budgetOfficerDashboard()
     {
+        $user = auth()->user();
         $applications = Application::with([
                 'client',
                 'serviceProvider',
                 'documents',
             ])
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
-            ->where('gl_payment_status', 'for_processing_budget')
+            ->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
             ->where('gl_program_approval_status', 'approved')
-            ->latest('gl_program_approved_at')
+            ->when($user?->role === 'budget_officer', fn ($query) => $query->whereNull('gl_budget_reviewed_at'))
+            ->when($user?->role === 'budget_approver', function ($query) {
+                $query->whereNotNull('gl_budget_reviewed_at')
+                    ->where(function ($statusQuery) {
+                        $statusQuery->where('gl_budget_approval_status', 'pending_approval')
+                            ->orWhereNull('gl_budget_approval_status');
+                    });
+            })
+            ->latest($user?->role === 'budget_officer' ? 'gl_program_approved_at' : 'gl_budget_reviewed_at')
             ->latest('updated_at')
             ->get();
 
@@ -395,11 +455,11 @@ class ApprovingOfficerController extends Controller
             'with_supporting_docs' => $applications->filter(function (Application $application) {
                 return $application->documents->contains(fn ($document) => $document->document_type === 'Other Supporting Document');
             })->count(),
-            'total_amount' => $applications->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+            'total_amount' => $applications->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
         ];
 
         $recentEndorsements = $applications
-            ->sortByDesc(fn (Application $application) => $application->gl_program_approved_at ?? $application->updated_at)
+            ->sortByDesc(fn (Application $application) => ($user?->role === 'budget_officer' ? $application->gl_program_approved_at : $application->gl_budget_reviewed_at) ?? $application->updated_at)
             ->take(6)
             ->values();
 
@@ -409,7 +469,7 @@ class ApprovingOfficerController extends Controller
                 return [
                     'fund_source' => $fundSource,
                     'total' => $group->count(),
-                    'amount' => $group->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+                    'amount' => $group->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
                 ];
             })
             ->sortByDesc('total')
@@ -422,7 +482,7 @@ class ApprovingOfficerController extends Controller
                 return [
                     'provider' => $providerName,
                     'total' => $group->count(),
-                    'amount' => $group->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+                    'amount' => $group->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
                 ];
             })
             ->sortByDesc('total')
@@ -430,6 +490,7 @@ class ApprovingOfficerController extends Controller
             ->values();
 
         return view('budget-officer.dashboard', [
+            'workspace' => $user?->role === 'budget_approver' ? 'approver' : 'officer',
             'stats' => $stats,
             'recentEndorsements' => $recentEndorsements,
             'fundSourceBreakdown' => $fundSourceBreakdown,
@@ -459,13 +520,25 @@ class ApprovingOfficerController extends Controller
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
             ->where(function ($stageQuery) use ($user) {
                 if ($user->role === 'budget_officer') {
-                    $stageQuery->where('gl_payment_status', 'for_processing_budget')
-                        ->where('gl_program_approval_status', 'approved');
+                    $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                        ->where('gl_program_approval_status', 'approved')
+                        ->whereNull('gl_budget_reviewed_at');
 
                     return;
                 }
 
-                $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_processing_budget'])
+                if ($user->role === 'budget_approver') {
+                    $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                        ->whereNotNull('gl_budget_reviewed_at')
+                        ->where(function ($statusQuery) {
+                            $statusQuery->where('gl_budget_approval_status', 'pending_approval')
+                                ->orWhereNull('gl_budget_approval_status');
+                        });
+
+                    return;
+                }
+
+                $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_compliance_approving_officer', 'for_processing_budget'])
                     ->where(function ($statusQuery) {
                         $statusQuery->where('gl_program_approval_status', 'pending_approval')
                             ->orWhereNull('gl_program_approval_status');
@@ -510,7 +583,7 @@ class ApprovingOfficerController extends Controller
             'glProgramAmountApprover',
         ])
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
-            ->where('gl_payment_status', 'for_processing_program_amount_approval')
+            ->whereIn('gl_payment_status', ['for_processing_program_amount_approval', 'for_compliance_accounting_officer'])
             ->where(function ($statusQuery) {
                 $statusQuery->where('gl_program_amount_approval_status', 'pending_approval')
                     ->orWhereNull('gl_program_amount_approval_status');
@@ -532,6 +605,27 @@ class ApprovingOfficerController extends Controller
         ]);
     }
 
+    public function showGlFinanceOrs($id)
+    {
+        $application = $this->resolveGlFinanceDocumentApplication((int) $id);
+
+        return $this->renderGlOrsView($application);
+    }
+
+    public function showGlFinanceDv($id)
+    {
+        $application = $this->resolveGlFinanceDocumentApplication((int) $id);
+
+        return $this->renderGlDvView($application);
+    }
+
+    public function showGlFinanceLddapAda($id)
+    {
+        $application = $this->resolveGlFinanceDocumentApplication((int) $id);
+
+        return $this->renderGlLddapAdaView($application);
+    }
+
     public function updateGlPaymentApproval(Request $request, $id)
     {
         $user = auth()->user();
@@ -539,13 +633,25 @@ class ApprovingOfficerController extends Controller
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
             ->where(function ($stageQuery) use ($user) {
                 if ($user->role === 'budget_officer') {
-                    $stageQuery->where('gl_payment_status', 'for_processing_budget')
-                        ->where('gl_program_approval_status', 'approved');
+                    $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                        ->where('gl_program_approval_status', 'approved')
+                        ->whereNull('gl_budget_reviewed_at');
 
                     return;
                 }
 
-                $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_processing_budget'])
+                if ($user->role === 'budget_approver') {
+                    $stageQuery->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                        ->whereNotNull('gl_budget_reviewed_at')
+                        ->where(function ($statusQuery) {
+                            $statusQuery->where('gl_budget_approval_status', 'pending_approval')
+                                ->orWhereNull('gl_budget_approval_status');
+                        });
+
+                    return;
+                }
+
+                $stageQuery->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_compliance_approving_officer', 'for_processing_budget'])
                     ->where(function ($statusQuery) {
                         $statusQuery->where('gl_program_approval_status', 'pending_approval')
                             ->orWhereNull('gl_program_approval_status');
@@ -554,6 +660,60 @@ class ApprovingOfficerController extends Controller
             ->findOrFail($id);
 
         $this->ensureOfficerCanHandleAmount(auth()->user(), $application->approvalRoutingAmount());
+
+        if ($user->role === 'budget_officer') {
+            $validated = $request->validate([
+                'decision' => ['required', 'in:approved,for_compliance'],
+                'remarks' => ['nullable', 'string', 'max:1500'],
+            ]);
+
+            if ($validated['decision'] === 'for_compliance' && blank($validated['remarks'] ?? null)) {
+                throw ValidationException::withMessages([
+                    'remarks' => 'Compliance remarks are required when returning the case to the approving officer.',
+                ]);
+            }
+
+            $remarks = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+            $updatePayload = $validated['decision'] === 'approved'
+                ? [
+                    'gl_budget_remarks' => $remarks,
+                    'gl_budget_reviewed_by' => auth()->id(),
+                    'gl_budget_reviewed_at' => now(),
+                    'gl_budget_approval_status' => 'pending_approval',
+                    'gl_budget_approval_remarks' => null,
+                    'gl_budget_approved_by' => null,
+                    'gl_budget_approved_at' => null,
+                    'gl_payment_status' => 'for_processing_budget',
+                ]
+                : [
+                    'gl_budget_remarks' => $remarks,
+                    'gl_budget_reviewed_by' => null,
+                    'gl_budget_reviewed_at' => null,
+                    'gl_budget_approval_status' => null,
+                    'gl_budget_approval_remarks' => null,
+                    'gl_budget_approved_by' => null,
+                    'gl_budget_approved_at' => null,
+                    'gl_program_approval_status' => 'for_compliance',
+                    'gl_program_approval_remarks' => $remarks,
+                    'gl_program_approved_by' => auth()->id(),
+                    'gl_program_approved_at' => now(),
+                    'gl_payment_status' => 'for_compliance_gl_processor',
+                ];
+
+            $application->update($updatePayload);
+
+            $this->auditLogs->log($request, 'gl_payment.budget_review_submitted', $application, [
+                'decision' => $validated['decision'],
+                'remarks' => $validated['remarks'] ?? null,
+                'payment_status' => $updatePayload['gl_payment_status'],
+            ]);
+
+            return redirect()
+                ->route('budget-officer.gl-payment-approvals')
+                ->with('success', $validated['decision'] === 'approved'
+                    ? 'Budget review submitted to the budget approver successfully.'
+                    : 'Case returned to the approving officer for compliance.');
+        }
 
         $validated = $request->validate([
             'decision' => ['required', 'in:for_compliance,approved,disapproved'],
@@ -566,15 +726,21 @@ class ApprovingOfficerController extends Controller
             ]);
         }
 
-        $updatePayload = [
-            'gl_program_approval_status' => $validated['decision'],
-            'gl_program_approval_remarks' => filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null,
-            'gl_program_approved_by' => auth()->id(),
-            'gl_program_approved_at' => now(),
-        ];
+        if ($validated['decision'] === 'for_compliance' && blank($validated['remarks'] ?? null)) {
+            throw ValidationException::withMessages([
+                'remarks' => 'Compliance remarks are required when returning the case to the previous stage.',
+            ]);
+        }
 
-        if ($validated['decision'] === 'approved') {
-            if ($user->role === 'budget_officer') {
+        if ($user->role === 'budget_approver') {
+            $updatePayload = [
+                'gl_budget_approval_status' => $validated['decision'],
+                'gl_budget_approval_remarks' => filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null,
+                'gl_budget_approved_by' => auth()->id(),
+                'gl_budget_approved_at' => now(),
+            ];
+
+            if ($validated['decision'] === 'approved') {
                 $updatePayload['gl_payment_status'] = 'for_processing_accounting';
                 $updatePayload['gl_accounting_review_status'] = 'pending_review';
                 $updatePayload['gl_accounting_remarks'] = null;
@@ -584,9 +750,49 @@ class ApprovingOfficerController extends Controller
                 $updatePayload['gl_accounting_approval_remarks'] = null;
                 $updatePayload['gl_accounting_approved_by'] = null;
                 $updatePayload['gl_accounting_approved_at'] = null;
+            } elseif ($validated['decision'] === 'for_compliance') {
+                $updatePayload['gl_payment_status'] = 'for_compliance_budget_officer';
+                $updatePayload['gl_budget_remarks'] = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+                $updatePayload['gl_budget_reviewed_by'] = null;
+                $updatePayload['gl_budget_reviewed_at'] = null;
+                $updatePayload['gl_budget_approval_status'] = null;
+                $updatePayload['gl_budget_approved_by'] = null;
+                $updatePayload['gl_budget_approved_at'] = null;
             } else {
                 $updatePayload['gl_payment_status'] = 'for_processing_budget';
             }
+
+            $application->update($updatePayload);
+
+            $this->auditLogs->log($request, 'gl_payment.budget_approval_updated', $application, [
+                'decision' => $validated['decision'],
+                'remarks' => $validated['remarks'] ?? null,
+                'payment_status' => $updatePayload['gl_payment_status'],
+            ]);
+
+            return redirect()
+                ->route('budget-approver.gl-payment-approvals')
+                ->with('success', 'Budget approval decision saved successfully.');
+        }
+
+        $updatePayload = [
+            'gl_program_approval_status' => $validated['decision'],
+            'gl_program_approval_remarks' => filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null,
+            'gl_program_approved_by' => auth()->id(),
+            'gl_program_approved_at' => now(),
+        ];
+
+        if ($validated['decision'] === 'approved') {
+            $updatePayload['gl_payment_status'] = 'for_processing_budget';
+            $updatePayload['gl_budget_remarks'] = null;
+            $updatePayload['gl_budget_reviewed_by'] = null;
+            $updatePayload['gl_budget_reviewed_at'] = null;
+            $updatePayload['gl_budget_approval_status'] = null;
+            $updatePayload['gl_budget_approval_remarks'] = null;
+            $updatePayload['gl_budget_approved_by'] = null;
+            $updatePayload['gl_budget_approved_at'] = null;
+        } elseif ($validated['decision'] === 'for_compliance') {
+            $updatePayload['gl_payment_status'] = 'for_compliance_gl_processor';
         }
 
         $application->update($updatePayload);
@@ -597,7 +803,7 @@ class ApprovingOfficerController extends Controller
         ]);
 
         return redirect()
-            ->route($user->role === 'budget_officer' ? 'budget-officer.gl-payment-approvals' : 'approving.gl-payment-approvals')
+            ->route('approving.gl-payment-approvals')
             ->with('success', 'GL payment approval decision saved successfully.');
     }
 
@@ -605,7 +811,7 @@ class ApprovingOfficerController extends Controller
     {
         $application = Application::with('modeOfAssistance')
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
-            ->where('gl_payment_status', 'for_processing_program_amount_approval')
+            ->whereIn('gl_payment_status', ['for_processing_program_amount_approval', 'for_compliance_accounting_officer'])
             ->where(function ($statusQuery) {
                 $statusQuery->where('gl_program_amount_approval_status', 'pending_approval')
                     ->orWhereNull('gl_program_amount_approval_status');
@@ -615,7 +821,7 @@ class ApprovingOfficerController extends Controller
         $this->ensureOfficerCanHandleAmount(auth()->user(), $application->approvalRoutingAmount());
 
         $validated = $request->validate([
-            'decision' => ['required', 'in:approved,disapproved'],
+            'decision' => ['required', 'in:for_compliance,approved,disapproved'],
             'remarks' => ['nullable', 'string', 'max:1500'],
         ]);
 
@@ -625,26 +831,49 @@ class ApprovingOfficerController extends Controller
             ]);
         }
 
-        $application->update([
+        if ($validated['decision'] === 'for_compliance' && blank($validated['remarks'] ?? null)) {
+            throw ValidationException::withMessages([
+                'remarks' => 'Compliance remarks are required when returning the case to the accounting officer.',
+            ]);
+        }
+
+        $updatePayload = [
             'gl_program_amount_approval_status' => $validated['decision'],
             'gl_program_amount_approval_remarks' => filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null,
             'gl_program_amount_approved_by' => auth()->id(),
             'gl_program_amount_approved_at' => now(),
-            'gl_payment_status' => $validated['decision'] === 'approved' ? 'for_processing_cash' : 'for_processing_program_amount_approval',
-            'gl_cash_review_status' => $validated['decision'] === 'approved' ? 'pending_review' : null,
-            'gl_cash_remarks' => null,
-            'gl_cash_reviewed_by' => null,
-            'gl_cash_reviewed_at' => null,
-            'gl_cash_approval_status' => null,
-            'gl_cash_approval_remarks' => null,
-            'gl_cash_approved_by' => null,
-            'gl_cash_approved_at' => null,
-        ]);
+        ];
+
+        if ($validated['decision'] === 'approved') {
+            $updatePayload['gl_payment_status'] = 'for_processing_cash';
+            $updatePayload['gl_cash_review_status'] = 'pending_review';
+            $updatePayload['gl_cash_remarks'] = null;
+            $updatePayload['gl_cash_reviewed_by'] = null;
+            $updatePayload['gl_cash_reviewed_at'] = null;
+            $updatePayload['gl_cash_approval_status'] = null;
+            $updatePayload['gl_cash_approval_remarks'] = null;
+            $updatePayload['gl_cash_approved_by'] = null;
+            $updatePayload['gl_cash_approved_at'] = null;
+        } elseif ($validated['decision'] === 'for_compliance') {
+            $updatePayload['gl_payment_status'] = 'for_compliance_accounting_officer';
+            $updatePayload['gl_accounting_review_status'] = 'pending_review';
+            $updatePayload['gl_accounting_remarks'] = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+            $updatePayload['gl_accounting_reviewed_by'] = null;
+            $updatePayload['gl_accounting_reviewed_at'] = null;
+            $updatePayload['gl_accounting_approval_status'] = null;
+            $updatePayload['gl_accounting_approval_remarks'] = null;
+            $updatePayload['gl_accounting_approved_by'] = null;
+            $updatePayload['gl_accounting_approved_at'] = null;
+        } else {
+            $updatePayload['gl_payment_status'] = 'for_processing_program_amount_approval';
+        }
+
+        $application->update($updatePayload);
 
         $this->auditLogs->log($request, 'gl_payment.program_amount_approval_updated', $application, [
             'decision' => $validated['decision'],
             'remarks' => $validated['remarks'] ?? null,
-            'payment_status' => $validated['decision'] === 'approved' ? 'for_processing_cash' : 'for_processing_program_amount_approval',
+            'payment_status' => $updatePayload['gl_payment_status'],
         ]);
 
         return redirect()
@@ -684,6 +913,41 @@ class ApprovingOfficerController extends Controller
         $familyNetwork = $this->familyNetwork->buildApplicationNetwork($application);
 
         return view('approving-officer.show', compact('application', 'readOnly', 'householdMembers', 'familyNetwork'));
+    }
+
+    protected function resolveGlFinanceDocumentApplication(int $id): Application
+    {
+        $user = auth()->user();
+
+        if ($user->role === 'budget_officer' || $user->role === 'budget_approver') {
+            return Application::with([
+                    'client',
+                    'serviceProvider',
+                    'approvingOfficer.position',
+                    'glBudgetApprover.position',
+                    'glAccountingApprover.position',
+                    'documents',
+                    'modeOfAssistance',
+                ])
+                ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
+                ->whereIn('gl_payment_status', ['for_processing_budget', 'for_compliance_budget_officer'])
+                ->whereKey($id)
+                ->firstOrFail();
+        }
+
+        return Application::with([
+                'client',
+                'serviceProvider',
+                'approvingOfficer.position',
+                'glBudgetApprover.position',
+                'glAccountingApprover.position',
+                'documents',
+                'modeOfAssistance',
+            ])
+            ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
+            ->whereIn('gl_payment_status', ['for_processing_program_approval', 'for_compliance_approving_officer', 'for_processing_program_amount_approval', 'for_compliance_accounting_officer'])
+            ->whereKey($id)
+            ->firstOrFail();
     }
 
     public function approve(Request $request, $id)
@@ -937,7 +1201,7 @@ class ApprovingOfficerController extends Controller
 
     protected function resolveOfficerRange(User $officer): ?array
     {
-        if (! in_array($officer->role, ['approving_officer', 'budget_officer'], true)) {
+        if (! in_array($officer->role, ['approving_officer', 'budget_officer', 'budget_approver'], true)) {
             return null;
         }
 

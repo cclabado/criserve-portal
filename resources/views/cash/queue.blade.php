@@ -94,11 +94,19 @@
                                 @endif
                             </td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $application->serviceProvider?->name ?? '-' }}</td>
-                            <td class="px-5 py-4 text-sm font-semibold text-slate-900">PHP {{ number_format((float) ($application->final_amount ?? $application->recommended_amount ?? 0), 2) }}</td>
+                            <td class="px-5 py-4 text-sm font-semibold text-slate-900">PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}</td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $application->gl_finance_fund_source ?? '-' }}</td>
                             <td class="px-5 py-4">
-                                <span class="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-blue-700">
-                                    {{ $statusLabel }}
+                                @php
+                                    $rowStatusLabel = $application->gl_payment_status === 'for_compliance_cash_officer'
+                                        ? 'For Compliance (Cash Officer)'
+                                        : $statusLabel;
+                                    $rowStatusClass = $application->gl_payment_status === 'for_compliance_cash_officer'
+                                        ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                        : 'border-blue-200 bg-blue-50 text-blue-700';
+                                @endphp
+                                <span class="inline-flex rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] {{ $rowStatusClass }}">
+                                    {{ $rowStatusLabel }}
                                 </span>
                             </td>
                             <td class="px-5 py-4 text-right">

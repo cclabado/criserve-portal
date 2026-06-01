@@ -90,8 +90,15 @@
                     $hasUpdatedStatement = $application->documents->contains(fn ($document) => $document->document_type === 'Updated Statement of Account');
                     $paymentStatusLabel = match ($application->gl_payment_status) {
                         'paid' => 'Paid',
+                        'for_compliance_service_provider' => 'For Compliance (Service Provider)',
+                        'for_compliance_gl_processor' => 'For Compliance (GL Processor)',
+                        'for_compliance_approving_officer' => 'For Compliance (Approving Officer)',
+                        'for_compliance_budget_officer' => 'For Compliance (Budget Officer)',
+                        'for_compliance_accounting_officer' => 'For Compliance (Accounting Officer)',
+                        'for_compliance_cash_officer' => 'For Compliance (Cash Officer)',
                         'for_processing_cash' => 'For Processing (Cash)',
                         'for_processing_accounting_certification' => 'For Processing (Accounting Certification)',
+                        'for_processing_finance_director' => 'For Processing (Finance Director)',
                         'for_processing_program_amount_approval' => 'For Processing (Program Amount Approval)',
                         'for_processing_accounting' => 'For Processing (Accounting)',
                         'for_processing_budget' => 'For Processing (Budget)',
@@ -108,6 +115,8 @@
                             $application->beneficiary?->extension_name,
                         ])))
                         : '';
+                    $beneficiaryRelationship = strtolower(trim((string) ($application->beneficiary?->relationshipData?->name ?? '')));
+                    $showBeneficiary = $beneficiaryName !== '' && $beneficiaryRelationship !== 'self';
                 @endphp
                 @if($loop->first)
                     <table class="letter-table">
@@ -129,21 +138,21 @@
                                     <p class="table-secondary">{{ strtoupper(str_replace('_', ' ', $application->status)) }}</p>
                                 </td>
                                 <td>
-                                    <p class="table-primary">Client: {{ $clientName }}</p>
-                                    @if($beneficiaryName !== '')
+                                    <p class="table-primary">{{ $clientName }}</p>
+                                    @if($showBeneficiary)
                                         <p class="table-secondary">Beneficiary: {{ $beneficiaryName }}</p>
                                     @endif
-                                    <p class="table-secondary">{{ $application->client?->contact_number ?? 'No contact number' }}</p>
+                                    <p class="table-secondary">{{ $application->client?->birthdate ? \Carbon\Carbon::parse($application->client->birthdate)->format('F d, Y') : 'No birthdate' }}</p>
                                 </td>
                                 <td>
                                     <p>{{ $application->assistanceSubtype?->name ?? '-' }}</p>
                                     <p class="table-secondary">{{ $application->assistanceDetail?->name ?? '-' }}</p>
                                 </td>
                                 <td>
-                                    <p class="table-primary">PHP {{ number_format((float) ($application->final_amount ?? $application->recommended_amount ?? 0), 2) }}</p>
+                                    <p class="table-primary">PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}</p>
                                 </td>
                                 <td>
-                                    <span class="status-pill {{ $application->gl_payment_status === 'paid' ? 'status-pill--emerald' : (in_array($application->gl_payment_status, ['for_processing_cash', 'for_processing_accounting_certification', 'for_processing_program_amount_approval', 'for_processing_accounting', 'for_processing_budget', 'for_processing_program_approval'], true) ? 'status-pill--sky' : 'status-pill--slate') }}">
+                                    <span class="status-pill {{ $application->gl_payment_status === 'paid' ? 'status-pill--emerald' : (in_array($application->gl_payment_status, ['for_compliance_gl_processor', 'for_compliance_service_provider', 'for_compliance_approving_officer', 'for_compliance_budget_officer', 'for_compliance_accounting_officer', 'for_compliance_cash_officer'], true) ? 'status-pill--rose' : (in_array($application->gl_payment_status, ['for_processing_cash', 'for_processing_accounting_certification', 'for_processing_finance_director', 'for_processing_program_amount_approval', 'for_processing_accounting', 'for_processing_budget', 'for_processing_program_approval'], true) ? 'status-pill--sky' : 'status-pill--slate')) }}">
                                         {{ $paymentStatusLabel }}
                                     </span>
                                 </td>

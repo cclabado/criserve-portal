@@ -81,15 +81,36 @@ class Application extends Model
         'amount_needed',
         'recommended_amount',
         'final_amount',
+        'gl_actual_utilized_amount',
         'gl_payment_status',
         'gl_soa_status',
         'gl_soa_review_notes',
         'gl_soa_reviewed_by',
         'gl_soa_reviewed_at',
         'gl_finance_fund_source',
+        'gl_fund_cluster',
+        'gl_responsibility_center',
+        'gl_mfo_pap',
+        'gl_mode_of_payment',
+        'gl_payee_tin',
+        'gl_ors_number',
+        'gl_ors_date',
+        'gl_dv_number',
+        'gl_dv_date',
+        'gl_lddap_ada_number',
+        'gl_lddap_ada_date',
+        'gl_nca_number',
+        'gl_nca_date',
+        'gl_servicing_bank_branch',
+        'gl_mds_sub_account_number',
+        'gl_withholding_tax_amount',
         'gl_budget_remarks',
         'gl_budget_reviewed_by',
         'gl_budget_reviewed_at',
+        'gl_budget_approval_status',
+        'gl_budget_approval_remarks',
+        'gl_budget_approved_by',
+        'gl_budget_approved_at',
         'gl_program_approval_status',
         'gl_program_approval_remarks',
         'gl_program_approved_by',
@@ -110,6 +131,10 @@ class Application extends Model
         'gl_cash_certification_remarks',
         'gl_cash_certified_by',
         'gl_cash_certified_at',
+        'gl_finance_director_status',
+        'gl_finance_director_remarks',
+        'gl_finance_director_approved_by',
+        'gl_finance_director_approved_at',
         'gl_accounting_review_status',
         'gl_accounting_remarks',
         'gl_accounting_reviewed_by',
@@ -137,13 +162,21 @@ class Application extends Model
         'amount_needed' => 'decimal:2',
         'recommended_amount' => 'decimal:2',
         'final_amount' => 'decimal:2',
+        'gl_actual_utilized_amount' => 'decimal:2',
         'gl_soa_reviewed_at' => 'datetime',
+        'gl_ors_date' => 'date',
+        'gl_dv_date' => 'date',
+        'gl_lddap_ada_date' => 'date',
+        'gl_nca_date' => 'date',
+        'gl_withholding_tax_amount' => 'decimal:2',
         'gl_budget_reviewed_at' => 'datetime',
+        'gl_budget_approved_at' => 'datetime',
         'gl_program_approved_at' => 'datetime',
         'gl_program_amount_approved_at' => 'datetime',
         'gl_cash_reviewed_at' => 'datetime',
         'gl_cash_approved_at' => 'datetime',
         'gl_cash_certified_at' => 'datetime',
+        'gl_finance_director_approved_at' => 'datetime',
         'gl_accounting_reviewed_at' => 'datetime',
         'gl_accounting_approved_at' => 'datetime',
         'has_elderly' => 'boolean',
@@ -235,6 +268,11 @@ class Application extends Model
         return $this->belongsTo(User::class, 'gl_budget_reviewed_by');
     }
 
+    public function glBudgetApprover()
+    {
+        return $this->belongsTo(User::class, 'gl_budget_approved_by');
+    }
+
     public function glProgramApprover()
     {
         return $this->belongsTo(User::class, 'gl_program_approved_by');
@@ -258,6 +296,11 @@ class Application extends Model
     public function glCashCertifier()
     {
         return $this->belongsTo(User::class, 'gl_cash_certified_by');
+    }
+
+    public function glFinanceDirectorApprover()
+    {
+        return $this->belongsTo(User::class, 'gl_finance_director_approved_by');
     }
 
     public function glAccountingReviewer()
@@ -355,6 +398,19 @@ class Application extends Model
         }
 
         foreach (['final_amount', 'recommended_amount', 'amount_needed'] as $field) {
+            $amount = $this->{$field};
+
+            if ($amount !== null) {
+                return (float) $amount;
+            }
+        }
+
+        return 0.0;
+    }
+
+    public function effectiveDisplayedAmount(): float
+    {
+        foreach (['gl_actual_utilized_amount', 'final_amount', 'recommended_amount', 'amount_needed'] as $field) {
             $amount = $this->{$field};
 
             if ($amount !== null) {

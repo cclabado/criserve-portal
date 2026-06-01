@@ -2,37 +2,16 @@
 
 @section('content')
 
-@php
-    $isOfficer = $workspace === 'officer';
-    $isCashCertifier = $workspace === 'cash_certifier';
-    $workspaceLabel = $isOfficer ? 'Accounting Officer' : 'Accounting Approver';
-    $indexRoute = $isOfficer
-        ? 'accounting-officer.gl-payment-reviews'
-        : ($isCashCertifier ? 'accounting-approver.cash-certifications' : 'accounting-approver.gl-payment-approvals');
-    $showRoute = $indexRoute.'.show';
-    $statusLabel = $isCashCertifier ? 'For Processing (Accounting Certification)' : 'For Processing (Accounting)';
-    $queueTitle = $isOfficer
-        ? 'Accounting Review Queue'
-        : ($isCashCertifier ? 'Cash Certification Queue' : 'Accounting Approval Queue');
-    $queueDescription = $isOfficer
-        ? 'Review guarantee letter cases already cleared by budget before sending them to accounting approval.'
-        : ($isCashCertifier
-            ? 'Approve and certify cash-cleared guarantee letter cases after the cash approver endorsement.'
-            : 'Approve accounting-reviewed guarantee letter cases while keeping them within the accounting stage.');
-    $actionLabel = $isOfficer ? 'Review' : ($isCashCertifier ? 'Certify' : 'Approve');
-    $emptyLabel = $isCashCertifier ? 'No cash certification cases are waiting right now.' : 'No accounting cases are waiting right now.';
-@endphp
-
 <main class="p-8 max-w-7xl mx-auto space-y-6">
     <section class="rounded-[28px] bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.16),_transparent_35%),linear-gradient(135deg,_#234E70_0%,_#18384f_46%,_#27597c_100%)] px-8 py-9 text-white shadow-[0_24px_60px_rgba(24,56,79,0.18)]">
         <div class="grid gap-6 lg:grid-cols-[1.4fr_.9fr] lg:items-end">
             <div>
                 <span class="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white/90">
-                    {{ $workspaceLabel }}
+                    Finance Director
                 </span>
-                <h1 class="mt-5 text-3xl font-bold leading-tight sm:text-4xl">{{ $queueTitle }}</h1>
+                <h1 class="mt-5 text-3xl font-bold leading-tight sm:text-4xl">Final Approval Queue</h1>
                 <p class="mt-3 max-w-2xl text-sm leading-6 text-white/80 sm:text-base">
-                    {{ $queueDescription }}
+                    Review the finance-tagged guarantee letter cases after accounting certification. Approving here closes the payment workflow and tags the case as Paid.
                 </p>
             </div>
 
@@ -50,7 +29,7 @@
     </section>
 
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <form method="GET" action="{{ route($indexRoute) }}" class="grid gap-4 md:grid-cols-3">
+        <form method="GET" action="{{ route('finance-director.gl-payment-approvals') }}" class="grid gap-4 md:grid-cols-3">
             <div>
                 <label class="label">Search</label>
                 <input type="text" name="search" class="input" value="{{ $filters['search'] }}" placeholder="Reference, client, provider">
@@ -66,7 +45,7 @@
             </div>
             <div class="flex items-end gap-3">
                 <button type="submit" class="btn-primary">Apply Filters</button>
-                <a href="{{ route($indexRoute) }}" class="btn-secondary">Reset</a>
+                <a href="{{ route('finance-director.gl-payment-approvals') }}" class="btn-secondary">Reset</a>
             </div>
         </form>
     </section>
@@ -91,51 +70,34 @@
                             <td class="px-5 py-4">
                                 <p class="font-semibold text-slate-900">{{ $application->reference_no }}</p>
                                 <p class="mt-1 text-xs text-slate-500">
-                                    {{ $isOfficer ? 'Approved' : ($isCashCertifier ? 'Cash Approved' : 'Reviewed') }}
-                                    {{ optional($isOfficer ? $application->gl_program_approved_at : ($isCashCertifier ? $application->gl_cash_approved_at : $application->gl_accounting_reviewed_at))->format('M d, Y h:i A') ?? $application->updated_at?->format('M d, Y h:i A') }}
+                                    Cash certified {{ optional($application->gl_cash_certified_at)->format('M d, Y h:i A') ?? $application->updated_at?->format('M d, Y h:i A') }}
                                 </p>
                             </td>
                             <td class="px-5 py-4">
                                 <p class="font-semibold text-slate-900">{{ trim(($application->client?->first_name ?? '').' '.($application->client?->last_name ?? '')) ?: '-' }}</p>
-                                @if($isOfficer && $application->gl_budget_remarks)
-                                    <p class="mt-1 text-xs text-slate-500">Processor remarks: {{ \Illuminate\Support\Str::limit($application->gl_budget_remarks, 80) }}</p>
-                                @endif
-                                @if(! $isOfficer && ! $isCashCertifier && $application->gl_accounting_remarks)
-                                    <p class="mt-1 text-xs text-slate-500">Accounting remarks: {{ \Illuminate\Support\Str::limit($application->gl_accounting_remarks, 80) }}</p>
-                                @endif
-                                @if($isCashCertifier && $application->gl_cash_approval_remarks)
-                                    <p class="mt-1 text-xs text-slate-500">Cash approval remarks: {{ \Illuminate\Support\Str::limit($application->gl_cash_approval_remarks, 80) }}</p>
+                                @if($application->gl_cash_certification_remarks)
+                                    <p class="mt-1 text-xs text-slate-500">Certification remarks: {{ \Illuminate\Support\Str::limit($application->gl_cash_certification_remarks, 80) }}</p>
                                 @endif
                             </td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $application->serviceProvider?->name ?? '-' }}</td>
                             <td class="px-5 py-4 text-sm font-semibold text-slate-900">PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}</td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $application->gl_finance_fund_source ?? '-' }}</td>
                             <td class="px-5 py-4">
-                                @php
-                                    $rowStatusLabel = match (true) {
-                                        $application->gl_payment_status === 'for_compliance_accounting_officer' => 'For Compliance (Accounting Officer)',
-                                        $application->gl_payment_status === 'for_compliance_cash_officer' => 'For Compliance (Cash Officer)',
-                                        default => $statusLabel,
-                                    };
-                                    $rowStatusClass = str_contains($rowStatusLabel, 'For Compliance')
-                                        ? 'border-rose-200 bg-rose-50 text-rose-700'
-                                        : 'border-blue-200 bg-blue-50 text-blue-700';
-                                @endphp
-                                <span class="inline-flex rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] {{ $rowStatusClass }}">
-                                    {{ $rowStatusLabel }}
+                                <span class="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-blue-700">
+                                    For Processing (Finance Director)
                                 </span>
                             </td>
                             <td class="px-5 py-4 text-right">
-                                <a href="{{ route($showRoute, $application->id) }}"
+                                <a href="{{ route('finance-director.gl-payment-approvals.show', $application->id) }}"
                                    class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#18384f]">
-                                    {{ $actionLabel }}
+                                    Approve
                                 </a>
                             </td>
                         </tr>
                     @empty
                         <tr>
                             <td colspan="7" class="px-5 py-12 text-center text-sm text-slate-500">
-                                {{ $emptyLabel }}
+                                No finance director cases are waiting right now.
                             </td>
                         </tr>
                     @endforelse

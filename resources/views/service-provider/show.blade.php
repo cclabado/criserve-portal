@@ -10,8 +10,15 @@
         : (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
     $paymentStatusLabel = match ($application->gl_payment_status) {
         'paid' => 'Paid',
+        'for_compliance_service_provider' => 'For Compliance (Service Provider)',
+        'for_compliance_gl_processor' => 'For Compliance (GL Processor)',
+        'for_compliance_approving_officer' => 'For Compliance (Approving Officer)',
+        'for_compliance_budget_officer' => 'For Compliance (Budget Officer)',
+        'for_compliance_accounting_officer' => 'For Compliance (Accounting Officer)',
+        'for_compliance_cash_officer' => 'For Compliance (Cash Officer)',
         'for_processing_cash' => 'For Processing (Cash)',
         'for_processing_accounting_certification' => 'For Processing (Accounting Certification)',
+        'for_processing_finance_director' => 'For Processing (Finance Director)',
         'for_processing_program_amount_approval' => 'For Processing (Program Amount Approval)',
         'for_processing_accounting' => 'For Processing (Accounting)',
         'for_processing_budget' => 'For Processing (Budget)',
@@ -21,8 +28,15 @@
     };
     $paymentStatusBadgeClass = match ($paymentStatusLabel) {
         'Paid' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        'For Compliance (Service Provider)' => 'border-rose-200 bg-rose-50 text-rose-700',
+        'For Compliance (GL Processor)' => 'border-rose-200 bg-rose-50 text-rose-700',
+        'For Compliance (Approving Officer)' => 'border-rose-200 bg-rose-50 text-rose-700',
+        'For Compliance (Budget Officer)' => 'border-rose-200 bg-rose-50 text-rose-700',
+        'For Compliance (Accounting Officer)' => 'border-rose-200 bg-rose-50 text-rose-700',
+        'For Compliance (Cash Officer)' => 'border-rose-200 bg-rose-50 text-rose-700',
         'For Processing (Cash)' => 'border-blue-200 bg-blue-50 text-blue-700',
         'For Processing (Accounting Certification)' => 'border-blue-200 bg-blue-50 text-blue-700',
+        'For Processing (Finance Director)' => 'border-blue-200 bg-blue-50 text-blue-700',
         'For Processing (Program Amount Approval)' => 'border-sky-200 bg-sky-50 text-sky-700',
         'For Processing (Accounting)' => 'border-amber-200 bg-amber-50 text-amber-700',
         'For Processing (Budget)' => 'border-violet-200 bg-violet-50 text-violet-700',
@@ -248,6 +262,9 @@
                                     <div class="min-w-0">
                                         <p class="truncate text-sm font-semibold text-slate-900">{{ $document->file_name }}</p>
                                         <p class="mt-1 text-xs text-slate-500">Uploaded {{ optional($document->created_at)->format('M d, Y h:i A') ?? '-' }}</p>
+                                        @if($document->bankAccountSummary())
+                                            <p class="mt-1 text-xs text-slate-500">Transfer account: {{ $document->bankAccountSummary() }}</p>
+                                        @endif
                                         @if($document->remarks)
                                             <p class="mt-1 text-xs text-slate-500">{{ $document->remarks }}</p>
                                         @endif
@@ -297,6 +314,50 @@
                     @error('attachments')
                         <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{{ $message }}</div>
                     @enderror
+
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-semibold text-slate-800">Transfer Bank Account</p>
+                                <p class="mt-1 text-xs text-slate-500">This account will be attached to the updated statement of account.</p>
+                            </div>
+                            <a href="{{ route('service-provider.bank-accounts') }}" class="text-sm font-semibold text-[#234E70] hover:text-[#18384f]">
+                                Manage
+                            </a>
+                        </div>
+
+                        <div class="mt-4">
+                            <select name="service_provider_bank_account_id" class="input">
+                                <option value="">Select bank account</option>
+                                @foreach($bankAccounts as $bankAccount)
+                                    <option value="{{ $bankAccount->id }}" @selected((string) old('service_provider_bank_account_id', optional($defaultBankAccount)->id) === (string) $bankAccount->id)>
+                                        {{ $bankAccount->displayLabel() }}{{ $bankAccount->is_default ? ' (Default)' : '' }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('service_provider_bank_account_id')
+                                <p class="mt-2 text-sm text-rose-700">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <label for="gl_actual_utilized_amount" class="text-sm font-semibold text-slate-800">Actual Utilized Amount</label>
+                        <p class="mt-1 text-xs text-slate-500">This amount will be reflected in the ORS and DV.</p>
+                        <input
+                            id="gl_actual_utilized_amount"
+                            type="number"
+                            name="gl_actual_utilized_amount"
+                            step="0.01"
+                            min="0"
+                            class="mt-3 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                            value="{{ old('gl_actual_utilized_amount', $application->gl_actual_utilized_amount ?? $application->final_amount ?? $application->recommended_amount) }}"
+                            placeholder="0.00"
+                        >
+                        @error('gl_actual_utilized_amount')
+                            <p class="mt-2 text-sm text-rose-700">{{ $message }}</p>
+                        @enderror
+                    </div>
 
                     <div>
                         <label for="statement_file" class="text-sm font-semibold text-slate-800">Updated Statement of Account</label>

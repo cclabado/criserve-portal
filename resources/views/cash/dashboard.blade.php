@@ -95,7 +95,7 @@
                                 <p class="mt-1 text-sm text-slate-500">{{ $application->serviceProvider?->name ?? 'No provider assigned' }}</p>
                                 <div class="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-slate-500">
                                     <span>Fund Source: {{ $application->gl_finance_fund_source ?? '-' }}</span>
-                                    <span>Amount: PHP {{ number_format((float) ($application->final_amount ?? $application->recommended_amount ?? 0), 2) }}</span>
+                                    <span>Amount: PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}</span>
                                 </div>
                             </div>
                             <a href="{{ route($listRoute.'.show', $application->id) }}"

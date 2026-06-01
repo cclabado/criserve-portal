@@ -55,6 +55,21 @@ class ServiceProvider extends Model
         return $this->hasMany(Application::class)->orderByDesc('updated_at');
     }
 
+    public function bankAccounts()
+    {
+        return $this->hasMany(ServiceProviderBankAccount::class)
+            ->with('bank')
+            ->orderByDesc('is_default')
+            ->orderBy('bank_name');
+    }
+
+    public function defaultBankAccount()
+    {
+        return $this->hasOne(ServiceProviderBankAccount::class)
+            ->where('is_default', true)
+            ->where('is_active', true);
+    }
+
     public function categoryList(): array
     {
         return collect($this->categories ?? [])

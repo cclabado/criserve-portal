@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\BuildsGlFinanceDocuments;
 use App\Models\Application;
 use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
@@ -11,6 +12,8 @@ use Illuminate\View\View;
 
 class CashController extends Controller
 {
+    use BuildsGlFinanceDocuments;
+
     public function __construct(
         protected AuditLogService $auditLogs
     ) {
@@ -29,7 +32,7 @@ class CashController extends Controller
                 'total' => $applications->count(),
                 'with_previous_remarks' => $applications->filter(fn (Application $application) => filled($application->gl_accounting_remarks))->count(),
                 'with_supporting_docs' => $applications->filter(fn (Application $application) => $application->documents->contains(fn ($document) => $document->document_type === 'Other Supporting Document'))->count(),
-                'total_amount' => $applications->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+                'total_amount' => $applications->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
             ],
             'recentCases' => $applications->take(6)->values(),
             'providerLoad' => $applications
@@ -37,7 +40,7 @@ class CashController extends Controller
                 ->map(fn ($group, $providerName) => [
                     'provider' => $providerName,
                     'total' => $group->count(),
-                    'amount' => $group->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+                    'amount' => $group->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
                 ])
                 ->sortByDesc('total')
                 ->take(5)
@@ -58,7 +61,7 @@ class CashController extends Controller
                 'total' => $applications->count(),
                 'with_previous_remarks' => $applications->filter(fn (Application $application) => filled($application->gl_cash_remarks))->count(),
                 'with_supporting_docs' => $applications->filter(fn (Application $application) => $application->documents->contains(fn ($document) => $document->document_type === 'Other Supporting Document'))->count(),
-                'total_amount' => $applications->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+                'total_amount' => $applications->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
             ],
             'recentCases' => $applications->take(6)->values(),
             'providerLoad' => $applications
@@ -66,7 +69,7 @@ class CashController extends Controller
                 ->map(fn ($group, $providerName) => [
                     'provider' => $providerName,
                     'total' => $group->count(),
-                    'amount' => $group->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+                    'amount' => $group->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
                 ])
                 ->sortByDesc('total')
                 ->take(5)
@@ -118,6 +121,48 @@ class CashController extends Controller
         return $this->renderShowView($application, 'approver');
     }
 
+    public function showCashOfficerOrs(Application $application)
+    {
+        $application = $this->cashOfficerBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlOrsView($application);
+    }
+
+    public function showCashOfficerDv(Application $application)
+    {
+        $application = $this->cashOfficerBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlDvView($application);
+    }
+
+    public function showCashOfficerLddapAda(Application $application)
+    {
+        $application = $this->cashOfficerBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlLddapAdaView($application);
+    }
+
+    public function showCashApproverOrs(Application $application)
+    {
+        $application = $this->cashApproverBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlOrsView($application);
+    }
+
+    public function showCashApproverDv(Application $application)
+    {
+        $application = $this->cashApproverBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlDvView($application);
+    }
+
+    public function showCashApproverLddapAda(Application $application)
+    {
+        $application = $this->cashApproverBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlLddapAdaView($application);
+    }
+
     public function submitCashOfficerReview(Request $request, Application $application): RedirectResponse
     {
         $application = $this->cashOfficerBaseQuery()
@@ -125,29 +170,110 @@ class CashController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
+            'decision' => ['required', 'in:approved,for_compliance'],
             'gl_cash_remarks' => ['nullable', 'string', 'max:1500'],
+            'gl_nca_number' => ['nullable', 'string', 'max:255'],
+            'gl_nca_date' => ['nullable', 'date'],
+            'gl_servicing_bank_branch' => ['nullable', 'string', 'max:255'],
+            'gl_mds_sub_account_number' => ['nullable', 'string', 'max:255'],
+            'gl_withholding_tax_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $application->update([
-            'gl_cash_review_status' => 'reviewed',
-            'gl_cash_remarks' => filled($validated['gl_cash_remarks'] ?? null) ? trim((string) $validated['gl_cash_remarks']) : null,
-            'gl_cash_reviewed_by' => $request->user()->id,
-            'gl_cash_reviewed_at' => now(),
-            'gl_cash_approval_status' => 'pending_approval',
-            'gl_cash_approval_remarks' => null,
-            'gl_cash_approved_by' => null,
-            'gl_cash_approved_at' => null,
-            'gl_payment_status' => 'for_processing_cash',
-        ]);
+        if ($validated['decision'] === 'for_compliance' && blank($validated['gl_cash_remarks'] ?? null)) {
+            throw ValidationException::withMessages([
+                'gl_cash_remarks' => 'Compliance remarks are required when returning the case to the accounting officer.',
+            ]);
+        }
+
+        $remarks = filled($validated['gl_cash_remarks'] ?? null) ? trim((string) $validated['gl_cash_remarks']) : null;
+        $latestStatement = $application->documents
+            ->where('document_type', 'Updated Statement of Account')
+            ->sortByDesc('created_at')
+            ->first();
+
+        if ($validated['decision'] === 'approved') {
+            $missingFields = [];
+
+            if (! $latestStatement || blank($latestStatement->bank_name_snapshot) || blank($latestStatement->account_number_snapshot)) {
+                $missingFields['gl_servicing_bank_branch'] = 'A submitted SOA with a linked service provider bank account is required before the LDDAP-ADA can be generated.';
+            }
+
+            if (blank($validated['gl_nca_number'] ?? null)) {
+                $missingFields['gl_nca_number'] = 'NCA number is required before the LDDAP-ADA can be generated.';
+            }
+
+            if (blank($validated['gl_nca_date'] ?? null)) {
+                $missingFields['gl_nca_date'] = 'NCA date is required before the LDDAP-ADA can be generated.';
+            }
+
+            if (blank($validated['gl_servicing_bank_branch'] ?? null)) {
+                $missingFields['gl_servicing_bank_branch'] = 'Servicing bank branch is required before the LDDAP-ADA can be generated.';
+            }
+
+            if (blank($validated['gl_mds_sub_account_number'] ?? null)) {
+                $missingFields['gl_mds_sub_account_number'] = 'MDS sub-account number is required before the LDDAP-ADA can be generated.';
+            }
+
+            if ($missingFields !== []) {
+                throw ValidationException::withMessages($missingFields);
+            }
+        }
+
+        $lddapAdaNumber = $application->gl_lddap_ada_number ?: $this->generateLddapAdaNumber($application);
+
+        $updatePayload = $validated['decision'] === 'approved'
+            ? [
+                'gl_cash_review_status' => 'reviewed',
+                'gl_cash_remarks' => $remarks,
+                'gl_cash_reviewed_by' => $request->user()->id,
+                'gl_cash_reviewed_at' => now(),
+                'gl_cash_approval_status' => 'pending_approval',
+                'gl_cash_approval_remarks' => null,
+                'gl_cash_approved_by' => null,
+                'gl_cash_approved_at' => null,
+                'gl_lddap_ada_number' => $lddapAdaNumber,
+                'gl_lddap_ada_date' => $application->gl_lddap_ada_date ?: now()->toDateString(),
+                'gl_nca_number' => trim((string) $validated['gl_nca_number']),
+                'gl_nca_date' => $validated['gl_nca_date'],
+                'gl_servicing_bank_branch' => trim((string) $validated['gl_servicing_bank_branch']),
+                'gl_mds_sub_account_number' => trim((string) $validated['gl_mds_sub_account_number']),
+                'gl_withholding_tax_amount' => round((float) ($validated['gl_withholding_tax_amount'] ?? 0), 2),
+                'gl_payment_status' => 'for_processing_cash',
+            ]
+            : [
+                'gl_cash_review_status' => 'pending_review',
+                'gl_cash_remarks' => $remarks,
+                'gl_cash_reviewed_by' => null,
+                'gl_cash_reviewed_at' => null,
+                'gl_accounting_review_status' => 'pending_review',
+                'gl_accounting_remarks' => $remarks,
+                'gl_accounting_reviewed_by' => null,
+                'gl_accounting_reviewed_at' => null,
+                'gl_accounting_approval_status' => null,
+                'gl_accounting_approval_remarks' => null,
+                'gl_accounting_approved_by' => null,
+                'gl_accounting_approved_at' => null,
+                'gl_program_amount_approval_status' => null,
+                'gl_program_amount_approval_remarks' => null,
+                'gl_program_amount_approved_by' => null,
+                'gl_program_amount_approved_at' => null,
+                'gl_payment_status' => 'for_compliance_accounting_officer',
+            ];
+
+        $application->update($updatePayload);
 
         $this->auditLogs->log($request, 'gl_payment.cash_review_submitted', $application, [
+            'decision' => $validated['decision'],
             'cash_remarks' => $validated['gl_cash_remarks'] ?? null,
-            'payment_status' => 'for_processing_cash',
+            'payment_status' => $updatePayload['gl_payment_status'],
+            'lddap_ada_number' => $updatePayload['gl_lddap_ada_number'] ?? null,
         ]);
 
         return redirect()
             ->route('cash-officer.gl-payment-reviews')
-            ->with('success', 'Case submitted to the cash approver successfully.');
+            ->with('success', $validated['decision'] === 'approved'
+                ? 'Case submitted to the cash approver successfully.'
+                : 'Case returned to the accounting officer for compliance.');
     }
 
     public function submitCashApproverDecision(Request $request, Application $application): RedirectResponse
@@ -157,7 +283,7 @@ class CashController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
-            'decision' => ['required', 'in:approved,disapproved'],
+            'decision' => ['required', 'in:for_compliance,approved,disapproved'],
             'remarks' => ['nullable', 'string', 'max:1500'],
         ]);
 
@@ -167,26 +293,44 @@ class CashController extends Controller
             ]);
         }
 
-        $application->update([
+        if ($validated['decision'] === 'for_compliance' && blank($validated['remarks'] ?? null)) {
+            throw ValidationException::withMessages([
+                'remarks' => 'Compliance remarks are required when returning the case to the cash officer.',
+            ]);
+        }
+
+        $updatePayload = [
             'gl_cash_approval_status' => $validated['decision'],
             'gl_cash_approval_remarks' => filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null,
             'gl_cash_approved_by' => $request->user()->id,
             'gl_cash_approved_at' => now(),
-            'gl_cash_certification_status' => $validated['decision'] === 'approved' ? 'pending_approval' : null,
-            'gl_cash_certification_remarks' => null,
-            'gl_cash_certified_by' => null,
-            'gl_cash_certified_at' => null,
-            'gl_payment_status' => $validated['decision'] === 'approved'
-                ? 'for_processing_accounting_certification'
-                : 'for_processing_cash',
-        ]);
+        ];
+
+        if ($validated['decision'] === 'approved') {
+            $updatePayload['gl_cash_certification_status'] = 'pending_approval';
+            $updatePayload['gl_cash_certification_remarks'] = null;
+            $updatePayload['gl_cash_certified_by'] = null;
+            $updatePayload['gl_cash_certified_at'] = null;
+            $updatePayload['gl_payment_status'] = 'for_processing_accounting_certification';
+        } elseif ($validated['decision'] === 'for_compliance') {
+            $updatePayload['gl_cash_review_status'] = 'pending_review';
+            $updatePayload['gl_cash_remarks'] = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+            $updatePayload['gl_cash_reviewed_by'] = null;
+            $updatePayload['gl_cash_reviewed_at'] = null;
+            $updatePayload['gl_cash_approval_status'] = null;
+            $updatePayload['gl_cash_approved_by'] = null;
+            $updatePayload['gl_cash_approved_at'] = null;
+            $updatePayload['gl_payment_status'] = 'for_compliance_cash_officer';
+        } else {
+            $updatePayload['gl_payment_status'] = 'for_processing_cash';
+        }
+
+        $application->update($updatePayload);
 
         $this->auditLogs->log($request, 'gl_payment.cash_approval_updated', $application, [
             'decision' => $validated['decision'],
             'remarks' => $validated['remarks'] ?? null,
-            'payment_status' => $validated['decision'] === 'approved'
-                ? 'for_processing_accounting_certification'
-                : 'for_processing_cash',
+            'payment_status' => $updatePayload['gl_payment_status'],
         ]);
 
         return redirect()
@@ -271,7 +415,7 @@ class CashController extends Controller
     protected function cashOfficerBaseQuery()
     {
         return $this->baseQuery()
-            ->where('gl_payment_status', 'for_processing_cash')
+            ->whereIn('gl_payment_status', ['for_processing_cash', 'for_compliance_cash_officer'])
             ->where(function ($statusQuery) {
                 $statusQuery->where('gl_cash_review_status', 'pending_review')
                     ->orWhereNull('gl_cash_review_status');
@@ -310,5 +454,15 @@ class CashController extends Controller
                 'glCashApprover',
             ])
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'));
+    }
+
+    protected function generateLddapAdaNumber(Application $application): string
+    {
+        return sprintf(
+            '01101101-%s-%04d-%s',
+            now()->format('m'),
+            (int) $application->id,
+            now()->format('Y')
+        );
     }
 }

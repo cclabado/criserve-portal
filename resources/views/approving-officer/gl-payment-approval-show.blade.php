@@ -3,20 +3,30 @@
 @section('content')
 
 @php
-    $isBudgetOfficer = auth()->user()?->role === 'budget_officer';
-    $glApprovalIndexRoute = auth()->user()?->role === 'budget_officer'
+    $role = auth()->user()?->role;
+    $isBudgetOfficer = $role === 'budget_officer';
+    $isBudgetApprover = $role === 'budget_approver';
+    $glApprovalIndexRoute = $isBudgetOfficer
         ? 'budget-officer.gl-payment-approvals'
-        : 'approving.gl-payment-approvals';
-    $glApprovalUpdateRoute = $isBudgetOfficer
-        ? 'budget-officer.gl-payment-approvals.update'
-        : 'approving.gl-payment-approvals.update';
+        : ($isBudgetApprover ? 'budget-approver.gl-payment-approvals' : 'approving.gl-payment-approvals');
+    $glApprovalUpdateRoute = $glApprovalIndexRoute.'.update';
+    $orsRoute = $glApprovalIndexRoute.'.ors';
+    $dvRoute = $glApprovalIndexRoute.'.dv';
+    $lddapAdaRoute = $glApprovalIndexRoute.'.lddap-ada';
     $totalRecommendedAmount = $application->assistanceRecommendations->isNotEmpty()
         ? $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount)
         : (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
-    $paymentStatusLabel = $isBudgetOfficer ? 'For Processing (Budget)' : 'For Processing (Program Approval)';
-    $paymentStatusClass = $isBudgetOfficer
-        ? 'border-violet-200 bg-violet-50 text-violet-700'
-        : 'border-indigo-200 bg-indigo-50 text-indigo-700';
+    $paymentStatusLabel = match (true) {
+        $application->gl_payment_status === 'for_compliance_budget_officer' => 'For Compliance (Budget Officer)',
+        $application->gl_payment_status === 'for_compliance_approving_officer' => 'For Compliance (Approving Officer)',
+        ($isBudgetOfficer || $isBudgetApprover) => 'For Processing (Budget)',
+        default => 'For Processing (Program Approval)',
+    };
+    $paymentStatusClass = str_contains($paymentStatusLabel, 'For Compliance')
+        ? 'border-rose-200 bg-rose-50 text-rose-700'
+        : (($isBudgetOfficer || $isBudgetApprover)
+            ? 'border-violet-200 bg-violet-50 text-violet-700'
+            : 'border-indigo-200 bg-indigo-50 text-indigo-700');
 @endphp
 
 <main class="space-y-6" x-data="{ activeTab: 'client' }">
@@ -26,14 +36,35 @@
                 <a href="{{ route($glApprovalIndexRoute) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
                     &larr; Back to GL Payment Approvals
                 </a>
-                <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{{ $isBudgetOfficer ? 'Budget Officer' : 'Approving Officer' }}</p>
+                <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{{ $isBudgetOfficer ? 'Budget Officer' : ($isBudgetApprover ? 'Budget Approver' : 'Approving Officer') }}</p>
                 <h1 class="mt-2 text-3xl font-black text-sky-950">{{ $application->reference_no }}</h1>
                 <p class="mt-2 text-sm text-slate-500">
                     {{ $isBudgetOfficer
                         ? 'Review the guarantee letter payment details after program approval, including service provider attachments, finance fund source, and processor remarks.'
-                        : 'Review the guarantee letter payment approval details, including service provider attachments, finance fund source, and processor remarks.' }}
+                        : ($isBudgetApprover
+                            ? 'Approve the budget-reviewed guarantee letter case before it proceeds to accounting.'
+                            : 'Review the guarantee letter payment approval details, including service provider attachments, finance fund source, and processor remarks.') }}
                 </p>
             </div>
+            @if($application->gl_ors_number || $application->gl_dv_number || $application->gl_lddap_ada_number)
+                <div class="flex flex-wrap gap-3">
+                    @if($application->gl_ors_number)
+                        <a href="{{ route($orsRoute, $application->id, false) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                            View ORS
+                        </a>
+                    @endif
+                    @if($application->gl_dv_number)
+                        <a href="{{ route($dvRoute, $application->id, false) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#18384f]">
+                            View DV
+                        </a>
+                    @endif
+                    @if($application->gl_lddap_ada_number)
+                        <a href="{{ route($lddapAdaRoute, $application->id, false) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                            View LDDAP-ADA
+                        </a>
+                    @endif
+                </div>
+            @endif
         </div>
     </section>
 
@@ -72,8 +103,8 @@
             </div>
         </article>
         <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Final Amount</p>
-            <p class="mt-3 text-lg font-black text-slate-900">PHP {{ number_format((float) ($application->final_amount ?? $totalRecommendedAmount), 2) }}</p>
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Utilized Amount</p>
+            <p class="mt-3 text-lg font-black text-slate-900">PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}</p>
         </article>
     </section>
 
@@ -174,6 +205,9 @@
                                     <div class="min-w-0">
                                         <p class="truncate text-sm font-semibold text-slate-900">{{ $document->file_name }}</p>
                                         <p class="mt-1 text-xs text-slate-500">Uploaded {{ $document->created_at?->format('M d, Y h:i A') ?? '-' }}</p>
+                                        @if($document->bankAccountSummary())
+                                            <p class="mt-1 text-xs text-slate-500">Transfer account: {{ $document->bankAccountSummary() }}</p>
+                                        @endif
                                         @if($document->remarks)
                                             <p class="mt-1 text-xs text-slate-500">{{ $document->remarks }}</p>
                                         @endif
@@ -228,7 +262,7 @@
                         <p class="mt-2 text-sm text-slate-600">{{ $application->gl_finance_fund_source ?? '-' }}</p>
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p class="text-sm font-semibold text-slate-800">Processor Remarks</p>
+                        <p class="text-sm font-semibold text-slate-800">{{ $isBudgetApprover ? 'Budget Review Remarks' : 'Processor Remarks' }}</p>
                         <p class="mt-2 text-sm text-slate-600">{{ $application->gl_budget_remarks ?? 'No remarks added.' }}</p>
                     </div>
                 </div>
@@ -239,20 +273,36 @@
                 <form method="POST" action="{{ route($glApprovalUpdateRoute, $application->id) }}" class="mt-5 space-y-4">
                     @csrf
                     @method('PATCH')
-                    <div>
-                        <label class="label">Approval Decision</label>
-                        <select name="decision" class="input">
-                            <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
-                            <option value="approved" @selected(old('decision') === 'approved')>Approved</option>
-                            <option value="disapproved" @selected(old('decision') === 'disapproved')>Disapproved</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="label">Remarks / Reason</label>
-                        <textarea name="remarks" class="input h-32" placeholder="Add compliance notes or the reason for disapproval when needed.">{{ old('remarks', $application->gl_program_approval_remarks) }}</textarea>
-                        <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is Disapproved.</p>
-                    </div>
-                    <button type="submit" class="btn-primary">Save Decision</button>
+                    @if($isBudgetOfficer)
+                        <div>
+                            <label class="label">Budget Review Decision</label>
+                            <select name="decision" class="input">
+                                <option value="approved" @selected(old('decision') === 'approved')>Submit to Budget Approval</option>
+                                <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="label">Budget Review Remarks</label>
+                            <textarea name="remarks" class="input h-32" placeholder="Add review remarks or state what must be corrected before it goes back.">{{ old('remarks', $application->gl_budget_remarks) }}</textarea>
+                        </div>
+                        <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance.</p>
+                        <button type="submit" class="btn-primary">Save Decision</button>
+                    @else
+                        <div>
+                            <label class="label">Approval Decision</label>
+                            <select name="decision" class="input">
+                                <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
+                                <option value="approved" @selected(old('decision') === 'approved')>Approved</option>
+                                <option value="disapproved" @selected(old('decision') === 'disapproved')>Disapproved</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="label">Remarks / Reason</label>
+                            <textarea name="remarks" class="input h-32" placeholder="Add compliance notes or the reason for disapproval when needed.">{{ old('remarks', $isBudgetApprover ? $application->gl_budget_approval_remarks : $application->gl_program_approval_remarks) }}</textarea>
+                            <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance or Disapproved.</p>
+                        </div>
+                        <button type="submit" class="btn-primary">Save Decision</button>
+                    @endif
                 </form>
             </section>
         </div>

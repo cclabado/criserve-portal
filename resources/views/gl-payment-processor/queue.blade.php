@@ -71,8 +71,15 @@
                     $latestStatement = $application->documents->where('document_type', 'Updated Statement of Account')->sortByDesc('created_at')->first();
                     $paymentStatusLabel = match ($application->gl_payment_status) {
                         'paid' => 'Paid',
+                        'for_compliance_service_provider' => 'For Compliance (Service Provider)',
+                        'for_compliance_gl_processor' => 'For Compliance (GL Processor)',
+                        'for_compliance_approving_officer' => 'For Compliance (Approving Officer)',
+                        'for_compliance_budget_officer' => 'For Compliance (Budget Officer)',
+                        'for_compliance_accounting_officer' => 'For Compliance (Accounting Officer)',
+                        'for_compliance_cash_officer' => 'For Compliance (Cash Officer)',
                         'for_processing_cash' => 'For Processing (Cash)',
                         'for_processing_accounting_certification' => 'For Processing (Accounting Certification)',
+                        'for_processing_finance_director' => 'For Processing (Finance Director)',
                         'for_processing_program_amount_approval' => 'For Processing (Program Amount Approval)',
                         'for_processing_accounting' => 'For Processing (Accounting)',
                         'for_processing_budget' => 'For Processing (Budget)',
@@ -81,8 +88,15 @@
                     };
                     $paymentBadgeClass = match ($paymentStatusLabel) {
                         'Paid' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                        'For Compliance (Service Provider)' => 'border-rose-200 bg-rose-50 text-rose-700',
+                        'For Compliance (GL Processor)' => 'border-rose-200 bg-rose-50 text-rose-700',
+                        'For Compliance (Approving Officer)' => 'border-rose-200 bg-rose-50 text-rose-700',
+                        'For Compliance (Budget Officer)' => 'border-rose-200 bg-rose-50 text-rose-700',
+                        'For Compliance (Accounting Officer)' => 'border-rose-200 bg-rose-50 text-rose-700',
+                        'For Compliance (Cash Officer)' => 'border-rose-200 bg-rose-50 text-rose-700',
                         'For Processing (Cash)' => 'border-blue-200 bg-blue-50 text-blue-700',
                         'For Processing (Accounting Certification)' => 'border-blue-200 bg-blue-50 text-blue-700',
+                        'For Processing (Finance Director)' => 'border-blue-200 bg-blue-50 text-blue-700',
                         'For Processing (Program Amount Approval)' => 'border-sky-200 bg-sky-50 text-sky-700',
                         'For Processing (Accounting)' => 'border-amber-200 bg-amber-50 text-amber-700',
                         'For Processing (Budget)' => 'border-violet-200 bg-violet-50 text-violet-700',
@@ -113,10 +127,18 @@
                                         {{ $paymentStatusLabel }}
                                     </span>
                                 </div>
-                                <div><span class="font-semibold text-slate-500">Final Amount</span><br>PHP {{ number_format((float) ($application->final_amount ?? $application->recommended_amount ?? 0), 2) }}</div>
+                                <div><span class="font-semibold text-slate-500">Utilized Amount</span><br>PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}</div>
                             </div>
 
-                            @if($application->gl_soa_review_notes)
+                            @if($application->gl_payment_status === 'for_compliance_gl_processor' && $application->gl_program_approval_remarks)
+                                <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                                    <span class="font-semibold">Approving officer notes:</span> {{ $application->gl_program_approval_remarks }}
+                                </div>
+                            @elseif($application->gl_payment_status === 'for_compliance_service_provider' && $application->gl_soa_review_notes)
+                                <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                                    <span class="font-semibold">Service provider compliance notes:</span> {{ $application->gl_soa_review_notes }}
+                                </div>
+                            @elseif($application->gl_soa_review_notes)
                                 <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                                     <span class="font-semibold">Review notes:</span> {{ $application->gl_soa_review_notes }}
                                 </div>

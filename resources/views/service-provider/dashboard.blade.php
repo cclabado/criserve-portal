@@ -17,6 +17,10 @@
                        class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#18384f]">
                         Open Guarantee Letters
                     </a>
+                    <a href="{{ route('service-provider.bank-accounts') }}"
+                       class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        Manage Bank Accounts
+                    </a>
                     <a href="{{ route('service-provider.letters', ['status' => 'pending_upload']) }}"
                        class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                         Upload Pending Cases
@@ -84,6 +88,38 @@
         </article>
     </section>
 
+    <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Default Transfer Account</p>
+                <h2 class="mt-2 text-2xl font-black text-sky-950">Bank Account Used for SOA Submissions</h2>
+            </div>
+            <a href="{{ route('service-provider.bank-accounts') }}"
+               class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                Manage Accounts
+            </a>
+        </div>
+
+        <div class="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            @if($defaultBankAccount)
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                        Default
+                    </span>
+                    <span class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Active transfer target</span>
+                </div>
+                <h3 class="mt-3 text-xl font-black text-slate-950">{{ $defaultBankAccount->resolvedBankName() }}</h3>
+                <p class="mt-1 text-sm font-semibold text-slate-700">{{ $defaultBankAccount->account_name }}</p>
+                <div class="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-slate-500">
+                    <span>Account No.: {{ $defaultBankAccount->maskedAccountNumber() }}</span>
+                    <span>Branch: {{ $defaultBankAccount->branch_name ?: 'Not specified' }}</span>
+                </div>
+            @else
+                <p class="text-sm text-slate-500">No default bank account is set yet. Add one so your SOA uploads automatically carry the correct transfer account.</p>
+            @endif
+        </div>
+    </section>
+
     <section class="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,.7fr)]">
         <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -135,7 +171,7 @@
                                     @endif
                                 </p>
                                 <p class="mt-2 text-sm font-semibold text-slate-700">
-                                    Amount: PHP {{ number_format((float) ($application->final_amount ?? $application->recommended_amount ?? 0), 2) }}
+                                    Amount: PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}
                                 </p>
                             </div>
 
@@ -223,7 +259,7 @@
 
                             <div class="mt-3 flex items-center justify-between gap-3">
                                 <p class="text-sm font-semibold text-slate-700">
-                                    PHP {{ number_format((float) ($application->final_amount ?? $application->recommended_amount ?? 0), 2) }}
+                                    PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}
                                 </p>
                                 <a href="{{ route('service-provider.show', $application->id) }}" class="text-sm font-semibold text-[#234E70] hover:text-[#18384f]">
                                     View Case

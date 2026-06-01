@@ -1,0 +1,1850 @@
+[
+  {
+    "name": "Al-Amanah Islamic Investment Bank of the Philippines",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Asia United Bank Corporation",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Australia and New Zealand Banking Group Limited",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Bank of Commerce",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Bank of the Philippine Islands",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "BDO Unibank, Inc.",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "China Banking Corporation",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Deutsche Bank AG, Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Development Bank of the Philippines",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "East West Banking Corporation",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "ING Bank N.V.",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Land Bank of the Philippines",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Metropolitan Bank & Trust Company",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Mizuho Bank, Ltd. - Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Philippine Bank of Communications",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Philippine National Bank",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Philippine Trust Company",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Rizal Commercial Banking Corporation",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Security Bank Corporation",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Standard Chartered Bank",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "The Hongkong and Shanghai Banking Corporation Limited",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Union Bank of the Philippines",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Bangkok Bank Public Company Limited",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Bank of America, National Association",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Bank of China (Hong Kong) Limited - Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "BDO Private Bank, Inc.",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Cathay United Bank Co., Ltd. Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Chang Hwa Commercial Bank, Ltd., Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "CIMB Bank Philippines Inc.",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Citibank, N.A.",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "CTBC Bank (Philippines) Corp.",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "First Commercial Bank, Ltd., Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Hua Nan Commercial Bank, Ltd., Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Industrial and Commercial Bank of China Limited - Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Industrial Bank of Korea Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "JPMorgan Chase Bank, N.A.",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "KEB Hana Bank - Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Maybank Philippines, Incorporated",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Mega International Commercial Bank Co., Ltd.",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "MUFG Bank, Ltd.",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Philippine Veterans Bank",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Shinhan Bank - Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "Sumitomo Mitsui Banking Corporation - Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "United Overseas Bank Limited, Manila Branch",
+    "category": "Universal / Commercial Bank"
+  },
+  {
+    "name": "1st Valley Bank, Inc. A Development Bank",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "AllBank (A Thrift Bank), Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Bangko Kabayan, Inc. (A Private Development Bank)",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Bank of Makati (A Savings Bank), Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Bank One Savings Corporation",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Bataan Development Bank",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "BDO Network Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "BPI Direct BanKo Inc., A Savings Bank",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "CARD SME Bank, Inc., A Thrift Bank",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Century Savings Bank Corporation",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "China Bank Savings, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "City Savings Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Citystate Savings Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Cordillera Savings Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Dumaguete City Development Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Equicom Savings Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "First Consolidated Bank, Inc. (A Private Development Bank)",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Hiyas Banking Corporation \"A Thrift Bank\"",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "ISLA BANK (A Thrift Bank), Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Legazpi Savings Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Lemery Savings and Loan Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Life Savings Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "LOLC BANK PHILIPPINES, INC. (A Thrift Bank)",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Luzon Development Bank",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Makiling Development Bank Corporation",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Malayan Savings Bank Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Northpoint Development Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Pacific Ace Savings Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Pampanga Development Bank",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Penbank, Inc. (A Private Development Bank)",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Phil Star Development Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Philippine Business Bank, Inc. A Savings Bank",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Philippine Savings Bank",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Producers Savings Bank Corporation",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Queen City Development Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "RCBC Microbank - A Thrift Bank Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Sterling Bank of Asia, Inc. (A Savings Bank)",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Sun Savings Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "UCPB Savings Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "University Savings Bank, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Wealth Development Bank Corporation",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Yuanta Savings Bank Philippines, Inc.",
+    "category": "Thrift Bank"
+  },
+  {
+    "name": "Advance Credit Bank (A Rural Bank) Corp.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Agribusiness Banking Corporation - A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Agricultural Bank of the Philippines, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Aliaga Farmers Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Anilao Bank (Rural Bank of Anilao (Iloilo), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "ARDCIBank, Inc. - A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Asenso Rural Bank of Bautista, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Aspac Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "AuroraBank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Baclaran Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Balanga Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Baliuag Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco Abucay, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco Bakun, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "BANCO DE CALAMBA, INC. (A RURAL BANK)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco de Mindoro, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco Lagawe (Lagawe Highlands Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco Maximo-RNG Coastal Corporation",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco Mexico, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco San Jose (CamSur), Inc. - A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco San Vicente, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco Santiago de Libon, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco Sual (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bangko Kaisa, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bangko Mabuhay (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bangko Magsaysay (Isabela), Inc. - A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bangko Monta\u00f1osa Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bangko ng Kabuhayan, (A Rural Bank) Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bangko Nuestra Se\u00f1ora Del Pilar, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bangko Pasig (Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bangko Rural ng San Teodoro, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bank of Hope, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bank of Ormoc, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banko Zambale\u00f1o (BZI), Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "BANKWAYS, INC. (A RURAL BANK)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bannawag Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Batangas Rural Bank for Cooperatives, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bayanihan Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "BAYBANK, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Benguet Center Bank, Inc., A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "BHF Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bi\u00f1an Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "BINHI Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "BOF, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bolbok Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "BRIC Bank, Inc. A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Bukidnon Bank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Butuan City Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cagsawa Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Camalig Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Camiling Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cantilan Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "CARD Bank-A Microfinance-Oriented Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "CARD MRI Rizal Bank, Inc., A Microfinance-Oriented Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Caritas Banco ng Masa, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cavite United Rural Bank, Corp.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cebuana Lhuillier Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Century Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Citizen's Rural Bank (Cabiao), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Classic Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Common Wealth Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Community Rural Bank of Dapitan City Incorporated",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Community Rural Bank of San Gabriel (La Union), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cordillera Bank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Crown Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "CSFirst Bank, Inc. - A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cuyapo Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Diamond Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Dumaguete Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Dungganon Bank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "East West Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "ECCOBANK (A Rural Bank) Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Enterprise Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Enterprise Capital Bank, Inc. (Taguig Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Entrepreneur Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Far Eastern Bank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "FARMBANK, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "FBC First Bank of Calaca, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Filidian Rural Bank of Antipolo, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "First Community Bank, Inc. (Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "First Imperial Business Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "First Integrity Bank, Inc. (Rural Bank of Bailen)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "First Mindoro Microfinance Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "First Philippine Partners Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "First State Bank, Inc., A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "First TRuBank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "First United Farmers Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Frontier Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Gateway Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "GM Bank of Luzon, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Golden Rural Bank of the Philippines, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Guagua Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Guagua Savers Bank, A Rural Bank, Incorporated",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Highland Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Imus Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Innovative Bank, Inc. ( A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Janiuay Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Katipunan Banking Corporation \"A Rural Bank\"",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Key Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Laguna Prestige Banking Corporation, (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Liberty Bank (A Rural Bank) Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "LifeBank - A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Limcoma Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Lipa Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "LUDB Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Mactan Rural Bank (Lapu-lapu City), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Maharlika Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Malarayat Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Mallig Plains Rural Bank (Isabela), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "MANOR BANK - A Rural Bank Corp.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Marayo Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "MARIBANK PHILIPPINES, INC. (A RURAL BANK)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Maritime Bank Corporation (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Masagana Rural Bank, (Gen. Natividad, N.E.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Mega Rural Bank (Lucena City), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Misamis Bank, Inc. A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Money Mall Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Mount Carmel Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "MVSM Bank (A Rural Bank since 1953), Inc",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Netbank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "New Rural Bank of Agoncillo, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "New Rural Bank of San Leonardo (Nueva Ecija), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "North Pacific Banking Corporation (A Rural Bank of Sta. Maria, Isabela)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "One Unified Rural Bank of Cavite, Inc. (OUR Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Ormon Bank (Rural Bank of Mulanay (Quezon), Inc.)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Own Bank, The Rural Bank of Cavite City, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Pangasinan Bank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Panguil Bay Rural Bank of Ozamiz, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Partner Rural Bank (Cotabato), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "People's Hawak Kamay Bank, Inc. - A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "People's Rural Bank (General Santos City), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Philippine SME Bank, Inc., A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Pioneer Bank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "PlanBank \"Rural Bank of Canlubang Planters, Inc.\"",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "ProFarmers Rural Banking Corporation",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Progressive Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Provident Rural Bank of Sta. Cruz (Laguna) Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Quezon Capital Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Quezon Coconut Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rang-ay Bank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "RBT Bank, Inc., A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Alabel (Sarangani), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Alaminos (Pangasinan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Alicia (Isabela), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Alitagtag, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Altavas (Aklan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Amlan (Negros Oriental), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Anda (Pangasinan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Angat (Bulacan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Angeles, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Angono, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Antipolo, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Apalit, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Aritao, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bacnotan, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Baco (Oriental Mindoro), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bacolod City, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bacong (Negros Oriental), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bagabag (N.V.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bagac, Bataan, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Baguio, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Balungao (Pangasinan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bambang (Nueva Vizcaya), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Banga (Aklan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bansud (Oriental Mindoro), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Barili (Cebu), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Batac, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bato (Leyte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bauang, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bay, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bayambang (Pangasinan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bayombong, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bogo (Cebu), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bolinao (Pang.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bonifacio (Misamis Occidental), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bontoc (Mountain Province), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Brooke's Point (Palawan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Bucay (Abra), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Cabangan (Zambales), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Cabatuan (Iloilo), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Cabugao (Ilocos Sur), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Cadiz, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Calauan, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Calbayog City, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Calinog (Iloilo), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Candelaria, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Capalonga (Camarines Norte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Cardona (Rizal), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Cauayan, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Cavinti (Laguna), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Central Pangasinan, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Compostela (COMVAL), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Cuartero (Capiz), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Cuenca, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Digos, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Dolores (Quezon), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Do\u00f1a Remedios Trinidad (Bulacan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Donsol (Sorsogon), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Dulag (Leyte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Dumangas, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Dupax (Nueva Vizcaya), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of El Salvador (Misamis Oriental), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Escalante (Neg. Occ.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Gandara (Samar), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Gattaran (Cag.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of General Luna (Quezon), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Gingoog, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Gitagum (Misamis Oriental), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Gloria (Or. Min.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Guinobatan, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Guiuan (Eastern Samar), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Hermosa (Bataan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Hilongos (Leyte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Hindang (Leyte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Hinundayan (Southern Leyte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Ilog (Negros Occidental), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Iloilo City, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Infanta, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Irosin (Sorsogon), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Itogon (Benguet), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Jaen, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Jamindan (Capiz), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Jimenez (Mis. Occ.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Jose Panganiban (Camarines Norte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Kapalong (Davao), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Kiamba (Sarangani), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Kibawe (Bukidnon), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of La Paz, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Labason (Zamboanga del Norte), Incorporated",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Lanuza (Surigao del Sur), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Lebak (Sultan Kudarat), Incorporated",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Liloy (Zamboanga Del Norte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Lipa City (Batangas), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Loon (Bohol), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Lopez Jaena (Misamis Occidental), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Lucban (Quezon), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Luisiana (Laguna), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Lumban (Laguna), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Mabalacat, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Madridejos (Cebu), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Magdalena (Laguna), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Makato (Aklan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Malitbog (Southern Leyte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Malolos, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Mambusao, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Manapla (Neg. Occ.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Mangaldan, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Manolo Fortich (Bukidnon), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Manukan (Zamboanga del Norte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Maria Aurora (Aurora), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Marilag (Sta. Maria, Laguna), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Mati, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Mauban, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Medina (Misamis Oriental), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Miagao (Iloilo), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Midsayap, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Montalban, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Naic, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of New Washington (Aklan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Norala (S. Cotabato), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Padre Garcia, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Paete, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Pagadian, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Pamplona (Negros Oriental), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Paracale (Camarines Norte), Incorporated",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Pilar (Bataan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Pilar (Sorsogon), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Pinamalayan, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Placer (Surigao del Norte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Pola (Oriental Mindoro), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Porac (Pampanga), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Puerto Galera (Oriental Mindoro), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Pura (Tarlac), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Quezon (N.E.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Ramon (Isabela), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Rizal (Kalinga-Apayao), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Rizal (Laguna), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Rizal (Zamboanga del Norte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Rosario (La Union), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Roxas (Or. Min.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Sagada (Mountain Province), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Sagay, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Salug (Zamboanga del Norte), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Sampaloc (Quezon), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of San Antonio, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of San Luis (Batangas), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of San Luis (Pampanga), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of San Manuel (Isabela), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of San Mateo (Isabela), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of San Miguel (Iloilo), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of San Narciso, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of San Pascual (Obando, Bulacan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of San Rafael (Bulacan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Sanchez Mira (Cagayan), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Santa Maria (Ilocos Sur), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Sasmuan (Pampanga), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Seven Lakes (San Pablo City), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Silay City, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Sipocot (Camarines Sur), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Socorro (Oriental Mindoro), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Solano (Nueva Vizcaya), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Sta. Barbara (Iloilo), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Sta. Ignacia, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Sta. Rosa de Lima (Paniqui, Tarlac), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Sudipen (La Union), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Taal, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Talugtug (N. E.), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Tandag (Surigao del Sur), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Tangub City, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Tanjay, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Tigaon Camarines Sur, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Tigbauan (Iloilo), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Victoria, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Villaverde (Nueva Vizcaya), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Rural Bank of Zarraga (Iloilo), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Sadiri Rural Bank (San Juan, Ilocos Sur), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Salmon Bank (Rural Bank) Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Salug Valley Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "San Bartolome Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Saviour Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Second Rural Bank of San Luis (Pampanga), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Second Rural Bank of Valenzuela (Metro Manila), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Secured Bank, Inc., A Rural Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "SG BANK - A RURAL BANK Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Silahis Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "South Bank (A Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Southeast Country Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "St. Michael Rural Bank of Tarlac (Tarlac), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Sta. Maria Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Summit Bank (Rural Bank of Tublay, Inc.)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Summit Rural Bank of Lipa City, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Sunrise Rural Bank (Rosario, Batangas), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Talisay Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Tamaraw Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "The Country Bank Rural Bank of Bongabong Or. Mindoro, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Top Bank Philippines, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Towncall Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "TRBank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Turumba Rural Bank of Pakil, Laguna, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Unilink Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Universal Rural Bank of Lopez (Quezon), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Upland Rural Bank of Dalaguete (Cebu), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Utility Bank-A Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Vigan Banco Rural Incorporada",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Village Bank, Inc. (A Rural Bank)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Vizcaya Bank, A Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Welcome Bank (Rural Bank), Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Zambales Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Zamboanga City Rural Bank, Inc.",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Banco Cooperativa de Zamboanga",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of Benguet",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of Cagayan",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of Cebu",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of Cotabato",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of La Union",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of Mountain Province",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of Negros Oriental",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of Nueva Vizcaya",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of Palawan",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of Quezon Province",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Cooperative Bank of Zambales",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "First Isabela Cooperative Bank (FICOBANK)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Ilocos Consolidated Cooperative Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Mindanao Consolidated Cooperative Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "National Teachers and Employees Cooperative Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Negros Cooperative Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Network Consolidated Cooperative Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Occidental Mindoro Cooperative Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "One Cooperative Bank (One CB)",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "Zamboanga del Norte Cooperative Bank",
+    "category": "Rural / Cooperative Bank"
+  },
+  {
+    "name": "GoTyme Bank Corporation",
+    "category": "Digital Bank"
+  },
+  {
+    "name": "Maya Bank, Inc.",
+    "category": "Digital Bank"
+  },
+  {
+    "name": "Overseas Filipino Bank, Inc., A Digital Bank of LANDBANK",
+    "category": "Digital Bank"
+  },
+  {
+    "name": "Tonik Digital Bank, Inc.",
+    "category": "Digital Bank"
+  },
+  {
+    "name": "UnionDigital Bank, Inc.",
+    "category": "Digital Bank"
+  },
+  {
+    "name": "UNObank, Inc.",
+    "category": "Digital Bank"
+  }
+]

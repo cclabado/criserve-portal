@@ -116,6 +116,17 @@
         <label class="label">Finance Fund Source Name</label>
         <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Regular Fund">
     </div>
+@elseif($definition['key'] === 'banks')
+    <div class="modal-grid two">
+        <div>
+            <label class="label">Bank Name</label>
+            <input type="text" name="name" class="input" value="{{ old('name', $item->name ?? '') }}" placeholder="Bank of the Philippine Islands">
+        </div>
+        <div>
+            <label class="label">Category</label>
+            <input type="text" name="category" class="input" value="{{ old('category', $item->category ?? '') }}" placeholder="Universal / Commercial Bank">
+        </div>
+    </div>
 @elseif($definition['key'] === 'service-providers')
     <div class="modal-grid two">
         <div>

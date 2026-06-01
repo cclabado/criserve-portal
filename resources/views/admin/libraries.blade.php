@@ -21,6 +21,7 @@
         'modes-of-assistance' => route('admin.libraries.modes-of-assistance.store'),
         'service-points' => route('admin.libraries.service-points.store'),
         'finance-fund-sources' => route('admin.libraries.finance-fund-sources.store'),
+        'banks' => route('admin.libraries.banks.store'),
         'service-providers' => route('admin.libraries.service-providers.store'),
         'positions' => route('admin.libraries.positions.store'),
         'relationships' => route('admin.libraries.relationships.store'),
@@ -123,6 +124,9 @@
                         @elseif($definition['key'] === 'modes-of-assistance')
                             <th>Mode</th>
                             <th>Amount Rule</th>
+                        @elseif($definition['key'] === 'banks')
+                            <th>Bank</th>
+                            <th>Category</th>
                         @elseif($definition['key'] === 'service-providers')
                             <th>Provider</th>
                             <th>Categories</th>
@@ -153,6 +157,7 @@
                             $editPayload = [
                                 'id' => $item->id,
                                 'name' => $item->name,
+                                'category' => $item->category ?? null,
                                 'assistance_type_id' => $item->assistance_type_id ?? null,
                                 'assistance_subtype_id' => $item->assistance_subtype_id ?? null,
                                 'assistance_detail_id' => $item->assistance_detail_id ?? null,
@@ -227,6 +232,14 @@
                                         {{ $item->maximum_amount !== null ? 'Max: PHP '.number_format((float) $item->maximum_amount, 2) : 'No maximum' }}
                                     </p>
                                 </td>
+                            @elseif($definition['key'] === 'banks')
+                                <td>
+                                    <p class="table-primary">{{ $item->name }}</p>
+                                    @unless($item->is_active)
+                                        <p class="table-secondary table-secondary--archived">Archived bank option</p>
+                                    @endunless
+                                </td>
+                                <td>{{ $item->category ?: '-' }}</td>
                             @elseif($definition['key'] === 'service-providers')
                                 <td>
                                     <p class="table-primary">{{ $item->name }}</p>
@@ -320,7 +333,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $definition['key'] === 'referral-institutions' ? 7 : 6 }}" class="empty-state">
+                            <td colspan="{{ in_array($definition['key'], ['referral-institutions', 'service-providers'], true) ? 7 : ($definition['key'] === 'banks' ? 4 : 6) }}" class="empty-state">
                                 No {{ strtolower($definition['title']) }} found for the selected filters.
                             </td>
                         </tr>

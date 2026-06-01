@@ -3,16 +3,16 @@
 @section('content')
 
 @php
-    $isBudgetOfficer = auth()->user()?->role === 'budget_officer';
-    $glApprovalIndexRoute = auth()->user()?->role === 'budget_officer'
+    $role = auth()->user()?->role;
+    $isBudgetOfficer = $role === 'budget_officer';
+    $isBudgetApprover = $role === 'budget_approver';
+    $glApprovalIndexRoute = $isBudgetOfficer
         ? 'budget-officer.gl-payment-approvals'
-        : 'approving.gl-payment-approvals';
-    $glApprovalShowRoute = $isBudgetOfficer
-        ? 'budget-officer.gl-payment-approvals.show'
-        : 'approving.gl-payment-approvals.show';
-    $queueRoleLabel = $isBudgetOfficer ? 'Budget Officer' : 'Approving Officer';
-    $queueStatusLabel = $isBudgetOfficer ? 'For Processing (Budget)' : 'For Processing (Program Approval)';
-    $queueStatusClass = $isBudgetOfficer
+        : ($isBudgetApprover ? 'budget-approver.gl-payment-approvals' : 'approving.gl-payment-approvals');
+    $glApprovalShowRoute = $glApprovalIndexRoute.'.show';
+    $queueRoleLabel = $isBudgetOfficer ? 'Budget Officer' : ($isBudgetApprover ? 'Budget Approver' : 'Approving Officer');
+    $queueStatusLabel = ($isBudgetOfficer || $isBudgetApprover) ? 'For Processing (Budget)' : 'For Processing (Program Approval)';
+    $queueStatusClass = ($isBudgetOfficer || $isBudgetApprover)
         ? 'border-violet-200 bg-violet-50 text-violet-700'
         : 'border-indigo-200 bg-indigo-50 text-indigo-700';
 @endphp
@@ -28,7 +28,9 @@
                 <p class="mt-3 max-w-2xl text-sm leading-6 text-white/80 sm:text-base">
                     {{ $isBudgetOfficer
                         ? 'Review guarantee letter cases that were already approved and are now waiting for budget processing.'
-                        : 'Review guarantee letter cases that were already submitted by the GL payment processor after finance fund source tagging.' }}
+                        : ($isBudgetApprover
+                            ? 'Approve budget-reviewed guarantee letter cases before they proceed to accounting.'
+                            : 'Review guarantee letter cases that were already submitted by the GL payment processor after finance fund source tagging.') }}
                 </p>
             </div>
 
@@ -87,7 +89,8 @@
                             <td class="px-5 py-4">
                                 <p class="font-semibold text-slate-900">{{ $application->reference_no }}</p>
                                 <p class="mt-1 text-xs text-slate-500">
-                                    Submitted {{ $application->gl_budget_reviewed_at?->format('M d, Y h:i A') ?? $application->updated_at?->format('M d, Y h:i A') }}
+                                    {{ $isBudgetOfficer ? 'Approved' : (($isBudgetApprover ? 'Reviewed' : 'Submitted')) }}
+                                    {{ ($isBudgetOfficer ? $application->gl_program_approved_at : ($isBudgetApprover ? $application->gl_budget_reviewed_at : $application->updated_at))?->format('M d, Y h:i A') ?? $application->updated_at?->format('M d, Y h:i A') }}
                                 </p>
                             </td>
                             <td class="px-5 py-4">
@@ -97,11 +100,24 @@
                                 @endif
                             </td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $application->serviceProvider?->name ?? '-' }}</td>
-                            <td class="px-5 py-4 text-sm font-semibold text-slate-900">PHP {{ number_format((float) ($application->final_amount ?? $application->recommended_amount ?? 0), 2) }}</td>
+                            <td class="px-5 py-4 text-sm font-semibold text-slate-900">PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}</td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $application->gl_finance_fund_source ?? '-' }}</td>
                             <td class="px-5 py-4">
-                                <span class="inline-flex rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] {{ $queueStatusClass }}">
-                                    {{ $queueStatusLabel }}
+                                @php
+                                    $rowStatusLabel = match (true) {
+                                        $application->gl_payment_status === 'for_compliance_budget_officer' => 'For Compliance (Budget Officer)',
+                                        $application->gl_payment_status === 'for_compliance_approving_officer' => 'For Compliance (Approving Officer)',
+                                        ($isBudgetOfficer || $isBudgetApprover) => 'For Processing (Budget)',
+                                        default => 'For Processing (Program Approval)',
+                                    };
+                                    $rowStatusClass = str_contains($rowStatusLabel, 'For Compliance')
+                                        ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                        : (($isBudgetOfficer || $isBudgetApprover)
+                                            ? 'border-violet-200 bg-violet-50 text-violet-700'
+                                            : 'border-indigo-200 bg-indigo-50 text-indigo-700');
+                                @endphp
+                                <span class="inline-flex rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] {{ $rowStatusClass }}">
+                                    {{ $rowStatusLabel }}
                                 </span>
                             </td>
                             <td class="px-5 py-4 text-right">

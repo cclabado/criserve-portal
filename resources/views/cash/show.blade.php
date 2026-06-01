@@ -6,6 +6,9 @@
     $isOfficer = $workspace === 'officer';
     $indexRoute = $isOfficer ? 'cash-officer.gl-payment-reviews' : 'cash-approver.gl-payment-approvals';
     $updateRoute = $indexRoute.'.update';
+    $orsRoute = $indexRoute.'.ors';
+    $dvRoute = $indexRoute.'.dv';
+    $lddapAdaRoute = $indexRoute.'.lddap-ada';
     $pageLabel = $isOfficer ? 'Cash Officer' : 'Cash Approver';
     $actionLabel = $isOfficer ? 'Cash Review' : 'Cash Approval';
     $totalRecommendedAmount = $application->assistanceRecommendations->isNotEmpty()
@@ -26,6 +29,25 @@
                     Review the guarantee letter cash-stage details, attachments, fund source tagging, and previous stage remarks.
                 </p>
             </div>
+            @if($application->gl_ors_number || $application->gl_dv_number || $application->gl_lddap_ada_number)
+                <div class="flex flex-wrap gap-3">
+                    @if($application->gl_ors_number)
+                        <a href="{{ route($orsRoute, $application->id, false) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                            View ORS
+                        </a>
+                    @endif
+                    @if($application->gl_dv_number)
+                        <a href="{{ route($dvRoute, $application->id, false) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#18384f]">
+                            View DV
+                        </a>
+                    @endif
+                    @if($application->gl_lddap_ada_number)
+                        <a href="{{ route($lddapAdaRoute, $application->id, false) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                            View LDDAP-ADA
+                        </a>
+                    @endif
+                </div>
+            @endif
         </div>
     </section>
 
@@ -58,14 +80,14 @@
         <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Payment Status</p>
             <div class="mt-3">
-                <span class="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">
-                    For Processing (Cash)
+                <span class="inline-flex rounded-full border {{ $application->gl_payment_status === 'for_compliance_cash_officer' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-blue-200 bg-blue-50 text-blue-700' }} px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em]">
+                    {{ $application->gl_payment_status === 'for_compliance_cash_officer' ? 'For Compliance (Cash Officer)' : 'For Processing (Cash)' }}
                 </span>
             </div>
         </article>
         <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Final Amount</p>
-            <p class="mt-3 text-lg font-black text-slate-900">PHP {{ number_format((float) ($application->final_amount ?? $totalRecommendedAmount), 2) }}</p>
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Utilized Amount</p>
+            <p class="mt-3 text-lg font-black text-slate-900">PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}</p>
         </article>
     </section>
 
@@ -165,6 +187,9 @@
                                 <div class="min-w-0">
                                     <p class="truncate text-sm font-semibold text-slate-900">{{ $document->file_name }}</p>
                                     <p class="mt-1 text-xs text-slate-500">Uploaded {{ $document->created_at?->format('M d, Y h:i A') ?? '-' }}</p>
+                                    @if($document->bankAccountSummary())
+                                        <p class="mt-1 text-xs text-slate-500">Transfer account: {{ $document->bankAccountSummary() }}</p>
+                                    @endif
                                     @if($document->remarks)
                                         <p class="mt-1 text-xs text-slate-500">{{ $document->remarks }}</p>
                                     @endif
@@ -230,15 +255,46 @@
                     @csrf
                     @method('PATCH')
                     @if($isOfficer)
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="label">NCA Number</label>
+                                <input type="text" name="gl_nca_number" class="input" value="{{ old('gl_nca_number', $application->gl_nca_number) }}" placeholder="Enter NCA number">
+                            </div>
+                            <div>
+                                <label class="label">NCA Date</label>
+                                <input type="date" name="gl_nca_date" class="input" value="{{ old('gl_nca_date', optional($application->gl_nca_date)->format('Y-m-d')) }}">
+                            </div>
+                            <div>
+                                <label class="label">Servicing Bank Branch</label>
+                                <input type="text" name="gl_servicing_bank_branch" class="input" value="{{ old('gl_servicing_bank_branch', $application->gl_servicing_bank_branch) }}" placeholder="Enter servicing branch">
+                            </div>
+                            <div>
+                                <label class="label">MDS Sub-Account Number</label>
+                                <input type="text" name="gl_mds_sub_account_number" class="input" value="{{ old('gl_mds_sub_account_number', $application->gl_mds_sub_account_number) }}" placeholder="Enter MDS sub-account number">
+                            </div>
+                            <div>
+                                <label class="label">Withholding Tax Amount</label>
+                                <input type="number" step="0.01" min="0" name="gl_withholding_tax_amount" class="input" value="{{ old('gl_withholding_tax_amount', $application->gl_withholding_tax_amount) }}" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="label">Cash Review Decision</label>
+                            <select name="decision" class="input">
+                                <option value="approved" @selected(old('decision') === 'approved')>Submit to Cash Approval</option>
+                                <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
+                            </select>
+                        </div>
                         <div>
                             <label class="label">Cash Remarks</label>
-                            <textarea name="gl_cash_remarks" class="input h-32" placeholder="Optional cash remarks before endorsing to the cash approver.">{{ old('gl_cash_remarks', $application->gl_cash_remarks) }}</textarea>
+                            <textarea name="gl_cash_remarks" class="input h-32" placeholder="Add cash remarks or state what must be corrected before it goes back.">{{ old('gl_cash_remarks', $application->gl_cash_remarks) }}</textarea>
                         </div>
-                        <button type="submit" class="btn-primary">Submit to Cash Approval</button>
+                        <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance.</p>
+                        <button type="submit" class="btn-primary">Save Decision</button>
                     @else
                         <div>
                             <label class="label">Approval Decision</label>
                             <select name="decision" class="input">
+                                <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
                                 <option value="approved" @selected(old('decision') === 'approved')>Approved</option>
                                 <option value="disapproved" @selected(old('decision') === 'disapproved')>Disapproved</option>
                             </select>
@@ -246,7 +302,7 @@
                         <div>
                             <label class="label">Remarks / Reason</label>
                             <textarea name="remarks" class="input h-32" placeholder="Add remarks or the reason for disapproval when needed.">{{ old('remarks', $application->gl_cash_approval_remarks) }}</textarea>
-                            <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is Disapproved.</p>
+                            <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance or Disapproved.</p>
                         </div>
                         <button type="submit" class="btn-primary">Save Decision</button>
                     @endif

@@ -6,6 +6,9 @@
     $totalRecommendedAmount = $application->assistanceRecommendations->isNotEmpty()
         ? $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount)
         : (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
+    $orsRoute = 'approving.gl-program-amount-approvals.ors';
+    $dvRoute = 'approving.gl-program-amount-approvals.dv';
+    $lddapAdaRoute = 'approving.gl-program-amount-approvals.lddap-ada';
 @endphp
 
 <main class="space-y-6" x-data="{ activeTab: 'client' }">
@@ -21,6 +24,25 @@
                     Review the amount and final guarantee letter payment details after accounting approval.
                 </p>
             </div>
+            @if($application->gl_ors_number || $application->gl_dv_number || $application->gl_lddap_ada_number)
+                <div class="flex flex-wrap gap-3">
+                    @if($application->gl_ors_number)
+                        <a href="{{ route($orsRoute, $application->id, false) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                            View ORS
+                        </a>
+                    @endif
+                    @if($application->gl_dv_number)
+                        <a href="{{ route($dvRoute, $application->id, false) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#18384f]">
+                            View DV
+                        </a>
+                    @endif
+                    @if($application->gl_lddap_ada_number)
+                        <a href="{{ route($lddapAdaRoute, $application->id, false) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                            View LDDAP-ADA
+                        </a>
+                    @endif
+                </div>
+            @endif
         </div>
     </section>
 
@@ -59,8 +81,8 @@
             </div>
         </article>
         <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Final Amount</p>
-            <p class="mt-3 text-lg font-black text-slate-900">PHP {{ number_format((float) ($application->final_amount ?? $totalRecommendedAmount), 2) }}</p>
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Utilized Amount</p>
+            <p class="mt-3 text-lg font-black text-slate-900">PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}</p>
         </article>
     </section>
 
@@ -161,6 +183,9 @@
                                     <div class="min-w-0">
                                         <p class="truncate text-sm font-semibold text-slate-900">{{ $document->file_name }}</p>
                                         <p class="mt-1 text-xs text-slate-500">Uploaded {{ $document->created_at?->format('M d, Y h:i A') ?? '-' }}</p>
+                                        @if($document->bankAccountSummary())
+                                            <p class="mt-1 text-xs text-slate-500">Transfer account: {{ $document->bankAccountSummary() }}</p>
+                                        @endif
                                         @if($document->remarks)
                                             <p class="mt-1 text-xs text-slate-500">{{ $document->remarks }}</p>
                                         @endif
@@ -229,6 +254,7 @@
                     <div>
                         <label class="label">Approval Decision</label>
                         <select name="decision" class="input">
+                            <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
                             <option value="approved" @selected(old('decision') === 'approved')>Approved</option>
                             <option value="disapproved" @selected(old('decision') === 'disapproved')>Disapproved</option>
                         </select>
@@ -236,7 +262,7 @@
                     <div>
                         <label class="label">Remarks / Reason</label>
                         <textarea name="remarks" class="input h-32" placeholder="Add remarks or the reason for disapproval when needed.">{{ old('remarks', $application->gl_program_amount_approval_remarks) }}</textarea>
-                        <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is Disapproved.</p>
+                        <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance or Disapproved.</p>
                     </div>
                     <button type="submit" class="btn-primary">Save Decision</button>
                 </form>

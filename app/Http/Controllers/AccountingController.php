@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\BuildsGlFinanceDocuments;
 use App\Models\Application;
 use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
@@ -11,6 +12,8 @@ use Illuminate\View\View;
 
 class AccountingController extends Controller
 {
+    use BuildsGlFinanceDocuments;
+
     public function __construct(
         protected AuditLogService $auditLogs
     ) {
@@ -29,7 +32,7 @@ class AccountingController extends Controller
                 'total' => $applications->count(),
                 'with_processor_remarks' => $applications->filter(fn (Application $application) => filled($application->gl_budget_remarks))->count(),
                 'with_supporting_docs' => $applications->filter(fn (Application $application) => $application->documents->contains(fn ($document) => $document->document_type === 'Other Supporting Document'))->count(),
-                'total_amount' => $applications->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+                'total_amount' => $applications->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
             ],
             'recentCases' => $applications->take(6)->values(),
             'providerLoad' => $applications
@@ -37,7 +40,7 @@ class AccountingController extends Controller
                 ->map(fn ($group, $providerName) => [
                     'provider' => $providerName,
                     'total' => $group->count(),
-                    'amount' => $group->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+                    'amount' => $group->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
                 ])
                 ->sortByDesc('total')
                 ->take(5)
@@ -62,7 +65,7 @@ class AccountingController extends Controller
                 'total' => $applications->count(),
                 'with_accounting_remarks' => $applications->filter(fn (Application $application) => filled($application->gl_accounting_remarks))->count(),
                 'with_supporting_docs' => $applications->filter(fn (Application $application) => $application->documents->contains(fn ($document) => $document->document_type === 'Other Supporting Document'))->count(),
-                'total_amount' => $applications->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+                'total_amount' => $applications->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
                 'cash_certifications_total' => $cashCertificationApplications->count(),
             ],
             'recentCases' => $applications->take(6)->values(),
@@ -72,7 +75,7 @@ class AccountingController extends Controller
                 ->map(fn ($group, $providerName) => [
                     'provider' => $providerName,
                     'total' => $group->count(),
-                    'amount' => $group->sum(fn (Application $application) => (float) ($application->final_amount ?? $application->recommended_amount ?? 0)),
+                    'amount' => $group->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
                 ])
                 ->sortByDesc('total')
                 ->take(5)
@@ -146,6 +149,69 @@ class AccountingController extends Controller
         return $this->renderShowView($application, 'cash_certifier');
     }
 
+    public function showAccountingOfficerOrs(Application $application)
+    {
+        $application = $this->accountingOfficerBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlOrsView($application);
+    }
+
+    public function showAccountingOfficerDv(Application $application)
+    {
+        $application = $this->accountingOfficerBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlDvView($application);
+    }
+
+    public function showAccountingOfficerLddapAda(Application $application)
+    {
+        $application = $this->accountingOfficerBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlLddapAdaView($application);
+    }
+
+    public function showAccountingApproverOrs(Application $application)
+    {
+        $application = $this->accountingApproverBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlOrsView($application);
+    }
+
+    public function showAccountingApproverDv(Application $application)
+    {
+        $application = $this->accountingApproverBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlDvView($application);
+    }
+
+    public function showAccountingApproverLddapAda(Application $application)
+    {
+        $application = $this->accountingApproverBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlLddapAdaView($application);
+    }
+
+    public function showCashCertificationOrs(Application $application)
+    {
+        $application = $this->cashCertificationBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlOrsView($application);
+    }
+
+    public function showCashCertificationDv(Application $application)
+    {
+        $application = $this->cashCertificationBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlDvView($application);
+    }
+
+    public function showCashCertificationLddapAda(Application $application)
+    {
+        $application = $this->cashCertificationBaseQuery()->whereKey($application->id)->firstOrFail();
+
+        return $this->renderGlLddapAdaView($application);
+    }
+
     public function submitAccountingOfficerReview(Request $request, Application $application): RedirectResponse
     {
         $application = $this->accountingOfficerBaseQuery()
@@ -153,29 +219,57 @@ class AccountingController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
+            'decision' => ['required', 'in:approved,for_compliance'],
             'gl_accounting_remarks' => ['nullable', 'string', 'max:1500'],
         ]);
 
-        $application->update([
-            'gl_accounting_review_status' => 'reviewed',
-            'gl_accounting_remarks' => filled($validated['gl_accounting_remarks'] ?? null) ? trim((string) $validated['gl_accounting_remarks']) : null,
-            'gl_accounting_reviewed_by' => $request->user()->id,
-            'gl_accounting_reviewed_at' => now(),
-            'gl_accounting_approval_status' => 'pending_approval',
-            'gl_accounting_approval_remarks' => null,
-            'gl_accounting_approved_by' => null,
-            'gl_accounting_approved_at' => null,
-            'gl_payment_status' => 'for_processing_accounting',
-        ]);
+        if ($validated['decision'] === 'for_compliance' && blank($validated['gl_accounting_remarks'] ?? null)) {
+            throw ValidationException::withMessages([
+                'gl_accounting_remarks' => 'Compliance remarks are required when returning the case to budget approval.',
+            ]);
+        }
+
+        $remarks = filled($validated['gl_accounting_remarks'] ?? null) ? trim((string) $validated['gl_accounting_remarks']) : null;
+
+        $updatePayload = $validated['decision'] === 'approved'
+            ? [
+                'gl_accounting_review_status' => 'reviewed',
+                'gl_accounting_remarks' => $remarks,
+                'gl_accounting_reviewed_by' => $request->user()->id,
+                'gl_accounting_reviewed_at' => now(),
+                'gl_accounting_approval_status' => 'pending_approval',
+                'gl_accounting_approval_remarks' => null,
+                'gl_accounting_approved_by' => null,
+                'gl_accounting_approved_at' => null,
+                'gl_payment_status' => 'for_processing_accounting',
+            ]
+            : [
+                'gl_accounting_review_status' => 'pending_review',
+                'gl_accounting_remarks' => $remarks,
+                'gl_accounting_reviewed_by' => null,
+                'gl_accounting_reviewed_at' => null,
+                'gl_budget_reviewed_by' => null,
+                'gl_budget_reviewed_at' => null,
+                'gl_budget_approval_status' => null,
+                'gl_budget_approval_remarks' => null,
+                'gl_budget_approved_by' => null,
+                'gl_budget_approved_at' => null,
+                'gl_payment_status' => 'for_compliance_budget_officer',
+            ];
+
+        $application->update($updatePayload);
 
         $this->auditLogs->log($request, 'gl_payment.accounting_review_submitted', $application, [
+            'decision' => $validated['decision'],
             'accounting_remarks' => $validated['gl_accounting_remarks'] ?? null,
-            'payment_status' => 'for_processing_accounting',
+            'payment_status' => $updatePayload['gl_payment_status'],
         ]);
 
         return redirect()
             ->route('accounting-officer.gl-payment-reviews')
-            ->with('success', 'Case submitted to the accounting approver successfully.');
+            ->with('success', $validated['decision'] === 'approved'
+                ? 'Case submitted to the accounting approver successfully.'
+                : 'Case returned to the budget officer for compliance.');
     }
 
     public function submitAccountingApproverDecision(Request $request, Application $application): RedirectResponse
@@ -185,7 +279,7 @@ class AccountingController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
-            'decision' => ['required', 'in:approved,disapproved'],
+            'decision' => ['required', 'in:for_compliance,approved,disapproved'],
             'remarks' => ['nullable', 'string', 'max:1500'],
         ]);
 
@@ -195,22 +289,44 @@ class AccountingController extends Controller
             ]);
         }
 
-        $application->update([
+        if ($validated['decision'] === 'for_compliance' && blank($validated['remarks'] ?? null)) {
+            throw ValidationException::withMessages([
+                'remarks' => 'Compliance remarks are required when returning the case to the accounting officer.',
+            ]);
+        }
+
+        $updatePayload = [
             'gl_accounting_approval_status' => $validated['decision'],
             'gl_accounting_approval_remarks' => filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null,
             'gl_accounting_approved_by' => $request->user()->id,
             'gl_accounting_approved_at' => now(),
-            'gl_payment_status' => $validated['decision'] === 'approved' ? 'for_processing_program_amount_approval' : 'for_processing_accounting',
-            'gl_program_amount_approval_status' => $validated['decision'] === 'approved' ? 'pending_approval' : null,
-            'gl_program_amount_approval_remarks' => null,
-            'gl_program_amount_approved_by' => null,
-            'gl_program_amount_approved_at' => null,
-        ]);
+        ];
+
+        if ($validated['decision'] === 'approved') {
+            $updatePayload['gl_payment_status'] = 'for_processing_program_amount_approval';
+            $updatePayload['gl_program_amount_approval_status'] = 'pending_approval';
+            $updatePayload['gl_program_amount_approval_remarks'] = null;
+            $updatePayload['gl_program_amount_approved_by'] = null;
+            $updatePayload['gl_program_amount_approved_at'] = null;
+        } elseif ($validated['decision'] === 'for_compliance') {
+            $updatePayload['gl_payment_status'] = 'for_compliance_accounting_officer';
+            $updatePayload['gl_accounting_review_status'] = 'pending_review';
+            $updatePayload['gl_accounting_remarks'] = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+            $updatePayload['gl_accounting_reviewed_by'] = null;
+            $updatePayload['gl_accounting_reviewed_at'] = null;
+            $updatePayload['gl_accounting_approval_status'] = null;
+            $updatePayload['gl_accounting_approved_by'] = null;
+            $updatePayload['gl_accounting_approved_at'] = null;
+        } else {
+            $updatePayload['gl_payment_status'] = 'for_processing_accounting';
+        }
+
+        $application->update($updatePayload);
 
         $this->auditLogs->log($request, 'gl_payment.accounting_approval_updated', $application, [
             'decision' => $validated['decision'],
             'remarks' => $validated['remarks'] ?? null,
-            'payment_status' => $validated['decision'] === 'approved' ? 'for_processing_program_amount_approval' : 'for_processing_accounting',
+            'payment_status' => $updatePayload['gl_payment_status'],
         ]);
 
         return redirect()
@@ -225,7 +341,7 @@ class AccountingController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
-            'decision' => ['required', 'in:approved,disapproved'],
+            'decision' => ['required', 'in:for_compliance,approved,disapproved'],
             'remarks' => ['nullable', 'string', 'max:1500'],
         ]);
 
@@ -235,18 +351,48 @@ class AccountingController extends Controller
             ]);
         }
 
-        $application->update([
+        if ($validated['decision'] === 'for_compliance' && blank($validated['remarks'] ?? null)) {
+            throw ValidationException::withMessages([
+                'remarks' => 'Compliance remarks are required when returning the case to the cash officer.',
+            ]);
+        }
+
+        $updatePayload = [
             'gl_cash_certification_status' => $validated['decision'],
             'gl_cash_certification_remarks' => filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null,
             'gl_cash_certified_by' => $request->user()->id,
             'gl_cash_certified_at' => now(),
-            'gl_payment_status' => 'for_processing_accounting_certification',
-        ]);
+        ];
+
+        if ($validated['decision'] === 'approved') {
+            $updatePayload['gl_payment_status'] = 'for_processing_finance_director';
+            $updatePayload['gl_finance_director_status'] = 'pending_approval';
+            $updatePayload['gl_finance_director_remarks'] = null;
+            $updatePayload['gl_finance_director_approved_by'] = null;
+            $updatePayload['gl_finance_director_approved_at'] = null;
+        } elseif ($validated['decision'] === 'for_compliance') {
+            $updatePayload['gl_payment_status'] = 'for_compliance_cash_officer';
+            $updatePayload['gl_cash_review_status'] = 'pending_review';
+            $updatePayload['gl_cash_remarks'] = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+            $updatePayload['gl_cash_reviewed_by'] = null;
+            $updatePayload['gl_cash_reviewed_at'] = null;
+            $updatePayload['gl_cash_approval_status'] = null;
+            $updatePayload['gl_cash_approval_remarks'] = null;
+            $updatePayload['gl_cash_approved_by'] = null;
+            $updatePayload['gl_cash_approved_at'] = null;
+            $updatePayload['gl_cash_certification_status'] = null;
+            $updatePayload['gl_cash_certified_by'] = null;
+            $updatePayload['gl_cash_certified_at'] = null;
+        } else {
+            $updatePayload['gl_payment_status'] = 'for_processing_accounting_certification';
+        }
+
+        $application->update($updatePayload);
 
         $this->auditLogs->log($request, 'gl_payment.cash_certification_updated', $application, [
             'decision' => $validated['decision'],
             'remarks' => $validated['remarks'] ?? null,
-            'payment_status' => 'for_processing_accounting_certification',
+            'payment_status' => $updatePayload['gl_payment_status'],
         ]);
 
         return redirect()
@@ -351,7 +497,7 @@ class AccountingController extends Controller
     protected function accountingOfficerBaseQuery()
     {
         return $this->baseQuery()
-            ->where('gl_payment_status', 'for_processing_accounting')
+            ->whereIn('gl_payment_status', ['for_processing_accounting', 'for_compliance_accounting_officer'])
             ->where(function ($statusQuery) {
                 $statusQuery->where('gl_accounting_review_status', 'pending_review')
                     ->orWhereNull('gl_accounting_review_status');

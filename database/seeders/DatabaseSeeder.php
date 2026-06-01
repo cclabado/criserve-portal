@@ -21,5 +21,6 @@ class DatabaseSeeder extends Seeder
         $this->call(ModeOfAssistanceSeeder::class);
         $this->call(AssistanceSeeder::class);
         $this->call(AssistanceFrequencyRuleSeeder::class);
+        $this->call(PhilippineBankSeeder::class);
     }
 }

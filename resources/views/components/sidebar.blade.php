@@ -219,6 +219,7 @@
                 ['label' => 'Modes of Assistance', 'path' => 'admin/libraries/modes-of-assistance'],
                 ['label' => 'Service Points', 'path' => 'admin/libraries/service-points'],
                 ['label' => 'Finance Fund Sources', 'path' => 'admin/libraries/finance-fund-sources'],
+                ['label' => 'Banks', 'path' => 'admin/libraries/banks'],
                 ['label' => 'Relationships', 'path' => 'admin/libraries/relationships'],
                 ['label' => 'Client Types', 'path' => 'admin/libraries/client-types'],
                 ['label' => 'Referral Institutions', 'path' => 'admin/libraries/referral-institutions'],
@@ -486,6 +487,16 @@
             <span class="text-sm tracking-wide">Guarantee Letters</span>
         </a>
 
+        <a href="/service-provider/bank-accounts"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('service-provider/bank-accounts*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('service-provider/bank-accounts*') }}">
+                account_balance
+            </span>
+
+            <span class="text-sm tracking-wide">Bank Accounts</span>
+        </a>
+
         @endif
 
         @if($role === 'technical_staff')
@@ -576,6 +587,30 @@
             </span>
 
             <span class="text-sm tracking-wide">For Review</span>
+        </a>
+
+        @endif
+
+        @if($role === 'budget_approver')
+
+        <a href="/budget-approver/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('budget-approver/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('budget-approver/dashboard*') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/budget-approver/gl-payment-approvals"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('budget-approver/gl-payment-approvals*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('budget-approver/gl-payment-approvals*') }}">
+                task_alt
+            </span>
+
+            <span class="text-sm tracking-wide">For Approval</span>
         </a>
 
         @endif
@@ -682,6 +717,30 @@
             </span>
 
             <span class="text-sm tracking-wide">For Approval</span>
+        </a>
+
+        @endif
+
+        @if($role === 'finance_director')
+
+        <a href="/finance-director/dashboard"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('finance-director/dashboard*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('finance-director/dashboard*') }}">
+                dashboard
+            </span>
+
+            <span class="text-sm tracking-wide">Dashboard</span>
+        </a>
+
+        <a href="/finance-director/gl-payment-approvals"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('finance-director/gl-payment-approvals*') }}">
+
+            <span class="material-symbols-outlined {{ $iconClass('finance-director/gl-payment-approvals*') }}">
+                verified_user
+            </span>
+
+            <span class="text-sm tracking-wide">Final Approvals</span>
         </a>
 
         @endif

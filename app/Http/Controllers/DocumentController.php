@@ -70,7 +70,7 @@ class DocumentController extends Controller
 
         abort_unless($user && $document->application, 403);
 
-        if (in_array($user->role, ['admin', 'social_worker', 'approving_officer', 'budget_officer', 'accounting_officer', 'accounting_approver', 'cash_officer', 'cash_approver', 'gl_payment_processor'], true)) {
+        if (in_array($user->role, ['admin', 'social_worker', 'approving_officer', 'budget_officer', 'budget_approver', 'accounting_officer', 'accounting_approver', 'cash_officer', 'cash_approver', 'finance_director', 'gl_payment_processor'], true)) {
             return;
         }
 

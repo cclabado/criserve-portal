@@ -77,6 +77,10 @@ class NotificationController extends Controller
             return $fallback;
         }
 
+        if ($request->user()?->role !== 'admin' && $request->user()?->role !== 'finance_director' && str_starts_with($normalizedPath, 'finance-director/')) {
+            return $fallback;
+        }
+
         if ($request->user()?->role !== 'admin' && $request->user()?->role !== 'referral_institution' && str_starts_with($normalizedPath, 'referral-institution/')) {
             return $fallback;
         }
@@ -126,6 +130,10 @@ class NotificationController extends Controller
             return route('budget-officer.dashboard');
         }
 
+        if ($user->role === 'budget_approver') {
+            return route('budget-approver.dashboard');
+        }
+
         if ($user->role === 'accounting_officer') {
             return route('accounting-officer.dashboard');
         }
@@ -140,6 +148,10 @@ class NotificationController extends Controller
 
         if ($user->role === 'cash_approver') {
             return route('cash-approver.dashboard');
+        }
+
+        if ($user->role === 'finance_director') {
+            return route('finance-director.dashboard');
         }
 
         if ($user->role === 'referral_institution') {
