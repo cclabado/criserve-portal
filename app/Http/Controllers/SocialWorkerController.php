@@ -28,8 +28,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class SocialWorkerController extends Controller
 {
@@ -130,17 +128,9 @@ class SocialWorkerController extends Controller
             $search = $request->search;
 
             $query->where(function ($q) use ($search) {
-                $q->where('reference_no', 'like', "%$search%");
-                $q->orWhereHas('client', function ($c) use ($search) {
-                    $c->where('first_name', 'like', "%$search%")
-                        ->orWhere('last_name', 'like', "%$search%")
-                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
-                });
-                $q->orWhereHas('beneficiary', function ($b) use ($search) {
-                    $b->where('first_name', 'like', "%$search%")
-                        ->orWhere('last_name', 'like', "%$search%")
-                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
-                });
+                $q->where('reference_no', 'like', "%{$search}%");
+                $q->orWhereHas('client', fn ($clientQuery) => $this->applyPersonNameSearch($clientQuery, $search));
+                $q->orWhereHas('beneficiary', fn ($beneficiaryQuery) => $this->applyPersonNameSearch($beneficiaryQuery, $search));
             });
         }
 
@@ -208,16 +198,8 @@ class SocialWorkerController extends Controller
 
             $query->where(function ($q) use ($search) {
                 $q->where('reference_no', 'like', "%$search%")
-                    ->orWhereHas('client', function ($clientQuery) use ($search) {
-                        $clientQuery->where('first_name', 'like', "%$search%")
-                            ->orWhere('last_name', 'like', "%$search%")
-                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
-                    })
-                    ->orWhereHas('beneficiary', function ($beneficiaryQuery) use ($search) {
-                        $beneficiaryQuery->where('first_name', 'like', "%$search%")
-                            ->orWhere('last_name', 'like', "%$search%")
-                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
-                    });
+                    ->orWhereHas('client', fn ($clientQuery) => $this->applyPersonNameSearch($clientQuery, $search))
+                    ->orWhereHas('beneficiary', fn ($beneficiaryQuery) => $this->applyPersonNameSearch($beneficiaryQuery, $search));
             });
         }
 
@@ -260,16 +242,8 @@ class SocialWorkerController extends Controller
 
             $query->where(function ($q) use ($search) {
                 $q->where('reference_no', 'like', "%$search%")
-                    ->orWhereHas('client', function ($c) use ($search) {
-                        $c->where('first_name', 'like', "%$search%")
-                            ->orWhere('last_name', 'like', "%$search%")
-                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
-                    })
-                    ->orWhereHas('beneficiary', function ($b) use ($search) {
-                        $b->where('first_name', 'like', "%$search%")
-                            ->orWhere('last_name', 'like', "%$search%")
-                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
-                    });
+                    ->orWhereHas('client', fn ($clientQuery) => $this->applyPersonNameSearch($clientQuery, $search))
+                    ->orWhereHas('beneficiary', fn ($beneficiaryQuery) => $this->applyPersonNameSearch($beneficiaryQuery, $search));
             });
         }
 
@@ -286,71 +260,55 @@ class SocialWorkerController extends Controller
 
     protected function downloadMyCasesExcel($query)
     {
-        $filename = 'social-worker-my-cases-'.now()->format('Ymd-His').'.xlsx';
+        $filename = 'social-worker-my-cases-'.now()->format('Ymd-His').'.csv';
 
         return response()->streamDownload(function () use ($query) {
-            $spreadsheet = new Spreadsheet;
-            $sheet = $spreadsheet->getActiveSheet();
-            $sheet->setTitle('My Cases');
+            $handle = fopen('php://output', 'w');
 
-            $sheet->fromArray([
-                [
-                    'Reference No',
-                    'Created Date',
-                    'Updated Date',
-                    'Client',
-                    'Status',
-                    'Assistance Type',
-                    'Assistance Subtype',
-                    'Mode of Assistance',
-                    'Service Point',
-                    'Amount Needed',
-                    'Recommended Amount',
-                    'Final Amount',
-                ],
-            ], null, 'A1');
-
-            $row = 2;
+            fputcsv($handle, [
+                'Reference No',
+                'Created Date',
+                'Updated Date',
+                'Client',
+                'Status',
+                'Assistance Type',
+                'Assistance Subtype',
+                'Mode of Assistance',
+                'Service Point',
+                'Amount Needed',
+                'Recommended Amount',
+                'Final Amount',
+            ]);
 
             $query->with(['client', 'assistanceType', 'assistanceSubtype', 'modeOfAssistance'])
-                ->orderBy('created_at')
-                ->chunk(200, function ($applications) use ($sheet, &$row) {
+                ->orderBy('id')
+                ->chunkById(200, function ($applications) use ($handle) {
                     foreach ($applications as $application) {
-                        $sheet->fromArray([
-                            [
-                                $application->reference_no,
-                                optional($application->created_at)->format('Y-m-d H:i:s'),
-                                optional($application->updated_at)->format('Y-m-d H:i:s'),
-                                trim(implode(' ', array_filter([
-                                    $application->client?->first_name,
-                                    $application->client?->middle_name,
-                                    $application->client?->last_name,
-                                    $application->client?->extension_name,
-                                ]))),
-                                str_replace('_', ' ', (string) $application->status),
-                                $application->assistanceType?->name,
-                                $application->assistanceSubtype?->name,
-                                $application->modeOfAssistance?->name ?? $application->mode_of_assistance,
-                                $application->gis_visit_type,
-                                $application->amount_needed,
-                                $application->recommended_amount,
-                                $application->final_amount,
-                            ],
-                        ], null, 'A'.$row);
-
-                        $row++;
+                        fputcsv($handle, [
+                            $application->reference_no,
+                            optional($application->created_at)->format('Y-m-d H:i:s'),
+                            optional($application->updated_at)->format('Y-m-d H:i:s'),
+                            trim(implode(' ', array_filter([
+                                $application->client?->first_name,
+                                $application->client?->middle_name,
+                                $application->client?->last_name,
+                                $application->client?->extension_name,
+                            ]))),
+                            str_replace('_', ' ', (string) $application->status),
+                            $application->assistanceType?->name,
+                            $application->assistanceSubtype?->name,
+                            $application->modeOfAssistance?->name ?? $application->mode_of_assistance,
+                            $application->gis_visit_type,
+                            $application->amount_needed,
+                            $application->recommended_amount,
+                            $application->final_amount,
+                        ]);
                     }
-                });
+                }, 'applications.id');
 
-            foreach (range('A', 'L') as $column) {
-                $sheet->getColumnDimension($column)->setAutoSize(true);
-            }
-
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
-            $spreadsheet->disconnectWorksheets();
+            fclose($handle);
         }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 
@@ -380,6 +338,23 @@ class SocialWorkerController extends Controller
         $familyNetwork = $this->familyNetwork->buildApplicationNetwork($application);
 
         return view('social-worker.show', compact('application', 'householdMembers', 'familyNetwork'));
+    }
+
+    protected function applyPersonNameSearch($query, string $search): void
+    {
+        $tokens = array_values(array_filter(preg_split('/\s+/', trim($search)) ?: []));
+
+        $query->where(function ($nameQuery) use ($search, $tokens) {
+            $nameQuery->where('first_name', 'like', "%{$search}%")
+                ->orWhere('last_name', 'like', "%{$search}%");
+
+            foreach ($tokens as $token) {
+                $nameQuery->orWhere(function ($tokenQuery) use ($token) {
+                    $tokenQuery->where('first_name', 'like', "%{$token}%")
+                        ->orWhere('last_name', 'like', "%{$token}%");
+                });
+            }
+        });
     }
 
     public function assess($id)
@@ -1579,16 +1554,13 @@ class SocialWorkerController extends Controller
             return;
         }
 
-        $hasAnyMatchingProvider = ServiceProvider::query()
-            ->where('is_active', true)
-            ->get()
-            ->contains(fn (ServiceProvider $serviceProvider) => collect($serviceProvider->categories ?? [])->intersect($relevantCategories)->isNotEmpty());
+        $hasAnyMatchingProvider = ServiceProvider::hasAnyActiveProviderForCategories($relevantCategories);
 
         if (! $hasAnyMatchingProvider) {
             return;
         }
 
-        if (! collect($provider->categories ?? [])->intersect($relevantCategories)->isNotEmpty()) {
+        if (! $provider->matchesAnyCategory($relevantCategories)) {
             throw ValidationException::withMessages([
                 'service_provider_id' => 'The selected service provider does not match the required category for this assistance.',
             ]);

@@ -3,7 +3,7 @@
 @section('content')
 
 <main x-data="userManagement({
-        users: @js($users->map(fn ($user) => [
+        users: @js($users->getCollection()->map(fn ($user) => [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
@@ -77,7 +77,7 @@
     <section class="grid gap-4 md:grid-cols-3">
         <article class="mini-metric">
             <p class="mini-metric__label">Visible Users</p>
-            <p class="mini-metric__value">{{ number_format($users->count()) }}</p>
+            <p class="mini-metric__value">{{ number_format($users->total()) }}</p>
         </article>
 
         <article class="mini-metric">
@@ -183,6 +183,10 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+
+        <div class="mt-6">
+            {{ $users->links() }}
         </div>
     </section>
 

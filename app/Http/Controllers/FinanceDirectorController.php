@@ -7,6 +7,7 @@ use App\Models\Application;
 use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -21,28 +22,30 @@ class FinanceDirectorController extends Controller
 
     public function dashboard(): View
     {
-        $applications = $this->baseQuery()
-            ->latest('gl_cash_certified_at')
-            ->latest('updated_at')
-            ->get();
+        $baseQuery = $this->baseQuery(true);
+        $amountSql = Application::effectiveDisplayedAmountSql();
 
         return view('finance-director.dashboard', [
             'stats' => [
-                'total' => $applications->count(),
-                'with_remarks' => $applications->filter(fn (Application $application) => filled($application->gl_cash_certification_remarks))->count(),
-                'with_supporting_docs' => $applications->filter(fn (Application $application) => $application->documents->contains(fn ($document) => $document->document_type === 'Other Supporting Document'))->count(),
-                'total_amount' => $applications->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
+                'total' => (clone $baseQuery)->count(),
+                'with_remarks' => (clone $baseQuery)->whereNotNull('gl_cash_certification_remarks')->where('gl_cash_certification_remarks', '!=', '')->count(),
+                'with_supporting_docs' => (clone $baseQuery)->whereHas('documents', fn ($query) => $query->where('document_type', 'Other Supporting Document'))->count(),
+                'total_amount' => (float) ((clone $baseQuery)->sum(DB::raw($amountSql))),
             ],
-            'recentCases' => $applications->take(6)->values(),
-            'providerLoad' => $applications
-                ->groupBy(fn (Application $application) => $application->serviceProvider?->name ?? 'Unassigned Provider')
-                ->map(fn ($group, $providerName) => [
-                    'provider' => $providerName,
-                    'total' => $group->count(),
-                    'amount' => $group->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
+            'recentCases' => (clone $baseQuery)->latest('gl_cash_certified_at')->latest('updated_at')->take(6)->get(),
+            'providerLoad' => (clone $baseQuery)
+                ->selectRaw('service_provider_id')
+                ->selectRaw('COUNT(*) as total')
+                ->selectRaw('SUM('.$amountSql.') as amount')
+                ->groupBy('service_provider_id')
+                ->orderByDesc('total')
+                ->limit(5)
+                ->get()
+                ->map(fn ($row) => [
+                    'provider' => $row->serviceProvider?->name ?? 'Unassigned Provider',
+                    'total' => (int) $row->total,
+                    'amount' => (float) $row->amount,
                 ])
-                ->sortByDesc('total')
-                ->take(5)
                 ->values(),
         ]);
     }
@@ -52,9 +55,15 @@ class FinanceDirectorController extends Controller
         $filters = [
             'search' => trim((string) $request->input('search', '')),
             'fund_source' => trim((string) $request->input('fund_source', 'all')),
+            'payment_status' => trim((string) $request->input('payment_status', 'all')),
+            'scope' => trim((string) $request->input('scope', 'active')),
         ];
 
-        $query = $this->baseQuery();
+        $sourceQuery = $filters['scope'] === 'finished'
+            ? $this->finishedQuery()
+            : $this->baseQuery(false);
+
+        $query = clone $sourceQuery;
 
         if ($filters['search'] !== '') {
             $search = $filters['search'];
@@ -74,24 +83,35 @@ class FinanceDirectorController extends Controller
             $query->where('gl_finance_fund_source', $filters['fund_source']);
         }
 
+        if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
+            $query->where('gl_payment_status', $filters['payment_status']);
+        }
+
         $applications = $query
             ->latest('gl_cash_certified_at')
             ->latest('updated_at')
             ->paginate(10)
             ->withQueryString();
 
-        $fundSources = $this->baseQuery()
+        $fundSources = (clone $sourceQuery)
             ->whereNotNull('gl_finance_fund_source')
             ->distinct()
             ->orderBy('gl_finance_fund_source')
             ->pluck('gl_finance_fund_source');
 
-        $statsQuery = $this->baseQuery();
+        $paymentStatusOptions = (clone $sourceQuery)
+            ->whereNotNull('gl_payment_status')
+            ->distinct()
+            ->orderBy('gl_payment_status')
+            ->pluck('gl_payment_status');
+
+        $statsQuery = clone $sourceQuery;
 
         return view('finance-director.queue', [
             'applications' => $applications,
             'filters' => $filters,
             'fundSources' => $fundSources,
+            'paymentStatusOptions' => $paymentStatusOptions,
             'queueStats' => [
                 'total' => (clone $statsQuery)->count(),
                 'with_remarks' => (clone $statsQuery)
@@ -106,9 +126,15 @@ class FinanceDirectorController extends Controller
         ]);
     }
 
+    protected function finishedQuery()
+    {
+        return $this->baseQuery(true)
+            ->where('gl_finance_director_approved_by', auth()->id());
+    }
+
     public function show(Application $application): View
     {
-        $application = $this->baseQuery()
+        $application = $this->baseQuery(true, true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -127,7 +153,7 @@ class FinanceDirectorController extends Controller
 
     public function showOrs(Application $application)
     {
-        $application = $this->baseQuery()
+        $application = $this->baseQuery(true, true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -136,7 +162,7 @@ class FinanceDirectorController extends Controller
 
     public function showDv(Application $application)
     {
-        $application = $this->baseQuery()
+        $application = $this->baseQuery(true, true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -145,7 +171,7 @@ class FinanceDirectorController extends Controller
 
     public function showLddapAda(Application $application)
     {
-        $application = $this->baseQuery()
+        $application = $this->baseQuery(true, true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -223,9 +249,9 @@ class FinanceDirectorController extends Controller
                     : 'Finance director decision saved successfully.'));
     }
 
-    protected function baseQuery()
+    protected function baseQuery(bool $includeHandled = false, bool $withDocuments = false)
     {
-        return Application::with([
+        $relations = [
                 'client',
                 'beneficiary.relationshipData',
                 'assistanceType',
@@ -237,16 +263,29 @@ class FinanceDirectorController extends Controller
                 'assistanceRecommendations.modeOfAssistance',
                 'serviceProvider',
                 'modeOfAssistance',
-                'documents',
                 'glCashApprover',
                 'glCashCertifier',
                 'glFinanceDirectorApprover',
-            ])
+            ];
+
+        if ($withDocuments) {
+            $relations[] = 'documents';
+        }
+
+        return Application::with($relations)
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
-            ->where('gl_payment_status', 'for_processing_finance_director')
-            ->where(function ($statusQuery) {
-                $statusQuery->where('gl_finance_director_status', 'pending_approval')
-                    ->orWhereNull('gl_finance_director_status');
+            ->where(function ($rootQuery) use ($includeHandled) {
+                $rootQuery->where(function ($statusQuery) {
+                    $statusQuery->where('gl_payment_status', 'for_processing_finance_director')
+                        ->where(function ($inner) {
+                            $inner->where('gl_finance_director_status', 'pending_approval')
+                                ->orWhereNull('gl_finance_director_status');
+                        });
+                });
+
+                if ($includeHandled) {
+                    $rootQuery->orWhere('gl_finance_director_approved_by', auth()->id());
+                }
             });
     }
 }

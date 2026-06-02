@@ -167,6 +167,12 @@
             @forelse($batches as $batch)
                 @php
                     $summary = $batch->summary ?? [];
+                    $importTone = match ($batch->import_status) {
+                        'completed' => 'bg-emerald-100 text-emerald-700',
+                        'failed' => 'bg-rose-100 text-rose-700',
+                        'processing' => 'bg-sky-100 text-sky-700',
+                        default => 'bg-amber-100 text-amber-700',
+                    };
                 @endphp
                 <article class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                     <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -177,6 +183,9 @@
                             <p class="mt-1 text-sm text-slate-500">Source: {{ $batch->source_filename }}</p>
                             <p class="mt-1 text-sm font-semibold text-emerald-700">Fixed payout: PHP {{ number_format((float) $batch->payout_amount, 2) }}</p>
                             <div class="mt-3 flex flex-wrap items-center gap-2">
+                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-bold {{ $importTone }}">
+                                    Import: {{ str($batch->import_status)->headline() }}
+                                </span>
                                 <span class="inline-flex rounded-full px-3 py-1 text-xs font-bold {{ $batch->is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700' }}">
                                     {{ $batch->is_active ? 'Active for staff' : 'Inactive draft' }}
                                 </span>
@@ -186,6 +195,12 @@
                                     </span>
                                 @endif
                             </div>
+                            @if($batch->progress_message)
+                                <p class="mt-2 text-sm text-slate-500">{{ $batch->progress_message }}</p>
+                            @endif
+                            @if($batch->error_message)
+                                <p class="mt-2 text-sm font-semibold text-rose-700">{{ $batch->error_message }}</p>
+                            @endif
                         </div>
 
                         <div class="grid gap-2 sm:grid-cols-2">

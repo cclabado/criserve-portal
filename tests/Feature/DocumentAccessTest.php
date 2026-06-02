@@ -47,6 +47,32 @@ class DocumentAccessTest extends TestCase
             ->assertOk();
     }
 
+    public function test_documents_pending_or_failing_scan_are_not_accessible(): void
+    {
+        Storage::fake('public');
+
+        [$owner, $document] = $this->createClientDocument('owner@example.com');
+        Storage::disk('public')->put($document->file_path, 'fake-pdf-content');
+
+        $document->update([
+            'scan_status' => 'pending_scan',
+            'scan_message' => 'Queued for malware scan.',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('documents.show', $document))
+            ->assertStatus(423);
+
+        $document->update([
+            'scan_status' => 'failed_scan',
+            'scan_message' => 'Detected by scanner.',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('documents.show', $document))
+            ->assertStatus(422);
+    }
+
     protected function createClientDocument(string $email): array
     {
         $user = User::factory()->create([
@@ -71,6 +97,7 @@ class DocumentAccessTest extends TestCase
             'application_id' => $application->id,
             'file_name' => 'sample.pdf',
             'file_path' => 'documents/sample-'.$user->id.'.pdf',
+            'storage_disk' => 'public',
         ]);
 
         return [$user, $document];

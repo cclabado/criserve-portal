@@ -4,10 +4,11 @@ namespace App\Notifications;
 
 use App\Models\BulkDeduplicationRun;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class BulkDeduplicationFinishedNotification extends Notification
+class BulkDeduplicationFinishedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -19,6 +20,14 @@ class BulkDeduplicationFinishedNotification extends Notification
     public function via(object $notifiable): array
     {
         return ['database', 'mail'];
+    }
+
+    public function viaQueues(): array
+    {
+        return [
+            'database' => 'notifications',
+            'mail' => 'mail',
+        ];
     }
 
     public function toMail(object $notifiable): MailMessage

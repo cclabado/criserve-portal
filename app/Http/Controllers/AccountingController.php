@@ -7,6 +7,7 @@ use App\Models\Application;
 use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -21,110 +22,88 @@ class AccountingController extends Controller
 
     public function accountingOfficerDashboard(): View
     {
-        $applications = $this->accountingOfficerBaseQuery()
-            ->latest('gl_program_approved_at')
-            ->latest('updated_at')
-            ->get();
+        $baseQuery = $this->accountingOfficerBaseQuery(true);
+        $amountSql = Application::effectiveDisplayedAmountSql();
 
         return view('accounting.dashboard', [
             'workspace' => 'officer',
             'stats' => [
-                'total' => $applications->count(),
-                'with_processor_remarks' => $applications->filter(fn (Application $application) => filled($application->gl_budget_remarks))->count(),
-                'with_supporting_docs' => $applications->filter(fn (Application $application) => $application->documents->contains(fn ($document) => $document->document_type === 'Other Supporting Document'))->count(),
-                'total_amount' => $applications->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
+                'total' => (clone $baseQuery)->count(),
+                'with_processor_remarks' => (clone $baseQuery)->whereNotNull('gl_budget_remarks')->where('gl_budget_remarks', '!=', '')->count(),
+                'with_supporting_docs' => (clone $baseQuery)->whereHas('documents', fn ($query) => $query->where('document_type', 'Other Supporting Document'))->count(),
+                'total_amount' => (float) ((clone $baseQuery)->sum(DB::raw($amountSql))),
             ],
-            'recentCases' => $applications->take(6)->values(),
-            'providerLoad' => $applications
-                ->groupBy(fn (Application $application) => $application->serviceProvider?->name ?? 'Unassigned Provider')
-                ->map(fn ($group, $providerName) => [
-                    'provider' => $providerName,
-                    'total' => $group->count(),
-                    'amount' => $group->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
-                ])
-                ->sortByDesc('total')
-                ->take(5)
-                ->values(),
+            'recentCases' => (clone $baseQuery)->latest('gl_program_approved_at')->latest('updated_at')->take(6)->get(),
+            'providerLoad' => $this->providerLoadRows($baseQuery, 5),
         ]);
     }
 
     public function accountingApproverDashboard(): View
     {
-        $applications = $this->accountingApproverBaseQuery()
-            ->latest('gl_accounting_reviewed_at')
-            ->latest('updated_at')
-            ->get();
-        $cashCertificationApplications = $this->cashCertificationBaseQuery()
-            ->latest('gl_cash_approved_at')
-            ->latest('updated_at')
-            ->get();
+        $baseQuery = $this->accountingApproverBaseQuery(true);
+        $cashCertificationQuery = $this->cashCertificationBaseQuery(true);
+        $amountSql = Application::effectiveDisplayedAmountSql();
 
         return view('accounting.dashboard', [
             'workspace' => 'approver',
             'stats' => [
-                'total' => $applications->count(),
-                'with_accounting_remarks' => $applications->filter(fn (Application $application) => filled($application->gl_accounting_remarks))->count(),
-                'with_supporting_docs' => $applications->filter(fn (Application $application) => $application->documents->contains(fn ($document) => $document->document_type === 'Other Supporting Document'))->count(),
-                'total_amount' => $applications->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
-                'cash_certifications_total' => $cashCertificationApplications->count(),
+                'total' => (clone $baseQuery)->count(),
+                'with_accounting_remarks' => (clone $baseQuery)->whereNotNull('gl_accounting_remarks')->where('gl_accounting_remarks', '!=', '')->count(),
+                'with_supporting_docs' => (clone $baseQuery)->whereHas('documents', fn ($query) => $query->where('document_type', 'Other Supporting Document'))->count(),
+                'total_amount' => (float) ((clone $baseQuery)->sum(DB::raw($amountSql))),
+                'cash_certifications_total' => (clone $cashCertificationQuery)->count(),
             ],
-            'recentCases' => $applications->take(6)->values(),
-            'cashCertificationCases' => $cashCertificationApplications->take(6)->values(),
-            'providerLoad' => $applications
-                ->groupBy(fn (Application $application) => $application->serviceProvider?->name ?? 'Unassigned Provider')
-                ->map(fn ($group, $providerName) => [
-                    'provider' => $providerName,
-                    'total' => $group->count(),
-                    'amount' => $group->sum(fn (Application $application) => $application->effectiveDisplayedAmount()),
-                ])
-                ->sortByDesc('total')
-                ->take(5)
-                ->values(),
+            'recentCases' => (clone $baseQuery)->latest('gl_accounting_reviewed_at')->latest('updated_at')->take(6)->get(),
+            'cashCertificationCases' => (clone $cashCertificationQuery)->latest('gl_cash_approved_at')->latest('updated_at')->take(6)->get(),
+            'providerLoad' => $this->providerLoadRows($baseQuery, 5),
         ]);
     }
 
     public function accountingOfficerQueue(Request $request): View
     {
-        [$applications, $filters, $fundSources, $queueStats] = $this->buildQueuePayload($request, 'officer');
+        [$applications, $filters, $fundSources, $queueStats, $paymentStatusOptions] = $this->buildQueuePayload($request, 'officer');
 
         return view('accounting.queue', [
             'workspace' => 'officer',
             'applications' => $applications,
             'filters' => $filters,
             'fundSources' => $fundSources,
+            'paymentStatusOptions' => $paymentStatusOptions,
             'queueStats' => $queueStats,
         ]);
     }
 
     public function accountingApproverQueue(Request $request): View
     {
-        [$applications, $filters, $fundSources, $queueStats] = $this->buildQueuePayload($request, 'approver');
+        [$applications, $filters, $fundSources, $queueStats, $paymentStatusOptions] = $this->buildQueuePayload($request, 'approver');
 
         return view('accounting.queue', [
             'workspace' => 'approver',
             'applications' => $applications,
             'filters' => $filters,
             'fundSources' => $fundSources,
+            'paymentStatusOptions' => $paymentStatusOptions,
             'queueStats' => $queueStats,
         ]);
     }
 
     public function cashCertificationQueue(Request $request): View
     {
-        [$applications, $filters, $fundSources, $queueStats] = $this->buildQueuePayload($request, 'cash_certifier');
+        [$applications, $filters, $fundSources, $queueStats, $paymentStatusOptions] = $this->buildQueuePayload($request, 'cash_certifier');
 
         return view('accounting.queue', [
             'workspace' => 'cash_certifier',
             'applications' => $applications,
             'filters' => $filters,
             'fundSources' => $fundSources,
+            'paymentStatusOptions' => $paymentStatusOptions,
             'queueStats' => $queueStats,
         ]);
     }
 
     public function showAccountingOfficer(Application $application): View
     {
-        $application = $this->accountingOfficerBaseQuery()
+        $application = $this->accountingOfficerBaseQuery(true, true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -133,7 +112,7 @@ class AccountingController extends Controller
 
     public function showAccountingApprover(Application $application): View
     {
-        $application = $this->accountingApproverBaseQuery()
+        $application = $this->accountingApproverBaseQuery(true, true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -142,7 +121,7 @@ class AccountingController extends Controller
 
     public function showCashCertification(Application $application): View
     {
-        $application = $this->cashCertificationBaseQuery()
+        $application = $this->cashCertificationBaseQuery(true, true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -151,63 +130,63 @@ class AccountingController extends Controller
 
     public function showAccountingOfficerOrs(Application $application)
     {
-        $application = $this->accountingOfficerBaseQuery()->whereKey($application->id)->firstOrFail();
+        $application = $this->accountingOfficerBaseQuery(true, true)->whereKey($application->id)->firstOrFail();
 
         return $this->renderGlOrsView($application);
     }
 
     public function showAccountingOfficerDv(Application $application)
     {
-        $application = $this->accountingOfficerBaseQuery()->whereKey($application->id)->firstOrFail();
+        $application = $this->accountingOfficerBaseQuery(true, true)->whereKey($application->id)->firstOrFail();
 
         return $this->renderGlDvView($application);
     }
 
     public function showAccountingOfficerLddapAda(Application $application)
     {
-        $application = $this->accountingOfficerBaseQuery()->whereKey($application->id)->firstOrFail();
+        $application = $this->accountingOfficerBaseQuery(true, true)->whereKey($application->id)->firstOrFail();
 
         return $this->renderGlLddapAdaView($application);
     }
 
     public function showAccountingApproverOrs(Application $application)
     {
-        $application = $this->accountingApproverBaseQuery()->whereKey($application->id)->firstOrFail();
+        $application = $this->accountingApproverBaseQuery(true, true)->whereKey($application->id)->firstOrFail();
 
         return $this->renderGlOrsView($application);
     }
 
     public function showAccountingApproverDv(Application $application)
     {
-        $application = $this->accountingApproverBaseQuery()->whereKey($application->id)->firstOrFail();
+        $application = $this->accountingApproverBaseQuery(true, true)->whereKey($application->id)->firstOrFail();
 
         return $this->renderGlDvView($application);
     }
 
     public function showAccountingApproverLddapAda(Application $application)
     {
-        $application = $this->accountingApproverBaseQuery()->whereKey($application->id)->firstOrFail();
+        $application = $this->accountingApproverBaseQuery(true, true)->whereKey($application->id)->firstOrFail();
 
         return $this->renderGlLddapAdaView($application);
     }
 
     public function showCashCertificationOrs(Application $application)
     {
-        $application = $this->cashCertificationBaseQuery()->whereKey($application->id)->firstOrFail();
+        $application = $this->cashCertificationBaseQuery(true, true)->whereKey($application->id)->firstOrFail();
 
         return $this->renderGlOrsView($application);
     }
 
     public function showCashCertificationDv(Application $application)
     {
-        $application = $this->cashCertificationBaseQuery()->whereKey($application->id)->firstOrFail();
+        $application = $this->cashCertificationBaseQuery(true, true)->whereKey($application->id)->firstOrFail();
 
         return $this->renderGlDvView($application);
     }
 
     public function showCashCertificationLddapAda(Application $application)
     {
-        $application = $this->cashCertificationBaseQuery()->whereKey($application->id)->firstOrFail();
+        $application = $this->cashCertificationBaseQuery(true, true)->whereKey($application->id)->firstOrFail();
 
         return $this->renderGlLddapAdaView($application);
     }
@@ -405,13 +384,17 @@ class AccountingController extends Controller
         $filters = [
             'search' => trim((string) $request->input('search', '')),
             'fund_source' => trim((string) $request->input('fund_source', 'all')),
+            'payment_status' => trim((string) $request->input('payment_status', 'all')),
+            'scope' => trim((string) $request->input('scope', 'active')),
         ];
 
-        $query = match ($workspace) {
-            'officer' => $this->accountingOfficerBaseQuery(),
-            'cash_certifier' => $this->cashCertificationBaseQuery(),
-            default => $this->accountingApproverBaseQuery(),
+        $sourceQuery = match ($workspace) {
+            'officer' => $filters['scope'] === 'finished' ? $this->accountingOfficerFinishedQuery() : $this->accountingOfficerBaseQuery(false),
+            'cash_certifier' => $filters['scope'] === 'finished' ? $this->cashCertificationFinishedQuery() : $this->cashCertificationBaseQuery(false),
+            default => $filters['scope'] === 'finished' ? $this->accountingApproverFinishedQuery() : $this->accountingApproverBaseQuery(false),
         };
+
+        $query = clone $sourceQuery;
 
         if ($filters['search'] !== '') {
             $search = $filters['search'];
@@ -431,6 +414,10 @@ class AccountingController extends Controller
             $query->where('gl_finance_fund_source', $filters['fund_source']);
         }
 
+        if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
+            $query->where('gl_payment_status', $filters['payment_status']);
+        }
+
         $applications = $query
             ->latest(match ($workspace) {
                 'officer' => 'gl_program_approved_at',
@@ -441,23 +428,19 @@ class AccountingController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $fundSourceQuery = match ($workspace) {
-            'officer' => $this->accountingOfficerBaseQuery(),
-            'cash_certifier' => $this->cashCertificationBaseQuery(),
-            default => $this->accountingApproverBaseQuery(),
-        };
-
-        $fundSources = $fundSourceQuery
+        $fundSources = (clone $sourceQuery)
             ->whereNotNull('gl_finance_fund_source')
             ->distinct()
             ->orderBy('gl_finance_fund_source')
             ->pluck('gl_finance_fund_source');
 
-        $statsQuery = match ($workspace) {
-            'officer' => $this->accountingOfficerBaseQuery(),
-            'cash_certifier' => $this->cashCertificationBaseQuery(),
-            default => $this->accountingApproverBaseQuery(),
-        };
+        $paymentStatusOptions = (clone $sourceQuery)
+            ->whereNotNull('gl_payment_status')
+            ->distinct()
+            ->orderBy('gl_payment_status')
+            ->pluck('gl_payment_status');
+
+        $statsQuery = clone $sourceQuery;
 
         $queueStats = [
             'total' => (clone $statsQuery)->count(),
@@ -475,7 +458,25 @@ class AccountingController extends Controller
                 ->count(),
         ];
 
-        return [$applications, $filters, $fundSources, $queueStats];
+        return [$applications, $filters, $fundSources, $queueStats, $paymentStatusOptions];
+    }
+
+    protected function accountingOfficerFinishedQuery()
+    {
+        return $this->accountingOfficerBaseQuery(true)
+            ->where('gl_accounting_reviewed_by', auth()->id());
+    }
+
+    protected function accountingApproverFinishedQuery()
+    {
+        return $this->accountingApproverBaseQuery(true)
+            ->where('gl_accounting_approved_by', auth()->id());
+    }
+
+    protected function cashCertificationFinishedQuery()
+    {
+        return $this->cashCertificationBaseQuery(true)
+            ->where('gl_cash_certified_by', auth()->id());
     }
 
     protected function renderShowView(Application $application, string $workspace): View
@@ -494,38 +495,82 @@ class AccountingController extends Controller
         ]);
     }
 
-    protected function accountingOfficerBaseQuery()
+    protected function providerLoadRows($query, int $limit = 5)
     {
-        return $this->baseQuery()
-            ->whereIn('gl_payment_status', ['for_processing_accounting', 'for_compliance_accounting_officer'])
-            ->where(function ($statusQuery) {
-                $statusQuery->where('gl_accounting_review_status', 'pending_review')
-                    ->orWhereNull('gl_accounting_review_status');
+        $amountSql = Application::effectiveDisplayedAmountSql();
+
+        return (clone $query)
+            ->selectRaw('service_provider_id')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM('.$amountSql.') as amount')
+            ->groupBy('service_provider_id')
+            ->orderByDesc('total')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($row) => [
+                'provider' => $row->serviceProvider?->name ?? 'Unassigned Provider',
+                'total' => (int) $row->total,
+                'amount' => (float) $row->amount,
+            ])
+            ->values();
+    }
+
+    protected function accountingOfficerBaseQuery(bool $includeHandled = false, bool $withDocuments = false)
+    {
+        return $this->baseQuery($withDocuments)
+            ->where(function ($query) use ($includeHandled) {
+                $query->where(function ($statusQuery) {
+                    $statusQuery->whereIn('gl_payment_status', ['for_processing_accounting', 'for_compliance_accounting_officer'])
+                        ->where(function ($inner) {
+                            $inner->where('gl_accounting_review_status', 'pending_review')
+                                ->orWhereNull('gl_accounting_review_status');
+                        });
+                });
+
+                if ($includeHandled) {
+                    $query->orWhere('gl_accounting_reviewed_by', auth()->id());
+                }
             });
     }
 
-    protected function accountingApproverBaseQuery()
+    protected function accountingApproverBaseQuery(bool $includeHandled = false, bool $withDocuments = false)
     {
-        return $this->baseQuery()
-            ->where('gl_payment_status', 'for_processing_accounting')
-            ->where('gl_accounting_review_status', 'reviewed')
-            ->where('gl_accounting_approval_status', 'pending_approval');
-    }
+        return $this->baseQuery($withDocuments)
+            ->where(function ($query) use ($includeHandled) {
+                $query->where(function ($statusQuery) {
+                    $statusQuery->where('gl_payment_status', 'for_processing_accounting')
+                        ->where('gl_accounting_review_status', 'reviewed')
+                        ->where('gl_accounting_approval_status', 'pending_approval');
+                });
 
-    protected function cashCertificationBaseQuery()
-    {
-        return $this->baseQuery()
-            ->where('gl_payment_status', 'for_processing_accounting_certification')
-            ->where('gl_cash_approval_status', 'approved')
-            ->where(function ($statusQuery) {
-                $statusQuery->where('gl_cash_certification_status', 'pending_approval')
-                    ->orWhereNull('gl_cash_certification_status');
+                if ($includeHandled) {
+                    $query->orWhere('gl_accounting_approved_by', auth()->id());
+                }
             });
     }
 
-    protected function baseQuery()
+    protected function cashCertificationBaseQuery(bool $includeHandled = false, bool $withDocuments = false)
     {
-        return Application::with([
+        return $this->baseQuery($withDocuments)
+            ->where(function ($query) use ($includeHandled) {
+                $query->where(function ($statusQuery) {
+                    $statusQuery->where('gl_payment_status', 'for_processing_accounting_certification')
+                        ->where('gl_cash_approval_status', 'approved')
+                        ->where(function ($inner) {
+                            $inner->where('gl_cash_certification_status', 'pending_approval')
+                                ->orWhereNull('gl_cash_certification_status');
+                        });
+                });
+
+                if ($includeHandled) {
+                    $query->orWhere('gl_cash_certified_by', auth()->id());
+                }
+            });
+    }
+
+    protected function baseQuery(bool $withDocuments = false)
+    {
+        $relations = [
                 'client',
                 'beneficiary.relationshipData',
                 'assistanceType',
@@ -537,7 +582,6 @@ class AccountingController extends Controller
                 'assistanceRecommendations.modeOfAssistance',
                 'serviceProvider',
                 'modeOfAssistance',
-                'documents',
                 'glBudgetReviewer',
                 'glProgramApprover',
                 'glAccountingReviewer',
@@ -545,7 +589,13 @@ class AccountingController extends Controller
                 'glCashReviewer',
                 'glCashApprover',
                 'glCashCertifier',
-            ])
+            ];
+
+        if ($withDocuments) {
+            $relations[] = 'documents';
+        }
+
+        return Application::with($relations)
             ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'));
     }
 }

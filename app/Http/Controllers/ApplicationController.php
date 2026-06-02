@@ -242,26 +242,7 @@ class ApplicationController extends Controller
         }
 
         // ================= APPLICATION =================
-        $year = now()->format('Y');
-        $month = now()->format('m');
-
-        // get latest this month
-        $last = Application::whereYear('created_at', $year)
-            ->whereMonth('created_at', $month)
-            ->orderBy('id', 'desc')
-            ->first();
-
-        if ($last && $last->reference_no) {
-            $lastNumber = (int) substr($last->reference_no, -6);
-            $nextNumber = $lastNumber + 1;
-        } else {
-            $nextNumber = 1;
-        }
-
-        // format 000001
-        $sequence = str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
-
-        $referenceNo = "APP-$year-$month-$sequence";
+        $referenceNo = Application::nextReferenceNo();
 
         $application = Application::create([
             'client_id' => $client->id,
@@ -644,6 +625,9 @@ class ApplicationController extends Controller
 
     protected function storeApplicationDocuments(Application $application, Request $request, $requirements): void
     {
+        $documentRows = [];
+        $timestamp = now();
+
         foreach ($requirements as $requirement) {
             if (! $request->hasFile("required_documents.{$requirement->id}")) {
                 continue;
@@ -652,7 +636,7 @@ class ApplicationController extends Controller
             foreach ($request->file("required_documents.{$requirement->id}") as $file) {
                 $storedDocument = $this->documentSecurity->secureStore($file);
 
-                Document::create([
+                $documentRows[] = [
                     'application_id' => $application->id,
                     'document_requirement_id' => $requirement->id,
                     'document_type' => $requirement->name,
@@ -662,27 +646,49 @@ class ApplicationController extends Controller
                     'mime_type' => $storedDocument['mime_type'],
                     'file_size' => $storedDocument['file_size'],
                     'file_hash' => $storedDocument['file_hash'],
-                ]);
+                    'scan_status' => $storedDocument['scan_status'] ?? null,
+                    'scan_message' => $storedDocument['scan_message'] ?? null,
+                    'scan_requested_at' => $storedDocument['scan_requested_at'] ?? null,
+                    'scanned_at' => $storedDocument['scanned_at'] ?? null,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
             }
         }
 
-        if (! $request->hasFile('documents')) {
-            return;
+        if ($request->hasFile('documents')) {
+            foreach ($request->file('documents') as $file) {
+                $storedDocument = $this->documentSecurity->secureStore($file);
+
+                $documentRows[] = [
+                    'application_id' => $application->id,
+                    'document_type' => 'Additional Supporting Document',
+                    'file_name' => $storedDocument['file_name'],
+                    'file_path' => $storedDocument['path'],
+                    'storage_disk' => $storedDocument['disk'],
+                    'mime_type' => $storedDocument['mime_type'],
+                    'file_size' => $storedDocument['file_size'],
+                    'file_hash' => $storedDocument['file_hash'],
+                    'scan_status' => $storedDocument['scan_status'] ?? null,
+                    'scan_message' => $storedDocument['scan_message'] ?? null,
+                    'scan_requested_at' => $storedDocument['scan_requested_at'] ?? null,
+                    'scanned_at' => $storedDocument['scanned_at'] ?? null,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
         }
 
-        foreach ($request->file('documents') as $file) {
-            $storedDocument = $this->documentSecurity->secureStore($file);
+        if ($documentRows !== []) {
+            Document::query()->insert($documentRows);
 
-            Document::create([
-                'application_id' => $application->id,
-                'document_type' => 'Additional Supporting Document',
-                'file_name' => $storedDocument['file_name'],
-                'file_path' => $storedDocument['path'],
-                'storage_disk' => $storedDocument['disk'],
-                'mime_type' => $storedDocument['mime_type'],
-                'file_size' => $storedDocument['file_size'],
-                'file_hash' => $storedDocument['file_hash'],
-            ]);
+            $insertedDocumentIds = Document::query()
+                ->where('application_id', $application->id)
+                ->where('created_at', $timestamp)
+                ->whereIn('file_path', collect($documentRows)->pluck('file_path')->all())
+                ->pluck('id');
+
+            $this->documentSecurity->queueStoredDocumentScans($insertedDocumentIds);
         }
     }
 
@@ -801,16 +807,13 @@ class ApplicationController extends Controller
             return;
         }
 
-        $hasAnyMatchingProvider = ServiceProvider::query()
-            ->where('is_active', true)
-            ->get()
-            ->contains(fn (ServiceProvider $serviceProvider) => collect($serviceProvider->categories ?? [])->intersect($relevantCategories)->isNotEmpty());
+        $hasAnyMatchingProvider = ServiceProvider::hasAnyActiveProviderForCategories($relevantCategories);
 
         if (! $hasAnyMatchingProvider) {
             return;
         }
 
-        if (! collect($provider->categories ?? [])->intersect($relevantCategories)->isNotEmpty()) {
+        if (! $provider->matchesAnyCategory($relevantCategories)) {
             throw ValidationException::withMessages([
                 'service_provider_id' => 'The selected service provider does not match the required category for this assistance.',
             ]);

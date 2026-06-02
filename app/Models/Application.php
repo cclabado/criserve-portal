@@ -3,10 +3,46 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class Application extends Model
 {
+    public static function nextReferenceNo(): string
+    {
+        return DB::transaction(function () {
+            $now = now();
+            $year = (int) $now->format('Y');
+            $month = (int) $now->format('m');
+
+            $counter = ApplicationReferenceCounter::query()
+                ->where('reference_year', $year)
+                ->where('reference_month', $month)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $counter) {
+                $counter = ApplicationReferenceCounter::create([
+                    'reference_year' => $year,
+                    'reference_month' => $month,
+                    'last_number' => 0,
+                ]);
+
+                $counter->refresh();
+            }
+
+            $counter->increment('last_number');
+            $counter->refresh();
+
+            return sprintf('APP-%04d-%02d-%06d', $year, $month, (int) $counter->last_number);
+        }, 3);
+    }
+
+    public static function effectiveDisplayedAmountSql(string $table = 'applications'): string
+    {
+        return "COALESCE({$table}.gl_actual_utilized_amount, {$table}.final_amount, {$table}.recommended_amount, {$table}.amount_needed, 0)";
+    }
+
     protected $fillable = [
         'client_id',
         'beneficiary_profile_id',

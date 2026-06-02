@@ -312,7 +312,8 @@ class AdminController extends Controller
                 $query->where('role', $request->role);
             })
             ->orderBy('name')
-            ->get();
+            ->paginate(25)
+            ->withQueryString();
 
         $roles = $this->roles;
 
@@ -332,6 +333,7 @@ class AdminController extends Controller
     public function auditLogs(Request $request): View
     {
         $search = trim((string) $request->input('search', ''));
+        $filterOptions = $this->auditLogFilterOptions();
 
         $logs = AuditLog::query()
             ->with('user:id,name,email,role')
@@ -364,9 +366,9 @@ class AdminController extends Controller
                 'date_from' => (string) $request->input('date_from', ''),
                 'date_to' => (string) $request->input('date_to', ''),
             ],
-            'actions' => AuditLog::query()->select('action')->distinct()->orderBy('action')->pluck('action'),
-            'auditableTypes' => AuditLog::query()->select('auditable_type')->whereNotNull('auditable_type')->distinct()->orderBy('auditable_type')->pluck('auditable_type'),
-            'users' => User::query()->whereIn('id', AuditLog::query()->select('user_id')->whereNotNull('user_id'))->orderBy('name')->get(['id', 'name', 'email']),
+            'actions' => $filterOptions['actions'],
+            'auditableTypes' => $filterOptions['auditable_types'],
+            'users' => $filterOptions['users'],
         ]);
     }
 
@@ -1282,8 +1284,8 @@ class AdminController extends Controller
             ]);
 
             $query->with(['client', 'assistanceType', 'assistanceSubtype', 'modeOfAssistance', 'socialWorker', 'approvingOfficer'])
-                ->orderBy('created_at')
-                ->chunk(200, function ($applications) use ($handle) {
+                ->orderBy('applications.id')
+                ->chunkById(200, function ($applications) use ($handle) {
                     foreach ($applications as $application) {
                         fputcsv($handle, [
                             $application->reference_no,
@@ -1304,12 +1306,35 @@ class AdminController extends Controller
                             $application->approvingOfficer?->name,
                         ]);
                     }
-                });
+                }, 'applications.id');
 
             fclose($handle);
         }, $filename, [
             'Content-Type' => 'text/csv',
         ]);
+    }
+
+    protected function auditLogFilterOptions(): array
+    {
+        return Cache::remember('admin.audit-log-filter-options', now()->addMinutes(10), function () {
+            return [
+                'actions' => AuditLog::query()
+                    ->select('action')
+                    ->distinct()
+                    ->orderBy('action')
+                    ->pluck('action'),
+                'auditable_types' => AuditLog::query()
+                    ->select('auditable_type')
+                    ->whereNotNull('auditable_type')
+                    ->distinct()
+                    ->orderBy('auditable_type')
+                    ->pluck('auditable_type'),
+                'users' => User::query()
+                    ->whereIn('id', AuditLog::query()->select('user_id')->whereNotNull('user_id'))
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'email']),
+            ];
+        });
     }
 
     protected function libraryDefinitions(): array

@@ -2,6 +2,10 @@
 
 @section('content')
 
+@php
+    $isFinishedScope = ($filters['scope'] ?? 'active') === 'finished';
+@endphp
+
 <main class="space-y-6">
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -37,8 +41,22 @@
         </div>
     @endif
 
+    <section class="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div class="flex flex-wrap gap-3">
+            <a href="{{ route('gl-payment-processor.queue', ['scope' => 'active']) }}"
+               class="inline-flex items-center rounded-2xl px-4 py-2 text-sm font-semibold {{ $isFinishedScope ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' : 'bg-[#234E70] text-white' }}">
+                For Review
+            </a>
+            <a href="{{ route('gl-payment-processor.queue', ['scope' => 'finished']) }}"
+               class="inline-flex items-center rounded-2xl px-4 py-2 text-sm font-semibold {{ $isFinishedScope ? 'bg-[#234E70] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200' }}">
+                Completed
+            </a>
+        </div>
+    </section>
+
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <form method="GET" action="{{ route('gl-payment-processor.queue') }}" class="grid gap-4 md:grid-cols-3">
+            <input type="hidden" name="scope" value="{{ $filters['scope'] ?? 'active' }}">
             <div>
                 <label class="label">Search</label>
                 <input type="text" name="search" class="input" value="{{ $filters['search'] }}" placeholder="Reference, client, provider">
@@ -69,6 +87,10 @@
             @forelse($applications as $application)
                 @php
                     $latestStatement = $application->documents->where('document_type', 'Updated Statement of Account')->sortByDesc('created_at')->first();
+                    $isHistoricalRow = (
+                        ((int) ($application->gl_soa_reviewed_by ?? 0) === (int) auth()->id() && ! is_null($application->gl_soa_reviewed_at))
+                        || ((int) ($application->gl_budget_reviewed_by ?? 0) === (int) auth()->id() && ! is_null($application->gl_budget_reviewed_at))
+                    ) && ! in_array($application->gl_payment_status, ['for_compliance_service_provider', 'for_compliance_gl_processor'], true);
                     $paymentStatusLabel = match ($application->gl_payment_status) {
                         'paid' => 'Paid',
                         'for_compliance_service_provider' => 'For Compliance (Service Provider)',
@@ -111,7 +133,12 @@
                             <div>
                                 <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{{ $application->reference_no }}</p>
                                 <h3 class="mt-2 text-xl font-bold text-slate-900">{{ trim(($application->client?->first_name ?? '').' '.($application->client?->last_name ?? '')) ?: '-' }}</h3>
-                                <p class="mt-1 text-sm text-slate-500">{{ $application->serviceProvider?->name ?? 'No service provider assigned' }}</p>
+                                <p class="mt-1 text-sm text-slate-500">
+                                {{ $application->serviceProvider?->name ?? 'No service provider assigned' }}
+                                    @if($isFinishedScope || $isHistoricalRow)
+                                        <span class="ml-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Handled</span>
+                                    @endif
+                                </p>
                             </div>
 
                             <div class="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-3">
@@ -148,7 +175,7 @@
                         <div class="flex flex-wrap gap-3">
                             <a href="{{ route('gl-payment-processor.show', $application->id) }}"
                                class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#18384f]">
-                                Review Case
+                                {{ $isFinishedScope || $isHistoricalRow ? 'View Case' : 'Review Case' }}
                             </a>
                         </div>
                     </div>
@@ -159,6 +186,12 @@
                 </div>
             @endforelse
         </div>
+
+        @if(method_exists($applications, 'links'))
+            <div class="mt-6">
+                {{ $applications->links() }}
+            </div>
+        @endif
     </section>
 </main>
 

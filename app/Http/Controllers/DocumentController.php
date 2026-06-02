@@ -69,6 +69,8 @@ class DocumentController extends Controller
         $document->loadMissing('application');
 
         abort_unless($user && $document->application, 403);
+        abort_if($document->isScanPending(), 423, 'This document is still being scanned and is not available yet.');
+        abort_if($document->isScanFailed(), 422, 'This document failed the security scan and is not available.');
 
         if (in_array($user->role, ['admin', 'social_worker', 'approving_officer', 'budget_officer', 'budget_approver', 'accounting_officer', 'accounting_approver', 'cash_officer', 'cash_approver', 'finance_director', 'gl_payment_processor'], true)) {
             return;

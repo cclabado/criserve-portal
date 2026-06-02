@@ -68,7 +68,7 @@
                 name="export"
                 value="xlsx"
                 class="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-emerald-100 px-5 py-2 text-sm font-semibold text-emerald-800">
-            Export Excel
+            Export CSV
         </button>
     </div>
 </form>

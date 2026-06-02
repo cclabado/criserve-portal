@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\PayoutBatch;
+use App\Support\ReadableStorageFile;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
@@ -15,61 +16,82 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as SpreadsheetDate;
 
 class PayoutImportService
 {
-    public function importBatch(UploadedFile $file, User $user, array $attributes = []): PayoutBatch
+    public function queueBatch(UploadedFile $file, User $user, array $attributes = []): PayoutBatch
     {
-        $storedFile = $file->store('payout-uploads', 'local');
-        $rows = $this->readSpreadsheet(Storage::disk('local')->path($storedFile));
-        $cleanRows = collect($rows)
-            ->map(fn (array $row, int $index) => $this->mapRow($row, $index + 1, (string) ($attributes['sector_label'] ?? '')))
-            ->filter(fn (array $row) => $row['full_name'] !== '')
-            ->values();
+        $uploadDisk = (string) config('security.workflow_uploads.disk', 'local');
+        $storedFile = $file->store('payout-uploads', $uploadDisk);
 
-        if ($cleanRows->isEmpty()) {
-            throw new \RuntimeException('No valid payout rows were found in the uploaded file.');
+        return PayoutBatch::create([
+            'user_id' => $user->id,
+            'bulk_deduplication_run_id' => $attributes['bulk_deduplication_run_id'] ?? null,
+            'access_role' => $user->role,
+            'batch_name' => trim((string) $attributes['batch_name']),
+            'sector_label' => trim((string) $attributes['sector_label']),
+            'venue' => trim((string) $attributes['venue']),
+            'payout_amount' => $attributes['payout_amount'],
+            'payout_date' => $attributes['payout_date'] ?? null,
+            'source_filename' => $file->getClientOriginalName(),
+            'upload_disk' => $uploadDisk,
+            'upload_path' => $storedFile,
+            'import_status' => 'queued',
+            'processed_rows' => 0,
+            'progress_message' => 'Queued for payout import.',
+            'notes' => filled($attributes['notes'] ?? null) ? trim((string) $attributes['notes']) : null,
+            'summary' => [
+                'total_entries' => 0,
+                'pending_count' => 0,
+                'paid_count' => 0,
+                'absent_count' => 0,
+                'deferred_count' => 0,
+            ],
+        ]);
+    }
+
+    public function processBatch(PayoutBatch $batch): PayoutBatch
+    {
+        if ($batch->import_status === 'completed' && $batch->entries()->exists()) {
+            return $batch;
         }
 
-        return DB::transaction(function () use ($file, $user, $attributes, $storedFile, $cleanRows) {
-            $batch = PayoutBatch::create([
-                'user_id' => $user->id,
-                'bulk_deduplication_run_id' => $attributes['bulk_deduplication_run_id'] ?? null,
-                'access_role' => $user->role,
-                'batch_name' => trim((string) $attributes['batch_name']),
-                'sector_label' => trim((string) $attributes['sector_label']),
-                'venue' => trim((string) $attributes['venue']),
-                'payout_amount' => $attributes['payout_amount'],
-                'payout_date' => $attributes['payout_date'] ?? null,
-                'source_filename' => $file->getClientOriginalName(),
-                'upload_disk' => 'local',
-                'upload_path' => $storedFile,
-                'notes' => filled($attributes['notes'] ?? null) ? trim((string) $attributes['notes']) : null,
-                'summary' => [
-                    'total_entries' => $cleanRows->count(),
-                    'pending_count' => $cleanRows->count(),
-                    'paid_count' => 0,
-                    'absent_count' => 0,
-                    'deferred_count' => 0,
-                ],
-            ]);
+        $batch->forceFill([
+            'import_status' => 'processing',
+            'processed_rows' => 0,
+            'progress_message' => 'Reading payout spreadsheet...',
+            'error_message' => null,
+            'import_started_at' => now(),
+            'import_completed_at' => null,
+            'import_failed_at' => null,
+        ])->save();
 
-            $batch->entries()->createMany($cleanRows->map(fn (array $row) => [
-                'sequence_no' => $row['sequence_no'],
-                'reference_no' => $row['reference_no'],
-                'full_name' => $row['full_name'],
-                'last_name' => $row['last_name'],
-                'first_name' => $row['first_name'],
-                'middle_name' => $row['middle_name'],
-                'extension_name' => $row['extension_name'],
-                'birthdate' => $row['birthdate'],
-                'sector_label' => $row['sector_label'],
-                'assistance_subtype' => $row['assistance_subtype'],
-                'assistance_detail' => $row['assistance_detail'],
-                'payout_status' => 'pending',
-                'remarks' => $row['remarks'],
-                'raw_row' => $row['raw_row'],
-            ])->all());
+        $storedFile = $this->resolveStoredFile($batch->upload_disk, $batch->upload_path);
 
-            return $batch->loadCount('entries');
-        });
+        try {
+            $summary = $this->importRowsIntoBatch($batch, $storedFile->path());
+        } finally {
+            $storedFile->cleanup();
+        }
+
+        $batch->forceFill([
+            'summary' => $summary,
+            'import_status' => 'completed',
+            'progress_message' => 'Payout batch import completed.',
+            'error_message' => null,
+            'processed_rows' => $summary['total_entries'],
+            'import_completed_at' => now(),
+            'import_failed_at' => null,
+        ])->save();
+
+        return $batch->fresh(['user']);
+    }
+
+    public function markBatchFailed(PayoutBatch $batch, string $message): void
+    {
+        $batch->forceFill([
+            'import_status' => 'failed',
+            'progress_message' => 'Payout batch import failed.',
+            'error_message' => Str::limit($message, 1000),
+            'import_failed_at' => now(),
+        ])->save();
     }
 
     public function recomputeSummary(PayoutBatch $batch): array
@@ -91,46 +113,143 @@ class PayoutImportService
         ];
     }
 
-    protected function readSpreadsheet(string $path): array
+    protected function importRowsIntoBatch(PayoutBatch $batch, string $path): array
     {
-        $spreadsheet = IOFactory::load($path);
-        $sheet = $spreadsheet->getSheet(0);
-        $highestRow = $sheet->getHighestDataRow();
-        $highestColumnIndex = Coordinate::columnIndexFromString($sheet->getHighestDataColumn());
+        $summary = [
+            'total_entries' => 0,
+            'pending_count' => 0,
+            'paid_count' => 0,
+            'absent_count' => 0,
+            'deferred_count' => 0,
+        ];
 
-        $headers = [];
-        $rows = [];
+        DB::transaction(function () use ($batch, $path, &$summary) {
+            $batch->entries()->delete();
 
-        for ($column = 1; $column <= $highestColumnIndex; $column++) {
-            $headers[$column] = $this->normalizeHeader((string) $sheet->getCell([$column, 1])->getValue());
+            $sequenceNo = 0;
+            $buffer = [];
+            $timestamp = now();
+
+            $this->streamSpreadsheetRows($path, function (array $row, int $rowNumber) use ($batch, &$sequenceNo, &$buffer, &$summary, $timestamp) {
+                $mapped = $this->mapRow($row, $sequenceNo + 1, (string) $batch->sector_label);
+
+                if ($mapped['full_name'] === '') {
+                    return;
+                }
+
+                $sequenceNo++;
+                $mapped['sequence_no'] = $sequenceNo;
+
+                $buffer[] = [
+                    'payout_batch_id' => $batch->id,
+                    'sequence_no' => $mapped['sequence_no'],
+                    'reference_no' => $mapped['reference_no'],
+                    'full_name' => $mapped['full_name'],
+                    'last_name' => $mapped['last_name'],
+                    'first_name' => $mapped['first_name'],
+                    'middle_name' => $mapped['middle_name'],
+                    'extension_name' => $mapped['extension_name'],
+                    'birthdate' => $mapped['birthdate'],
+                    'sector_label' => $mapped['sector_label'],
+                    'assistance_subtype' => $mapped['assistance_subtype'],
+                    'assistance_detail' => $mapped['assistance_detail'],
+                    'payout_status' => 'pending',
+                    'remarks' => $mapped['remarks'],
+                    'raw_row' => json_encode($mapped['raw_row'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+
+                $summary['total_entries']++;
+                $summary['pending_count']++;
+
+                if (count($buffer) >= 500) {
+                    $this->flushEntryBuffer($buffer);
+                    $this->updateBatchProgress($batch, $summary['total_entries']);
+                }
+            });
+
+            $this->flushEntryBuffer($buffer);
+            $this->updateBatchProgress($batch, $summary['total_entries']);
+        });
+
+        if ($summary['total_entries'] === 0) {
+            throw new \RuntimeException('No valid payout rows were found in the uploaded file.');
         }
 
-        for ($row = 2; $row <= $highestRow; $row++) {
-            $item = [];
-            $hasData = false;
+        return $summary;
+    }
+
+    protected function flushEntryBuffer(array &$buffer): void
+    {
+        if ($buffer === []) {
+            return;
+        }
+
+        DB::table('payout_entries')->insert($buffer);
+        $buffer = [];
+    }
+
+    protected function updateBatchProgress(PayoutBatch $batch, int $processedRows): void
+    {
+        $batch->forceFill([
+            'processed_rows' => $processedRows,
+            'progress_message' => $processedRows === 0
+                ? 'Reading payout spreadsheet...'
+                : 'Imported '.$processedRows.' payout rows...',
+        ])->save();
+    }
+
+    protected function streamSpreadsheetRows(string $path, callable $onRow): void
+    {
+        $reader = IOFactory::createReaderForFile($path);
+        $reader->setReadDataOnly(true);
+        $spreadsheet = $reader->load($path);
+
+        try {
+            $sheet = $spreadsheet->getSheet(0);
+            $highestRow = $sheet->getHighestDataRow();
+            $highestColumnIndex = Coordinate::columnIndexFromString($sheet->getHighestDataColumn());
+
+            $headers = [];
 
             for ($column = 1; $column <= $highestColumnIndex; $column++) {
-                $header = $headers[$column] ?? null;
-
-                if (! $header) {
-                    continue;
-                }
-
-                $value = $sheet->getCell([$column, $row])->getValue();
-
-                if ($value !== null && $value !== '') {
-                    $hasData = true;
-                }
-
-                $item[$header] = $this->normalizeCellValue($value, $header);
+                $headers[$column] = $this->normalizeHeader((string) $sheet->getCell([$column, 1])->getValue());
             }
 
-            if ($hasData) {
-                $rows[] = $item;
+            for ($row = 2; $row <= $highestRow; $row++) {
+                $item = [];
+                $hasData = false;
+
+                for ($column = 1; $column <= $highestColumnIndex; $column++) {
+                    $header = $headers[$column] ?? null;
+
+                    if (! $header) {
+                        continue;
+                    }
+
+                    $value = $sheet->getCell([$column, $row])->getValue();
+
+                    if ($value !== null && $value !== '') {
+                        $hasData = true;
+                    }
+
+                    $item[$header] = $this->normalizeCellValue($value, $header);
+                }
+
+                if ($hasData) {
+                    $onRow($item, $row);
+                }
             }
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
         }
+    }
 
-        return $rows;
+    protected function resolveStoredFile(string $disk, string $path): ReadableStorageFile
+    {
+        return ReadableStorageFile::fromDisk($disk, $path, 'The uploaded payout file could not be found.');
     }
 
     protected function normalizeHeader(string $header): ?string

@@ -87,7 +87,7 @@
         <div class="table-shell mt-6">
             @forelse($applications as $application)
                 @php
-                    $hasUpdatedStatement = $application->documents->contains(fn ($document) => $document->document_type === 'Updated Statement of Account');
+                    $hasUpdatedStatement = (bool) ($application->has_updated_statement ?? false);
                     $paymentStatusLabel = match ($application->gl_payment_status) {
                         'paid' => 'Paid',
                         'for_compliance_service_provider' => 'For Compliance (Service Provider)',

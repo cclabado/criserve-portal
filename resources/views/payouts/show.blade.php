@@ -3,6 +3,14 @@
 @section('content')
 
 <main class="space-y-6">
+    @php
+        $importTone = match ($batch->import_status) {
+            'completed' => 'border-emerald-200 bg-emerald-50 text-emerald-800',
+            'failed' => 'border-rose-200 bg-rose-50 text-rose-800',
+            'processing' => 'border-sky-200 bg-sky-50 text-sky-800',
+            default => 'border-amber-200 bg-amber-50 text-amber-800',
+        };
+    @endphp
     <section class="rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(219,234,254,.75),_transparent_35%),linear-gradient(135deg,_#ffffff_0%,_#f8fafc_100%)] p-6 shadow-sm">
         <div class="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div>
@@ -11,10 +19,21 @@
                 <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
                     Venue: {{ $batch->venue }}. Fixed payout amount: PHP {{ number_format((float) $batch->payout_amount, 2) }}. Source file: {{ $batch->source_filename }}. Use this workspace during the payout event to search a beneficiary, mark them paid, and attach photo proof.
                 </p>
+                <div class="mt-4 flex flex-wrap items-center gap-3">
+                    <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] {{ $importTone }}">
+                        Import {{ str($batch->import_status)->headline() }}
+                    </span>
+                    @if($batch->progress_message)
+                        <span class="text-sm text-slate-600">{{ $batch->progress_message }}</span>
+                    @endif
+                </div>
+                @if($batch->error_message)
+                    <p class="mt-2 text-sm font-semibold text-rose-700">{{ $batch->error_message }}</p>
+                @endif
             </div>
 
             <div class="flex flex-wrap gap-3">
-                @if($canGenerateReport)
+                @if($canGenerateReport && $batch->isImportComplete())
                     <a href="{{ route($reportRouteName, $batch) }}"
                        class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#18384f]">
                         Generate Report
@@ -69,6 +88,23 @@
         </article>
     </section>
 
+    @if(! $batch->isImportComplete())
+        <section class="rounded-2xl border {{ $batch->import_status === 'failed' ? 'border-rose-200 bg-rose-50' : 'border-sky-200 bg-sky-50' }} px-5 py-4 text-sm {{ $batch->import_status === 'failed' ? 'text-rose-800' : 'text-sky-800' }}">
+            <p class="font-semibold">
+                @if($batch->import_status === 'failed')
+                    This payout batch import failed.
+                @elseif($batch->import_status === 'processing')
+                    This payout batch is still being processed in the background.
+                @else
+                    This payout batch is queued for background import.
+                @endif
+            </p>
+            <p class="mt-1">
+                {{ $batch->progress_message ?: 'Refresh this page in a moment to load the beneficiaries once the import completes.' }}
+            </p>
+        </section>
+    @endif
+
     <section class="panel-card">
         <form method="GET"
               x-ref="searchForm"
@@ -104,7 +140,7 @@
     <section class="panel-card">
         @if($entries->isEmpty())
             <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
-                No payout records match the current filters.
+                {{ $batch->isImportComplete() ? 'No payout records match the current filters.' : 'Beneficiary rows will appear here after the payout import completes.' }}
             </div>
         @else
             <div class="table-shell">

@@ -2,17 +2,29 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessPayoutBatchImport;
 use App\Models\PayoutBatch;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class PayoutModuleTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['queue.default' => 'sync']);
+
+        $this->withoutMiddleware(PreventRequestForgery::class);
+    }
 
     public function test_admin_can_create_payout_batch_from_uploaded_clean_list(): void
     {
@@ -40,9 +52,43 @@ class PayoutModuleTest extends TestCase
         $response->assertRedirect(route('admin.payouts.show', $batch));
         $this->assertNotNull($batch);
         $this->assertSame('Typhoon Relief Batch A', $batch->batch_name);
+        $this->assertSame('completed', $batch->import_status);
         $this->assertSame('1500.00', number_format((float) $batch->payout_amount, 2, '.', ''));
         $this->assertSame(2, $batch->entries()->count());
         $this->assertSame(2, $batch->summary['pending_count']);
+    }
+
+    public function test_payout_batch_import_job_is_dispatched_when_queue_is_faked(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $file = UploadedFile::fake()->createWithContent('clean-list.csv', implode("\n", [
+            'reference_no,last_name,first_name,birthdate,assistance_subtype,remarks',
+            'REF-001,Dela Cruz,Juana,1990-01-01,Typhoon Aid,Verified in clean list',
+        ]));
+
+        $response = $this->actingAs($admin)->post(route('admin.payouts.store'), [
+            'batch_name' => 'Queued Payout Import',
+            'sector_label' => 'Typhoon Affected',
+            'venue' => 'City Gymnasium',
+            'payout_amount' => '1500.00',
+            'payout_date' => '2026-05-12',
+            'spreadsheet' => $file,
+        ]);
+
+        $batch = PayoutBatch::first();
+
+        $response->assertRedirect(route('admin.payouts.show', $batch));
+        $this->assertNotNull($batch);
+        $this->assertSame('queued', $batch->import_status);
+        $this->assertSame(0, $batch->entries()->count());
+
+        Queue::assertPushed(ProcessPayoutBatchImport::class, function (ProcessPayoutBatchImport $job) use ($batch) {
+            return $job->batchId === $batch->id;
+        });
     }
 
     public function test_reporting_officer_can_update_payout_status(): void
@@ -60,6 +106,7 @@ class PayoutModuleTest extends TestCase
             'source_filename' => 'drivers-clean.xlsx',
             'upload_disk' => 'local',
             'upload_path' => 'payout-uploads/drivers-clean.xlsx',
+            'import_status' => 'completed',
             'summary' => [
                 'total_entries' => 1,
                 'pending_count' => 1,
@@ -118,6 +165,7 @@ class PayoutModuleTest extends TestCase
             'source_filename' => 'fire-victims-clean.xlsx',
             'upload_disk' => 'local',
             'upload_path' => 'payout-uploads/fire-victims-clean.xlsx',
+            'import_status' => 'completed',
             'summary' => [
                 'total_entries' => 0,
                 'pending_count' => 0,
@@ -174,6 +222,7 @@ class PayoutModuleTest extends TestCase
             'source_filename' => 'drivers-clean.xlsx',
             'upload_disk' => 'local',
             'upload_path' => 'payout-uploads/drivers-clean.xlsx',
+            'import_status' => 'completed',
             'summary' => [
                 'total_entries' => 0,
                 'pending_count' => 0,
@@ -233,6 +282,7 @@ class PayoutModuleTest extends TestCase
             'source_filename' => 'shared-clean.xlsx',
             'upload_disk' => 'local',
             'upload_path' => 'payout-uploads/shared-clean.xlsx',
+            'import_status' => 'completed',
             'summary' => [
                 'total_entries' => 1,
                 'pending_count' => 1,
@@ -288,6 +338,7 @@ class PayoutModuleTest extends TestCase
             'source_filename' => 'typhoon-clean.xlsx',
             'upload_disk' => 'local',
             'upload_path' => 'payout-uploads/typhoon-clean.xlsx',
+            'import_status' => 'completed',
             'summary' => [
                 'total_entries' => 1,
                 'pending_count' => 1,
@@ -307,10 +358,10 @@ class PayoutModuleTest extends TestCase
 
         $adminResponse = $this->actingAs($admin)->get(route('admin.payouts.report', $batch));
         $adminResponse->assertOk();
-        $adminResponse->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $adminResponse->assertHeader('content-type', 'text/csv; charset=UTF-8');
 
         $officerResponse = $this->actingAs($officer)->get(route('reporting.payouts.report', $batch));
         $officerResponse->assertOk();
-        $officerResponse->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $officerResponse->assertHeader('content-type', 'text/csv; charset=UTF-8');
     }
 }

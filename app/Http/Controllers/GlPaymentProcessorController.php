@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\BuildsGlFinanceDocuments;
 use App\Models\Application;
+use App\Models\Document;
 use App\Models\FinanceFundSource;
 use App\Services\AuditLogService;
 use Carbon\Carbon;
@@ -22,48 +23,50 @@ class GlPaymentProcessorController extends Controller
 
     public function dashboard(Request $request): View
     {
-        $applications = $this->baseQuery()
-            ->latest('updated_at')
-            ->get();
+        $baseQuery = $this->baseQuery();
+        $statementExistsConstraint = fn ($query) => $query->where('document_type', 'Updated Statement of Account');
 
         $stats = [
-            'total' => $applications->count(),
-            'awaiting_soa' => $applications->filter(fn (Application $application) => ! $this->latestUpdatedStatement($application))->count(),
-            'for_processing' => $applications->filter(function (Application $application) {
-                return $this->latestUpdatedStatement($application) && $application->gl_payment_status !== 'paid';
-            })->count(),
-            'paid' => $applications->where('gl_payment_status', 'paid')->count(),
+            'total' => (clone $baseQuery)->count(),
+            'awaiting_soa' => (clone $baseQuery)
+                ->whereDoesntHave('documents', $statementExistsConstraint)
+                ->count(),
+            'for_processing' => (clone $baseQuery)
+                ->whereHas('documents', $statementExistsConstraint)
+                ->where('gl_payment_status', '!=', 'paid')
+                ->count(),
+            'paid' => (clone $baseQuery)
+                ->where('gl_payment_status', 'paid')
+                ->count(),
         ];
 
-        $returnedCases = $applications
+        $returnedCases = (clone $baseQuery)
             ->where('gl_soa_status', 'returned_for_compliance')
-            ->sortByDesc('updated_at')
+            ->latest('updated_at')
             ->take(5)
-            ->values();
+            ->get();
 
-        $recentSubmissions = $applications
-            ->filter(fn (Application $application) => (bool) $this->latestUpdatedStatement($application))
-            ->sortByDesc(function (Application $application) {
-                return optional($this->latestUpdatedStatement($application))->created_at;
-            })
+        $recentSubmissions = (clone $baseQuery)
+            ->whereHas('documents', $statementExistsConstraint)
+            ->latest('gl_soa_reviewed_at')
+            ->latest('updated_at')
             ->take(5)
-            ->values();
+            ->get();
 
-        $providerLoad = $applications
-            ->groupBy(fn (Application $application) => $application->serviceProvider?->name ?? 'Unassigned Provider')
-            ->map(function ($group, $providerName) {
-                $total = $group->count();
-                $awaitingSoa = $group->filter(fn (Application $application) => ! $this->latestUpdatedStatement($application))->count();
-
-                return [
-                    'provider' => $providerName,
-                    'total' => $total,
-                    'awaiting_soa' => $awaitingSoa,
-                ];
-            })
-            ->sortByDesc('total')
-            ->take(5)
-            ->values();
+        $providerLoad = (clone $baseQuery)
+            ->leftJoin('service_providers', 'service_providers.id', '=', 'applications.service_provider_id')
+            ->selectRaw("COALESCE(service_providers.name, 'Unassigned Provider') as provider")
+            ->selectRaw('COUNT(applications.id) as total')
+            ->selectRaw("SUM(CASE WHEN NOT EXISTS (
+                SELECT 1
+                FROM documents
+                WHERE documents.application_id = applications.id
+                    AND documents.document_type = 'Updated Statement of Account'
+            ) THEN 1 ELSE 0 END) as awaiting_soa")
+            ->groupBy('service_providers.name')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
 
         return view('gl-payment-processor/dashboard', [
             'stats' => $stats,
@@ -78,11 +81,13 @@ class GlPaymentProcessorController extends Controller
         $filters = [
             'search' => trim((string) $request->input('search', '')),
             'payment_status' => (string) $request->input('payment_status', 'all'),
+            'scope' => (string) $request->input('scope', 'active'),
         ];
 
         $applications = $this->filteredQueueQuery($filters)
             ->latest('updated_at')
-            ->get();
+            ->paginate(20)
+            ->withQueryString();
 
         return view('gl-payment-processor/queue', [
             'applications' => $applications,
@@ -93,7 +98,7 @@ class GlPaymentProcessorController extends Controller
 
     public function show(Application $application): View
     {
-        $application = $this->baseQuery()
+        $application = $this->baseQuery(true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -110,7 +115,7 @@ class GlPaymentProcessorController extends Controller
 
     public function ors(Application $application): View
     {
-        $application = $this->baseQuery()
+        $application = $this->baseQuery(true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -119,7 +124,7 @@ class GlPaymentProcessorController extends Controller
 
     public function dv(Application $application): View
     {
-        $application = $this->baseQuery()
+        $application = $this->baseQuery(true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -128,7 +133,7 @@ class GlPaymentProcessorController extends Controller
 
     public function lddapAda(Application $application): View
     {
-        $application = $this->baseQuery()
+        $application = $this->baseQuery(true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -137,7 +142,7 @@ class GlPaymentProcessorController extends Controller
 
     public function guaranteeLetter(Application $application): View
     {
-        $application = $this->baseQuery()
+        $application = $this->baseQuery(true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -146,7 +151,7 @@ class GlPaymentProcessorController extends Controller
 
     public function updateSoaReview(Request $request, Application $application): RedirectResponse
     {
-        $application = $this->baseQuery()
+        $application = $this->baseQuery(true)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -254,9 +259,9 @@ class GlPaymentProcessorController extends Controller
             ->with('success', 'Case submitted to the approving officer successfully.');
     }
 
-    protected function baseQuery()
+    protected function baseQuery(bool $withDocuments = false)
     {
-        return Application::with([
+        $relations = [
                 'client',
                 'beneficiary.relationshipData',
                 'assistanceType',
@@ -264,7 +269,6 @@ class GlPaymentProcessorController extends Controller
                 'assistanceDetail',
                 'modeOfAssistance',
                 'serviceProvider',
-                'documents',
                 'socialWorker',
                 'approvingOfficer.position',
                 'assistanceRecommendations.assistanceType',
@@ -276,7 +280,13 @@ class GlPaymentProcessorController extends Controller
                 'glBudgetReviewer',
                 'glBudgetApprover.position',
                 'glAccountingApprover.position',
-            ])
+            ];
+
+        if ($withDocuments) {
+            $relations[] = 'documents';
+        }
+
+        return Application::with($relations)
             ->whereHas('modeOfAssistance', fn ($query) => $query->where('name', 'Guarantee Letter'))
             ->whereIn('status', ['approved', 'released']);
     }
@@ -312,6 +322,28 @@ class GlPaymentProcessorController extends Controller
                 }
 
                 $query->where('gl_payment_status', $filters['payment_status']);
+            })
+            ->when(($filters['scope'] ?? 'active') === 'finished', function ($query) {
+                $query->where(function ($handledQuery) {
+                    $handledQuery->where('gl_soa_reviewed_by', auth()->id())
+                        ->orWhere('gl_budget_reviewed_by', auth()->id());
+                })->where('gl_payment_status', '!=', 'for_compliance_gl_processor');
+            })
+            ->when(($filters['scope'] ?? 'active') !== 'finished', function ($query) {
+                $query->where(function ($scopeQuery) {
+                    $scopeQuery->where('gl_payment_status', 'for_compliance_gl_processor')
+                        ->orWhere(function ($notHandledQuery) {
+                            $notHandledQuery
+                                ->where(function ($soaQuery) {
+                                    $soaQuery->whereNull('gl_soa_reviewed_by')
+                                        ->orWhere('gl_soa_reviewed_by', '!=', auth()->id());
+                                })
+                                ->where(function ($budgetQuery) {
+                                    $budgetQuery->whereNull('gl_budget_reviewed_by')
+                                        ->orWhere('gl_budget_reviewed_by', '!=', auth()->id());
+                                });
+                        });
+                });
             });
     }
 
@@ -319,7 +351,7 @@ class GlPaymentProcessorController extends Controller
     {
         return $application->documents
             ->where('document_type', 'Updated Statement of Account')
-            ->sortByDesc('created_at')
+            ->sortByDesc(fn (Document $document) => $document->created_at?->getTimestamp() ?? 0)
             ->first();
     }
 

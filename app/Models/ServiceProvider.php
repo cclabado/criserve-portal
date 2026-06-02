@@ -78,6 +78,33 @@ class ServiceProvider extends Model
             ->all();
     }
 
+    public function matchesAnyCategory(array $categories): bool
+    {
+        if ($categories === []) {
+            return false;
+        }
+
+        return collect($this->categories ?? [])
+            ->intersect($categories)
+            ->isNotEmpty();
+    }
+
+    public static function hasAnyActiveProviderForCategories(array $categories): bool
+    {
+        if ($categories === []) {
+            return false;
+        }
+
+        return static::query()
+            ->where('is_active', true)
+            ->where(function ($query) use ($categories) {
+                foreach ($categories as $category) {
+                    $query->orWhereJsonContains('categories', $category);
+                }
+            })
+            ->exists();
+    }
+
     public static function inferRelevantCategories(?string $subtypeName = null, ?string $detailName = null): array
     {
         $sources = array_filter([

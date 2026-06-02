@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Notifications\ClientDocumentComplianceRequestedNotification;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -21,6 +22,13 @@ use Tests\TestCase;
 class ClientDocumentComplianceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->withoutMiddleware(PreventRequestForgery::class);
+    }
 
     public function test_social_worker_can_request_document_compliance_and_notify_client(): void
     {

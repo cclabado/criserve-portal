@@ -21,6 +21,15 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
+## Project Operations
+
+Production-hardening references for this project:
+
+- [Scaling hardening plan](/Applications/XAMPP/xamppfiles/htdocs/criserve-portal/docs/scaling-hardening-plan.md)
+- [Production rollout checklist](/Applications/XAMPP/xamppfiles/htdocs/criserve-portal/docs/production-rollout-checklist.md)
+- [Supervisor worker template](/Applications/XAMPP/xamppfiles/htdocs/criserve-portal/deploy/supervisor/criserve-workers.conf)
+- [k6 load test starter](/Applications/XAMPP/xamppfiles/htdocs/criserve-portal/scripts/load/k6-web-smoke.js)
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.

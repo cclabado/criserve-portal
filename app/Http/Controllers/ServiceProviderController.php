@@ -29,53 +29,53 @@ class ServiceProviderController extends Controller
 
         abort_unless($provider, 403, 'No service provider account is linked to this login.');
 
-        $applications = $this->providerApplicationQuery($provider->id)
-            ->latest('updated_at')
-            ->get();
+        $baseQuery = $this->providerApplicationDashboardQuery($provider->id);
+        $statementExistsConstraint = fn ($query) => $query->where('document_type', 'Updated Statement of Account');
 
-        $totalAssigned = $applications->count();
-        $pendingStatementCount = $applications->filter(function (Application $application) {
-            return ! $application->documents->contains(fn ($document) => $document->document_type === 'Updated Statement of Account');
-        })->count();
-        $submittedStatementCount = $applications->filter(function (Application $application) {
-            return $application->documents->contains(fn ($document) => $document->document_type === 'Updated Statement of Account');
-        })->count();
-        $forProcessingCount = $applications->filter(function (Application $application) {
-            $hasUpdatedStatement = $application->documents->contains(fn ($document) => $document->document_type === 'Updated Statement of Account');
-
-            return $hasUpdatedStatement && $application->gl_payment_status !== 'paid';
-        })->count();
-        $pendingReviewCount = $applications->where('gl_soa_status', 'pending_review')->count();
-        $returnedCount = $applications->where('gl_soa_status', 'returned_for_compliance')->count();
-        $processedCount = $applications->where('gl_soa_status', 'processed')->count();
-        $paidCount = $applications->where('gl_payment_status', 'paid')->count();
-        $releasedCount = $applications->where('status', 'released')->count();
-        $totalFinalAmount = $applications->sum(fn (Application $application) => $application->effectiveDisplayedAmount());
+        $totalAssigned = (clone $baseQuery)->count();
+        $pendingStatementCount = (clone $baseQuery)
+            ->whereDoesntHave('documents', $statementExistsConstraint)
+            ->count();
+        $submittedStatementCount = (clone $baseQuery)
+            ->whereHas('documents', $statementExistsConstraint)
+            ->count();
+        $forProcessingCount = (clone $baseQuery)
+            ->whereHas('documents', $statementExistsConstraint)
+            ->where('gl_payment_status', '!=', 'paid')
+            ->count();
+        $pendingReviewCount = (clone $baseQuery)->where('gl_soa_status', 'pending_review')->count();
+        $returnedCount = (clone $baseQuery)->where('gl_soa_status', 'returned_for_compliance')->count();
+        $processedCount = (clone $baseQuery)->where('gl_soa_status', 'processed')->count();
+        $paidCount = (clone $baseQuery)->where('gl_payment_status', 'paid')->count();
+        $releasedCount = (clone $baseQuery)->where('status', 'released')->count();
+        $totalFinalAmount = (float) ((clone $baseQuery)->sum(DB::raw(Application::effectiveDisplayedAmountSql())));
         $completionRate = $totalAssigned > 0
             ? (int) round(($paidCount / $totalAssigned) * 100)
             : 0;
 
-        $priorityApplications = $applications
-            ->filter(fn (Application $application) => in_array($application->gl_soa_status, ['awaiting_upload', 'returned_for_compliance', 'pending_review'], true))
-            ->sortBy(function (Application $application) {
-                return match ($application->gl_soa_status) {
-                    'returned_for_compliance' => 0,
-                    'awaiting_upload' => 1,
-                    'pending_review' => 2,
-                    default => 3,
-                };
-            })
-            ->values();
+        $priorityApplications = (clone $baseQuery)
+            ->whereIn('gl_soa_status', ['awaiting_upload', 'returned_for_compliance', 'pending_review'])
+            ->orderByRaw("
+                CASE gl_soa_status
+                    WHEN 'returned_for_compliance' THEN 0
+                    WHEN 'awaiting_upload' THEN 1
+                    WHEN 'pending_review' THEN 2
+                    ELSE 3
+                END
+            ")
+            ->latest('updated_at')
+            ->take(25)
+            ->get();
 
-        $recentlyProcessed = $applications
-            ->filter(fn (Application $application) => $application->gl_soa_status === 'processed')
+        $recentlyProcessed = (clone $baseQuery)
+            ->where('gl_soa_status', 'processed')
+            ->latest('updated_at')
             ->take(5)
-            ->values();
+            ->get();
 
         return view('service-provider.dashboard', [
             'provider' => $provider,
             'defaultBankAccount' => $provider->defaultBankAccount,
-            'applications' => $applications,
             'totalAssigned' => $totalAssigned,
             'pendingStatementCount' => $pendingStatementCount,
             'submittedStatementCount' => $submittedStatementCount,
@@ -103,18 +103,11 @@ class ServiceProviderController extends Controller
             'status' => (string) $request->input('status', 'all'),
         ];
 
-        $applications = $this->providerApplicationQuery($provider->id)
-            ->when($filters['search'] !== '', function ($query) use ($filters) {
-                $search = $filters['search'];
+        $statementExistsConstraint = fn ($query) => $query->where('document_type', 'Updated Statement of Account');
 
-                $query->where(function ($inner) use ($search) {
-                    $inner->where('reference_no', 'like', "%{$search}%")
-                        ->orWhereHas('client', function ($clientQuery) use ($search) {
-                            $clientQuery->where('first_name', 'like', "%{$search}%")
-                                ->orWhere('last_name', 'like', "%{$search}%")
-                                ->orWhereRaw("CONCAT(first_name, ' ', last_name) like ?", ["%{$search}%"]);
-                        });
-                });
+        $filteredQuery = $this->providerApplicationListQuery($provider->id)
+            ->when($filters['search'] !== '', function ($query) use ($filters) {
+                $this->applyPersonNameSearch($query, $filters['search']);
             })
             ->when($filters['status'] !== 'all', function ($query) use ($filters) {
                 if ($filters['status'] === 'uploaded') {
@@ -130,20 +123,19 @@ class ServiceProviderController extends Controller
                 }
 
                 $query->where('gl_soa_status', $filters['status']);
-            })
+            });
+
+        $applications = (clone $filteredQuery)
             ->latest('updated_at')
             ->paginate(12)
             ->withQueryString();
 
-        $applicationCollection = method_exists($applications, 'getCollection')
-            ? $applications->getCollection()
-            : collect($applications);
-
-        $uploadedCount = $applicationCollection->filter(function (Application $application) {
-            return $application->documents->contains(fn ($document) => $document->document_type === 'Updated Statement of Account');
-        })->count();
-
-        $pendingUploadCount = $applicationCollection->count() - $uploadedCount;
+        $uploadedCount = (clone $filteredQuery)
+            ->whereHas('documents', $statementExistsConstraint)
+            ->count();
+        $pendingUploadCount = (clone $filteredQuery)
+            ->whereDoesntHave('documents', $statementExistsConstraint)
+            ->count();
 
         return view('service-provider.letters', [
             'provider' => $provider,
@@ -160,7 +152,7 @@ class ServiceProviderController extends Controller
 
         abort_unless($provider, 403, 'No service provider account is linked to this login.');
 
-        $application = $this->providerApplicationQuery($provider->id)
+        $application = $this->providerApplicationDetailQuery($provider->id)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -252,7 +244,7 @@ class ServiceProviderController extends Controller
 
         abort_unless($provider, 403, 'No service provider account is linked to this login.');
 
-        $application = $this->providerApplicationQuery($provider->id)
+        $application = $this->providerApplicationDetailQuery($provider->id)
             ->whereKey($application->id)
             ->firstOrFail();
 
@@ -477,7 +469,7 @@ class ServiceProviderController extends Controller
             .($bankAccountSummary ? ' | Bank: '.$bankAccountSummary : '')
             .($extraRemarks !== '' ? ' | Remarks: '.$extraRemarks : ''));
 
-        Document::create([
+        $document = Document::create([
             'application_id' => $application->id,
             'service_provider_bank_account_id' => $bankAccount?->id,
             'document_type' => $documentType,
@@ -487,12 +479,18 @@ class ServiceProviderController extends Controller
             'mime_type' => $storedDocument['mime_type'],
             'file_size' => $storedDocument['file_size'],
             'file_hash' => $storedDocument['file_hash'],
+            'scan_status' => $storedDocument['scan_status'] ?? null,
+            'scan_message' => $storedDocument['scan_message'] ?? null,
+            'scan_requested_at' => $storedDocument['scan_requested_at'] ?? null,
+            'scanned_at' => $storedDocument['scanned_at'] ?? null,
             'remarks' => $remarks,
             'bank_name_snapshot' => $bankAccount?->resolvedBankName(),
             'account_name_snapshot' => $bankAccount?->account_name,
             'account_number_snapshot' => $bankAccount?->account_number,
             'branch_name_snapshot' => $bankAccount?->branch_name,
         ]);
+
+        $this->documentSecurity->queueStoredDocumentScan($document);
 
         return $storedDocument;
     }
@@ -505,9 +503,46 @@ class ServiceProviderController extends Controller
             ->values();
     }
 
-    protected function providerApplicationQuery(int $providerId)
+    protected function providerApplicationBaseQuery(int $providerId)
     {
-        return Application::with([
+        return Application::query()
+            ->where('service_provider_id', $providerId)
+            ->whereHas('modeOfAssistance', fn ($query) => $query->where('name', 'Guarantee Letter'))
+            ->whereIn('status', ['approved', 'released']);
+    }
+
+    protected function providerApplicationDashboardQuery(int $providerId)
+    {
+        return $this->providerApplicationBaseQuery($providerId)
+            ->with([
+                'client:id,first_name,last_name',
+                'assistanceSubtype:id,name',
+                'assistanceDetail:id,name',
+            ])
+            ->withExists([
+                'documents as has_updated_statement' => fn ($query) => $query->where('document_type', 'Updated Statement of Account'),
+            ]);
+    }
+
+    protected function providerApplicationListQuery(int $providerId)
+    {
+        return $this->providerApplicationBaseQuery($providerId)
+            ->with([
+                'client:id,first_name,last_name,birthdate',
+                'beneficiary:id,application_id,first_name,middle_name,last_name,extension_name,relationship_id',
+                'beneficiary.relationshipData:id,name',
+                'assistanceSubtype:id,name',
+                'assistanceDetail:id,name',
+            ])
+            ->withExists([
+                'documents as has_updated_statement' => fn ($query) => $query->where('document_type', 'Updated Statement of Account'),
+            ]);
+    }
+
+    protected function providerApplicationDetailQuery(int $providerId)
+    {
+        return $this->providerApplicationBaseQuery($providerId)
+            ->with([
                 'client',
                 'beneficiary.relationshipData',
                 'assistanceType',
@@ -523,10 +558,40 @@ class ServiceProviderController extends Controller
                 'assistanceRecommendations.assistanceDetail',
                 'assistanceRecommendations.modeOfAssistance',
                 'assistanceRecommendations.referralInstitution',
-            ])
-            ->where('service_provider_id', $providerId)
-            ->whereHas('modeOfAssistance', fn ($query) => $query->where('name', 'Guarantee Letter'))
-            ->whereIn('status', ['approved', 'released']);
+            ]);
+    }
+
+    protected function applyPersonNameSearch($query, string $search): void
+    {
+        $term = trim($search);
+
+        if ($term === '') {
+            return;
+        }
+
+        $tokens = collect(preg_split('/\s+/', $term) ?: [])
+            ->map(fn ($token) => trim((string) $token))
+            ->filter()
+            ->values();
+
+        $query->where(function ($inner) use ($term, $tokens) {
+            $inner->where('reference_no', 'like', "%{$term}%")
+                ->orWhereHas('client', function ($clientQuery) use ($term, $tokens) {
+                    $clientQuery->where(function ($nameQuery) use ($term, $tokens) {
+                        $nameQuery->where('first_name', 'like', "%{$term}%")
+                            ->orWhere('last_name', 'like', "%{$term}%");
+
+                        if ($tokens->count() >= 2) {
+                            foreach ($tokens as $token) {
+                                $nameQuery->where(function ($tokenQuery) use ($token) {
+                                    $tokenQuery->where('first_name', 'like', "%{$token}%")
+                                        ->orWhere('last_name', 'like', "%{$token}%");
+                                });
+                            }
+                        }
+                    });
+                });
+        });
     }
 
     protected function resolveProviderBankAccount($provider, ?string $selectedId): ?ServiceProviderBankAccount

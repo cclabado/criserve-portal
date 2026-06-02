@@ -11,9 +11,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
-use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BulkDeduplicationController extends Controller
@@ -136,37 +133,32 @@ class BulkDeduplicationController extends Controller
         abort_unless($run->status === 'completed', 404);
 
         $rows = $this->deduplication->exportRows($run, $type);
-        $filename = 'bulk-deduplication-'.$type.'-'.$run->id.'.xlsx';
+        $filename = 'bulk-deduplication-'.$type.'-'.$run->id.'.csv';
 
         $this->auditLogs->log($request, 'bulk_deduplication.downloaded', $run, [
             'download_type' => $type,
         ]);
 
         return response()->streamDownload(function () use ($rows, $type) {
-            $spreadsheet = new Spreadsheet();
-            $sheet = $spreadsheet->getActiveSheet();
-            $sheet->setTitle(Str::title(str_replace('_', ' ', $type)));
-
             $flattenedRows = $this->flattenRowsForExport($rows, $type);
             $headers = array_keys($flattenedRows[0] ?? ['message' => 'No rows available']);
+            $handle = fopen('php://output', 'w');
 
-            foreach ($headers as $index => $header) {
-                $sheet->setCellValue(Coordinate::stringFromColumnIndex($index + 1).'1', Str::headline($header));
-            }
+            fputcsv($handle, array_map(fn (string $header) => Str::headline($header), $headers));
 
-            foreach ($flattenedRows as $rowIndex => $row) {
-                foreach (array_values($row) as $columnIndex => $value) {
-                    $sheet->setCellValue(
-                        Coordinate::stringFromColumnIndex($columnIndex + 1).($rowIndex + 2),
-                        (string) $value
-                    );
+            foreach ($flattenedRows as $row) {
+                $line = [];
+
+                foreach ($headers as $header) {
+                    $line[] = (string) ($row[$header] ?? '');
                 }
+
+                fputcsv($handle, $line);
             }
 
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
+            fclose($handle);
         }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 

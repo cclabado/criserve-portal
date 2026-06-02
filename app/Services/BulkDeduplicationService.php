@@ -10,6 +10,7 @@ use App\Models\BeneficiaryProfile;
 use App\Models\BulkDeduplicationRun;
 use App\Models\Client;
 use App\Models\User;
+use App\Support\ReadableStorageFile;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -33,8 +34,9 @@ class BulkDeduplicationService
         ?UploadedFile $referenceFile = null
     ): BulkDeduplicationRun
     {
-        $storedFile = $file->store('deduplication-uploads', 'local');
-        $storedReferenceFile = $referenceFile?->store('deduplication-uploads', 'local');
+        $uploadDisk = (string) config('security.workflow_uploads.disk', 'local');
+        $storedFile = $file->store('deduplication-uploads', $uploadDisk);
+        $storedReferenceFile = $referenceFile?->store('deduplication-uploads', $uploadDisk);
         $compareSource = $options['compare_source'] ?? 'system';
         $applyFrequencyRules = (bool) ($options['apply_frequency_rules'] ?? false);
 
@@ -42,9 +44,9 @@ class BulkDeduplicationService
             'user_id' => $user->id,
             'access_role' => $user->role,
             'original_filename' => $file->getClientOriginalName(),
-            'upload_disk' => 'local',
+            'upload_disk' => $uploadDisk,
             'upload_path' => $storedFile,
-            'reference_upload_disk' => $storedReferenceFile ? 'local' : null,
+            'reference_upload_disk' => $storedReferenceFile ? $uploadDisk : null,
             'reference_upload_path' => $storedReferenceFile,
             'status' => 'queued',
             'progress_percentage' => 0,
@@ -79,141 +81,146 @@ class BulkDeduplicationService
             'failed_at' => null,
         ])->save();
 
-        $uploadPath = $this->resolveStoredFilePath($run->upload_disk, $run->upload_path);
-        $referenceUploadPath = $run->reference_upload_path
-            ? $this->resolveStoredFilePath($run->reference_upload_disk, $run->reference_upload_path)
+        $uploadFile = $this->resolveStoredFile($run->upload_disk, $run->upload_path);
+        $referenceUploadFile = $run->reference_upload_path
+            ? $this->resolveStoredFile($run->reference_upload_disk, $run->reference_upload_path)
             : null;
 
-        $options = $run->summary ?? [];
-        $rows = $this->readSpreadsheet($uploadPath);
-        $compareSource = $options['compare_source'] ?? 'system';
-        $applyFrequencyRules = (bool) ($options['apply_frequency_rules'] ?? false);
+        try {
+            $options = $run->summary ?? [];
+            $rows = $this->readSpreadsheet($uploadFile->path());
+            $compareSource = $options['compare_source'] ?? 'system';
+            $applyFrequencyRules = (bool) ($options['apply_frequency_rules'] ?? false);
 
-        $this->updateRunProgress($run, 12, 'Loading comparison records...', [
-            'total_rows' => count($rows),
-        ]);
+            $this->updateRunProgress($run, 12, 'Loading comparison records...', [
+                'total_rows' => count($rows),
+            ]);
 
-        $systemReference = $this->loadReferenceRecords();
-        $systemReferenceIndex = $this->buildReferenceIndex($systemReference);
-        $reference = $compareSource === 'uploaded_list'
-            ? $this->loadReferenceRowsFromStoredFile($referenceUploadPath)
-            : $systemReference;
-        $referenceIndex = $compareSource === 'uploaded_list'
-            ? $this->buildReferenceIndex($reference)
-            : $systemReferenceIndex;
-        $mappings = $this->loadAssistanceMappings();
-        $cleanRows = [];
-        $duplicateRows = [];
-        $findingRows = [];
-        $skippedRows = [];
-        $uploadedExactKeys = [];
+            $systemReference = $this->loadReferenceRecords();
+            $systemReferenceIndex = $this->buildReferenceIndex($systemReference);
+            $reference = $compareSource === 'uploaded_list'
+                ? $this->loadReferenceRowsFromStoredFile($referenceUploadFile?->path())
+                : $systemReference;
+            $referenceIndex = $compareSource === 'uploaded_list'
+                ? $this->buildReferenceIndex($reference)
+                : $systemReferenceIndex;
+            $mappings = $this->loadAssistanceMappings();
+            $cleanRows = [];
+            $duplicateRows = [];
+            $findingRows = [];
+            $skippedRows = [];
+            $uploadedExactKeys = [];
 
-        $totalRows = max(count($rows), 1);
+            $totalRows = max(count($rows), 1);
 
-        foreach ($rows as $index => $row) {
-            $prepared = $this->prepareUploadedRow($row);
+            foreach ($rows as $index => $row) {
+                $prepared = $this->prepareUploadedRow($row);
 
-            if ($prepared['has_missing_required']) {
-                $skippedRows[] = [
-                    'row_number' => $prepared['row_number'],
-                    'reason' => 'Missing required fields: last name, first name, and birthdate are required.',
-                    'row' => $prepared['display'],
-                ];
-                $this->touchProgressWithinLoop($run, $index + 1, $totalRows);
+                if ($prepared['has_missing_required']) {
+                    $skippedRows[] = [
+                        'row_number' => $prepared['row_number'],
+                        'reason' => 'Missing required fields: last name, first name, and birthdate are required.',
+                        'row' => $prepared['display'],
+                    ];
+                    $this->touchProgressWithinLoop($run, $index + 1, $totalRows);
 
-                continue;
-            }
+                    continue;
+                }
 
-            $internalKey = $prepared['exact_key'];
+                $internalKey = $prepared['exact_key'];
 
-            if (isset($uploadedExactKeys[$internalKey])) {
-                $duplicateRows[] = $this->buildDuplicateRow(
-                    $prepared,
-                    'duplicate_upload',
-                    'Duplicate of uploaded row '.$uploadedExactKeys[$internalKey].'.'
-                );
-                $this->touchProgressWithinLoop($run, $index + 1, $totalRows);
-                continue;
-            }
+                if (isset($uploadedExactKeys[$internalKey])) {
+                    $duplicateRows[] = $this->buildDuplicateRow(
+                        $prepared,
+                        'duplicate_upload',
+                        'Duplicate of uploaded row '.$uploadedExactKeys[$internalKey].'.'
+                    );
+                    $this->touchProgressWithinLoop($run, $index + 1, $totalRows);
+                    continue;
+                }
 
-            $uploadedExactKeys[$internalKey] = $prepared['row_number'];
+                $uploadedExactKeys[$internalKey] = $prepared['row_number'];
 
-            $exactMatch = $this->findExactMatch($prepared, $referenceIndex);
-            $systemExactMatch = $this->findExactMatch($prepared, $systemReferenceIndex);
-            $frequency = $applyFrequencyRules
-                ? $this->evaluateFrequency($prepared, $systemExactMatch, $mappings)
-                : $this->frequencyNotApplied();
+                $exactMatch = $this->findExactMatch($prepared, $referenceIndex);
+                $systemExactMatch = $this->findExactMatch($prepared, $systemReferenceIndex);
+                $frequency = $applyFrequencyRules
+                    ? $this->evaluateFrequency($prepared, $systemExactMatch, $mappings)
+                    : $this->frequencyNotApplied();
 
-            if ($exactMatch) {
-                $duplicateRows[] = $this->buildDuplicateRow(
-                    $prepared,
-                    $compareSource === 'uploaded_list' ? 'duplicate_uploaded_list' : 'duplicate_database',
-                    'Exact match found in '.$exactMatch['source_label'].'.',
-                    $exactMatch,
-                    $frequency
-                );
-                $this->touchProgressWithinLoop($run, $index + 1, $totalRows);
-                continue;
-            }
+                if ($exactMatch) {
+                    $duplicateRows[] = $this->buildDuplicateRow(
+                        $prepared,
+                        $compareSource === 'uploaded_list' ? 'duplicate_uploaded_list' : 'duplicate_database',
+                        'Exact match found in '.$exactMatch['source_label'].'.',
+                        $exactMatch,
+                        $frequency
+                    );
+                    $this->touchProgressWithinLoop($run, $index + 1, $totalRows);
+                    continue;
+                }
 
-            if (($frequency['status'] ?? 'eligible') !== 'eligible') {
-                $duplicateRows[] = $this->buildDuplicateRow(
-                    $prepared,
-                    'frequency_not_eligible',
-                    $frequency['message'] ?? 'Frequency rule check marked this row as not eligible.',
-                    null,
-                    $frequency
-                );
-                $this->touchProgressWithinLoop($run, $index + 1, $totalRows);
-                continue;
-            }
+                if (($frequency['status'] ?? 'eligible') !== 'eligible') {
+                    $duplicateRows[] = $this->buildDuplicateRow(
+                        $prepared,
+                        'frequency_not_eligible',
+                        $frequency['message'] ?? 'Frequency rule check marked this row as not eligible.',
+                        null,
+                        $frequency
+                    );
+                    $this->touchProgressWithinLoop($run, $index + 1, $totalRows);
+                    continue;
+                }
 
-            $possibleMatches = $this->findPossibleMatches($prepared, $referenceIndex);
+                $possibleMatches = $this->findPossibleMatches($prepared, $referenceIndex);
 
-            $cleanRows[] = [
-                'row_number' => $prepared['row_number'],
-                ...$prepared['display'],
-                'frequency_status' => $frequency['status'] ?? 'eligible',
-                'frequency_message' => $frequency['message'] ?? 'Eligible for inclusion.',
-                'assistance_subtype' => $frequency['resolved_assistance_subtype'] ?? '',
-                'assistance_detail' => $frequency['resolved_assistance_detail'] ?? '',
-            ];
-
-            if ($possibleMatches !== []) {
-                $findingRows[] = [
+                $cleanRows[] = [
                     'row_number' => $prepared['row_number'],
                     ...$prepared['display'],
-                    'finding_type' => 'possible_duplicate',
-                    'finding_message' => 'Possible duplicate found due to close name/date match.',
-                    'matches' => $possibleMatches,
+                    'frequency_status' => $frequency['status'] ?? 'eligible',
+                    'frequency_message' => $frequency['message'] ?? 'Eligible for inclusion.',
+                    'assistance_subtype' => $frequency['resolved_assistance_subtype'] ?? '',
+                    'assistance_detail' => $frequency['resolved_assistance_detail'] ?? '',
                 ];
+
+                if ($possibleMatches !== []) {
+                    $findingRows[] = [
+                        'row_number' => $prepared['row_number'],
+                        ...$prepared['display'],
+                        'finding_type' => 'possible_duplicate',
+                        'finding_message' => 'Possible duplicate found due to close name/date match.',
+                        'matches' => $possibleMatches,
+                    ];
+                }
+
+                $this->touchProgressWithinLoop($run, $index + 1, $totalRows);
             }
 
-            $this->touchProgressWithinLoop($run, $index + 1, $totalRows);
+            $run->forceFill([
+                'status' => 'completed',
+                'progress_percentage' => 100,
+                'progress_message' => 'Deduplication complete. Results are ready for review.',
+                'completed_at' => now(),
+                'summary' => [
+                    'total_rows' => count($rows),
+                    'clean_count' => count($cleanRows),
+                    'duplicate_count' => count($duplicateRows),
+                    'finding_count' => count($findingRows),
+                    'skipped_count' => count($skippedRows),
+                    'compare_source' => $compareSource,
+                    'apply_frequency_rules' => $applyFrequencyRules,
+                    'reference_filename' => $options['reference_filename'] ?? null,
+                ],
+                'clean_rows' => $cleanRows,
+                'duplicate_rows' => $duplicateRows,
+                'finding_rows' => $findingRows,
+                'skipped_rows' => $skippedRows,
+            ])->save();
+
+            return $run;
+        } finally {
+            $uploadFile->cleanup();
+            $referenceUploadFile?->cleanup();
         }
-
-        $run->forceFill([
-            'status' => 'completed',
-            'progress_percentage' => 100,
-            'progress_message' => 'Deduplication complete. Results are ready for review.',
-            'completed_at' => now(),
-            'summary' => [
-                'total_rows' => count($rows),
-                'clean_count' => count($cleanRows),
-                'duplicate_count' => count($duplicateRows),
-                'finding_count' => count($findingRows),
-                'skipped_count' => count($skippedRows),
-                'compare_source' => $compareSource,
-                'apply_frequency_rules' => $applyFrequencyRules,
-                'reference_filename' => $options['reference_filename'] ?? null,
-            ],
-            'clean_rows' => $cleanRows,
-            'duplicate_rows' => $duplicateRows,
-            'finding_rows' => $findingRows,
-            'skipped_rows' => $skippedRows,
-        ])->save();
-
-        return $run;
     }
 
     public function exportRows(BulkDeduplicationRun $run, string $type): array
@@ -848,13 +855,13 @@ class BulkDeduplicationService
         ];
     }
 
-    protected function resolveStoredFilePath(?string $disk, ?string $path): string
+    protected function resolveStoredFile(?string $disk, ?string $path): ReadableStorageFile
     {
-        if (! $disk || ! $path || ! Storage::disk($disk)->exists($path)) {
+        if (! $disk || ! $path) {
             throw new \RuntimeException('The uploaded deduplication file could not be found.');
         }
 
-        return Storage::disk($disk)->path($path);
+        return ReadableStorageFile::fromDisk($disk, $path, 'The uploaded deduplication file could not be found.');
     }
 
     protected function touchProgressWithinLoop(BulkDeduplicationRun $run, int $processedRows, int $totalRows): void

@@ -23,10 +23,16 @@ class Document extends Model
         'account_number_snapshot',
         'branch_name_snapshot',
         'requires_client_resubmission',
+        'scan_status',
+        'scan_message',
+        'scan_requested_at',
+        'scanned_at',
     ];
 
     protected $casts = [
         'requires_client_resubmission' => 'boolean',
+        'scan_requested_at' => 'datetime',
+        'scanned_at' => 'datetime',
     ];
 
     public function application()
@@ -66,5 +72,20 @@ class Document extends Model
             $this->account_name_snapshot,
             $this->maskedBankAccountNumber(),
         ])->filter()->implode(' • '));
+    }
+
+    public function isScanClean(): bool
+    {
+        return in_array($this->scan_status, [null, '', 'clean'], true);
+    }
+
+    public function isScanPending(): bool
+    {
+        return $this->scan_status === 'pending_scan';
+    }
+
+    public function isScanFailed(): bool
+    {
+        return $this->scan_status === 'failed_scan';
     }
 }

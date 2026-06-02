@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessPayoutBatchImport;
 use App\Models\BulkDeduplicationRun;
 use App\Models\PayoutBatch;
 use App\Models\PayoutEntry;
@@ -10,10 +11,9 @@ use App\Services\PayoutImportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\View\View;
 
@@ -90,22 +90,19 @@ class PayoutController extends Controller
             }
         }
 
-        try {
-            $batch = $this->imports->importBatch($validated['spreadsheet'], $request->user(), $validated);
-        } catch (\RuntimeException $exception) {
-            return back()->withErrors(['spreadsheet' => $exception->getMessage()])->withInput();
-        }
+        $batch = $this->imports->queueBatch($validated['spreadsheet'], $request->user(), $validated);
+        ProcessPayoutBatchImport::dispatch($batch->id);
 
         $this->auditLogs->log($request, 'payout.batch_created', $batch, [
             'sector_label' => $batch->sector_label,
             'venue' => $batch->venue,
             'payout_amount' => $batch->payout_amount,
-            'summary' => $batch->summary,
+            'import_status' => $batch->import_status,
         ]);
 
         return redirect()
             ->route($this->showRouteName($request), $batch)
-            ->with('success', 'Payout batch created successfully. You can now process beneficiaries one by one at the venue.');
+            ->with('success', 'Payout batch upload accepted. The clean list is now being imported in the background.');
     }
 
     public function updateActivation(Request $request, PayoutBatch $batch): RedirectResponse
@@ -146,20 +143,27 @@ class PayoutController extends Controller
             'status' => (string) $request->input('status', 'all'),
         ];
 
-        $entries = $batch->entries()
-            ->with(['paidBy', 'handlingUser'])
-            ->when($filters['search'] !== '', function ($query) use ($filters) {
-                $search = $filters['search'];
-                $query->where(function ($inner) use ($search) {
-                    $inner->where('full_name', 'like', "%{$search}%")
-                        ->orWhere('reference_no', 'like', "%{$search}%")
-                        ->orWhere('sector_label', 'like', "%{$search}%");
-                });
-            })
-            ->when($filters['status'] !== 'all', fn ($query) => $query->where('payout_status', $filters['status']))
-            ->orderBy('sequence_no')
-            ->paginate(20)
-            ->withQueryString();
+        if ($batch->isImportComplete()) {
+            $entries = $batch->entries()
+                ->with(['paidBy', 'handlingUser'])
+                ->when($filters['search'] !== '', function ($query) use ($filters) {
+                    $search = $filters['search'];
+                    $query->where(function ($inner) use ($search) {
+                        $inner->where('full_name', 'like', "%{$search}%")
+                            ->orWhere('reference_no', 'like', "%{$search}%")
+                            ->orWhere('sector_label', 'like', "%{$search}%");
+                    });
+                })
+                ->when($filters['status'] !== 'all', fn ($query) => $query->where('payout_status', $filters['status']))
+                ->orderBy('sequence_no')
+                ->paginate(20)
+                ->withQueryString();
+        } else {
+            $entries = new LengthAwarePaginator([], 0, 20, 1, [
+                'path' => $request->url(),
+                'pageName' => 'page',
+            ]);
+        }
 
         return view('payouts.show', [
             'batch' => $batch,
@@ -180,18 +184,10 @@ class PayoutController extends Controller
     {
         abort_unless(in_array((string) $request->user()->role, ['admin', 'reporting_officer'], true), 403);
         abort_unless($this->visibleBatchesQuery($request)->whereKey($batch->id)->exists(), 403);
+        abort_unless($batch->isImportComplete(), 409, 'The payout report becomes available after the batch import completes.');
 
         $batch->load(['user', 'activatedBy']);
-        $entries = $batch->entries()
-            ->with(['paidBy', 'handlingUser'])
-            ->orderBy('sequence_no')
-            ->get();
-
         $summary = $batch->summary ?? $this->imports->recomputeSummary($batch);
-
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Payout Report');
 
         $metadataRows = [
             ['Payout Batch', $batch->batch_name],
@@ -212,15 +208,6 @@ class PayoutController extends Controller
             ['Notes', $batch->notes ?? ''],
         ];
 
-        $row = 1;
-        foreach ($metadataRows as [$label, $value]) {
-            $sheet->setCellValue("A{$row}", $label);
-            $sheet->setCellValue("B{$row}", $value);
-            $row++;
-        }
-
-        $row += 1;
-
         $headers = [
             'Queue No',
             'Reference No',
@@ -239,47 +226,46 @@ class PayoutController extends Controller
             'Imported Remarks',
         ];
 
-        foreach ($headers as $index => $header) {
-            $column = chr(ord('A') + $index);
-            $sheet->setCellValue("{$column}{$row}", $header);
-        }
+        $filename = 'payout-report-'.Str::slug($batch->batch_name).'-'.$batch->id.'.csv';
 
-        $sheet->getStyle("A{$row}:O{$row}")->getFont()->setBold(true);
-        $row++;
+        return response()->streamDownload(function () use ($batch, $metadataRows, $headers) {
+            $handle = fopen('php://output', 'w');
 
-        foreach ($entries as $entry) {
-            $sheet->fromArray([
-                $entry->sequence_no,
-                $entry->reference_no,
-                $entry->full_name,
-                $entry->birthdate?->format('Y-m-d') ?? '',
-                $entry->sector_label ?: $batch->sector_label,
-                $entry->assistance_subtype,
-                $entry->assistance_detail,
-                $entry->payout_status,
-                $entry->paid_at?->format('Y-m-d H:i:s') ?? '',
-                $entry->paidBy?->name ?? '',
-                $entry->handlingUser?->name ?? '',
-                $entry->handling_started_at?->format('Y-m-d H:i:s') ?? '',
-                $entry->hasProofPhoto() ? 'Yes' : 'No',
-                $entry->payout_notes,
-                $entry->remarks,
-            ], null, "A{$row}");
+            foreach ($metadataRows as [$label, $value]) {
+                fputcsv($handle, [$label, $value]);
+            }
 
-            $row++;
-        }
+            fputcsv($handle, []);
+            fputcsv($handle, $headers);
 
-        foreach (range('A', 'O') as $column) {
-            $sheet->getColumnDimension($column)->setAutoSize(true);
-        }
+            $batch->entries()
+                ->with(['paidBy:id,name', 'handlingUser:id,name'])
+                ->orderBy('id')
+                ->chunkById(500, function ($entries) use ($handle, $batch) {
+                    foreach ($entries as $entry) {
+                        fputcsv($handle, [
+                            $entry->sequence_no,
+                            $entry->reference_no,
+                            $entry->full_name,
+                            $entry->birthdate?->format('Y-m-d') ?? '',
+                            $entry->sector_label ?: $batch->sector_label,
+                            $entry->assistance_subtype,
+                            $entry->assistance_detail,
+                            $entry->payout_status,
+                            $entry->paid_at?->format('Y-m-d H:i:s') ?? '',
+                            $entry->paidBy?->name ?? '',
+                            $entry->handlingUser?->name ?? '',
+                            $entry->handling_started_at?->format('Y-m-d H:i:s') ?? '',
+                            $entry->hasProofPhoto() ? 'Yes' : 'No',
+                            $entry->payout_notes,
+                            $entry->remarks,
+                        ]);
+                    }
+                }, 'id');
 
-        $filename = 'payout-report-'.Str::slug($batch->batch_name).'-'.$batch->id.'.xlsx';
-
-        return response()->streamDownload(function () use ($spreadsheet) {
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
+            fclose($handle);
         }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 
@@ -287,6 +273,7 @@ class PayoutController extends Controller
     {
         abort_unless($this->visibleBatchesQuery($request)->whereKey($batch->id)->exists(), 403);
         abort_unless((int) $entry->payout_batch_id === (int) $batch->id, 404);
+        abort_unless($batch->isImportComplete(), 409);
 
         $entry->refresh();
 
@@ -310,6 +297,7 @@ class PayoutController extends Controller
     {
         abort_unless($this->visibleBatchesQuery($request)->whereKey($batch->id)->exists(), 403);
         abort_unless((int) $entry->payout_batch_id === (int) $batch->id, 404);
+        abort_unless($batch->isImportComplete(), 409);
 
         $entry->refresh();
 
@@ -329,6 +317,7 @@ class PayoutController extends Controller
     {
         abort_unless($this->visibleBatchesQuery($request)->whereKey($batch->id)->exists(), 403);
         abort_unless((int) $entry->payout_batch_id === (int) $batch->id, 404);
+        abort_unless($batch->isImportComplete(), 409);
 
         $entry->loadMissing('handlingUser');
 
@@ -360,7 +349,7 @@ class PayoutController extends Controller
             ]);
         }
 
-        $proofPhotoDisk = $entry->proof_photo_disk;
+        $proofPhotoDisk = $entry->proof_photo_disk ?: (string) config('security.payout_proofs.disk', 'local');
         $proofPhotoPath = $entry->proof_photo_path;
         $proofPhotoMimeType = $entry->proof_photo_mime_type;
 
@@ -369,7 +358,7 @@ class PayoutController extends Controller
                 Storage::disk($entry->proof_photo_disk)->delete($entry->proof_photo_path);
             }
 
-            $proofPhotoDisk = 'local';
+            $proofPhotoDisk = (string) config('security.payout_proofs.disk', 'local');
             $proofPhotoPath = $request->file('proof_photo')->store('payout-proofs', $proofPhotoDisk);
             $proofPhotoMimeType = $request->file('proof_photo')->getMimeType();
         }
@@ -394,7 +383,7 @@ class PayoutController extends Controller
             }
 
             $extension = strtolower($matches['type']) === 'jpeg' ? 'jpg' : strtolower($matches['type']);
-            $proofPhotoDisk = 'local';
+            $proofPhotoDisk = (string) config('security.payout_proofs.disk', 'local');
             $proofPhotoPath = 'payout-proofs/'.Str::uuid().'.'.$extension;
             Storage::disk($proofPhotoDisk)->put($proofPhotoPath, $binary);
             $proofPhotoMimeType = 'image/'.($extension === 'jpg' ? 'jpeg' : $extension);
@@ -430,6 +419,7 @@ class PayoutController extends Controller
     {
         abort_unless($this->visibleBatchesQuery($request)->whereKey($batch->id)->exists(), 403);
         abort_unless((int) $entry->payout_batch_id === (int) $batch->id, 404);
+        abort_unless($batch->isImportComplete(), 409);
         abort_unless($entry->hasProofPhoto(), 404);
 
         return Storage::disk($entry->proof_photo_disk)->response(

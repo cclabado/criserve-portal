@@ -48,9 +48,15 @@ class ClientDashboardController extends Controller
 
     protected function applicationQuery()
     {
+        return $this->visibleApplicationsBaseQuery()
+            ->with(['assistanceType', 'assistanceSubtype', 'assistanceDetail', 'frequencyRule', 'serviceProvider']);
+    }
+
+    protected function visibleApplicationsBaseQuery()
+    {
         $userId = auth()->id();
 
-        return Application::with(['assistanceType', 'assistanceSubtype', 'assistanceDetail', 'frequencyRule', 'serviceProvider'])
+        return Application::query()
             ->where(function ($query) use ($userId) {
                 $query->where('user_id', $userId)
                     ->orWhereHas('beneficiaryProfile', function ($beneficiaryProfileQuery) use ($userId) {
@@ -87,7 +93,7 @@ class ClientDashboardController extends Controller
             ->latest()
             ->first();
 
-        $baseQuery = Application::query()->where('user_id', auth()->id());
+        $baseQuery = $this->visibleApplicationsBaseQuery();
         $summaryRow = (clone $baseQuery)
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("SUM(CASE WHEN status IN ('submitted', 'under_review', 'for_approval', 'approved') THEN 1 ELSE 0 END) as active")
@@ -302,10 +308,13 @@ class ClientDashboardController extends Controller
         ]);
 
         DB::transaction(function () use ($application, $request, $validated) {
+            $documentRows = [];
+            $timestamp = now();
+
             foreach ($request->file('documents', []) as $file) {
                 $storedDocument = $this->documentSecurity->secureStore($file);
 
-                Document::create([
+                $documentRows[] = [
                     'application_id' => $application->id,
                     'document_type' => 'Compliance Resubmission',
                     'file_name' => $storedDocument['file_name'],
@@ -314,10 +323,28 @@ class ClientDashboardController extends Controller
                     'mime_type' => $storedDocument['mime_type'],
                     'file_size' => $storedDocument['file_size'],
                     'file_hash' => $storedDocument['file_hash'],
+                    'scan_status' => $storedDocument['scan_status'] ?? null,
+                    'scan_message' => $storedDocument['scan_message'] ?? null,
+                    'scan_requested_at' => $storedDocument['scan_requested_at'] ?? null,
+                    'scanned_at' => $storedDocument['scanned_at'] ?? null,
                     'remarks' => filled($validated['compliance_note'] ?? null)
                         ? 'Client resubmission note: '.trim((string) $validated['compliance_note'])
                         : 'Client resubmitted this file for compliance review.',
-                ]);
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
+
+            if ($documentRows !== []) {
+                Document::query()->insert($documentRows);
+
+                $insertedDocumentIds = Document::query()
+                    ->where('application_id', $application->id)
+                    ->where('created_at', $timestamp)
+                    ->whereIn('file_path', collect($documentRows)->pluck('file_path')->all())
+                    ->pluck('id');
+
+                $this->documentSecurity->queueStoredDocumentScans($insertedDocumentIds);
             }
 
             $application->update([

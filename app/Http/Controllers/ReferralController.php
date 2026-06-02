@@ -51,10 +51,10 @@ class ReferralController extends Controller
 
         $query = $this->institutionReferralQuery($institution, $request);
         $referrals = (clone $query)->latest('referred_at')->paginate(10)->withQueryString();
-        $stats = $this->buildRecommendationStats((clone $query)->get());
+        $stats = $this->buildRecommendationStats(clone $query);
         $submittedQuery = $this->institutionSubmittedReferralQuery($institution, $request);
         $submittedReferrals = (clone $submittedQuery)->latest('submitted_at')->paginate(10, ['*'], 'submitted_page')->withQueryString();
-        $submissionStats = $this->buildInstitutionReferralStats((clone $submittedQuery)->get());
+        $submissionStats = $this->buildInstitutionReferralStats(clone $submittedQuery);
 
         return view('referral.dashboard', [
             'institution' => $institution,
@@ -75,10 +75,10 @@ class ReferralController extends Controller
     {
         $query = $this->officerReferralQuery($request);
         $referrals = (clone $query)->latest('referred_at')->paginate(12)->withQueryString();
-        $stats = $this->buildRecommendationStats((clone $query)->get());
+        $stats = $this->buildRecommendationStats(clone $query);
         $institutionReferralsQuery = $this->officerInstitutionReferralQuery($request);
         $institutionReferrals = (clone $institutionReferralsQuery)->latest('submitted_at')->paginate(12, ['*'], 'institution_page')->withQueryString();
-        $institutionReferralStats = $this->buildInstitutionReferralStats((clone $institutionReferralsQuery)->get());
+        $institutionReferralStats = $this->buildInstitutionReferralStats(clone $institutionReferralsQuery);
 
         return view('referral.dashboard', [
             'institution' => null,
@@ -635,6 +635,9 @@ class ReferralController extends Controller
 
     protected function storeApplicationDocuments(Application $application, Request $request, $requirements): void
     {
+        $documentRows = [];
+        $timestamp = now();
+
         foreach ($requirements as $requirement) {
             if (! $request->hasFile("required_documents.{$requirement->id}")) {
                 continue;
@@ -643,7 +646,7 @@ class ReferralController extends Controller
             foreach ($request->file("required_documents.{$requirement->id}") as $file) {
                 $storedDocument = $this->documentSecurity->secureStore($file);
 
-                Document::create([
+                $documentRows[] = [
                     'application_id' => $application->id,
                     'document_requirement_id' => $requirement->id,
                     'document_type' => $requirement->name,
@@ -653,27 +656,49 @@ class ReferralController extends Controller
                     'mime_type' => $storedDocument['mime_type'],
                     'file_size' => $storedDocument['file_size'],
                     'file_hash' => $storedDocument['file_hash'],
-                ]);
+                    'scan_status' => $storedDocument['scan_status'] ?? null,
+                    'scan_message' => $storedDocument['scan_message'] ?? null,
+                    'scan_requested_at' => $storedDocument['scan_requested_at'] ?? null,
+                    'scanned_at' => $storedDocument['scanned_at'] ?? null,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
             }
         }
 
-        if (! $request->hasFile('documents')) {
-            return;
+        if ($request->hasFile('documents')) {
+            foreach ($request->file('documents') as $file) {
+                $storedDocument = $this->documentSecurity->secureStore($file);
+
+                $documentRows[] = [
+                    'application_id' => $application->id,
+                    'document_type' => 'Additional Supporting Document',
+                    'file_name' => $storedDocument['file_name'],
+                    'file_path' => $storedDocument['path'],
+                    'storage_disk' => $storedDocument['disk'],
+                    'mime_type' => $storedDocument['mime_type'],
+                    'file_size' => $storedDocument['file_size'],
+                    'file_hash' => $storedDocument['file_hash'],
+                    'scan_status' => $storedDocument['scan_status'] ?? null,
+                    'scan_message' => $storedDocument['scan_message'] ?? null,
+                    'scan_requested_at' => $storedDocument['scan_requested_at'] ?? null,
+                    'scanned_at' => $storedDocument['scanned_at'] ?? null,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
         }
 
-        foreach ($request->file('documents') as $file) {
-            $storedDocument = $this->documentSecurity->secureStore($file);
+        if ($documentRows !== []) {
+            Document::query()->insert($documentRows);
 
-            Document::create([
-                'application_id' => $application->id,
-                'document_type' => 'Additional Supporting Document',
-                'file_name' => $storedDocument['file_name'],
-                'file_path' => $storedDocument['path'],
-                'storage_disk' => $storedDocument['disk'],
-                'mime_type' => $storedDocument['mime_type'],
-                'file_size' => $storedDocument['file_size'],
-                'file_hash' => $storedDocument['file_hash'],
-            ]);
+            $insertedDocumentIds = Document::query()
+                ->where('application_id', $application->id)
+                ->where('created_at', $timestamp)
+                ->whereIn('file_path', collect($documentRows)->pluck('file_path')->all())
+                ->pluck('id');
+
+            $this->documentSecurity->queueStoredDocumentScans($insertedDocumentIds);
         }
     }
 
@@ -737,16 +762,13 @@ class ReferralController extends Controller
             return;
         }
 
-        $hasAnyMatchingProvider = ServiceProvider::query()
-            ->where('is_active', true)
-            ->get()
-            ->contains(fn (ServiceProvider $serviceProvider) => collect($serviceProvider->categories ?? [])->intersect($relevantCategories)->isNotEmpty());
+        $hasAnyMatchingProvider = ServiceProvider::hasAnyActiveProviderForCategories($relevantCategories);
 
         if (! $hasAnyMatchingProvider) {
             return;
         }
 
-        if (! collect($provider->categories ?? [])->intersect($relevantCategories)->isNotEmpty()) {
+        if (! $provider->matchesAnyCategory($relevantCategories)) {
             throw ValidationException::withMessages([
                 'service_provider_id' => 'The selected service provider does not match the required category for this assistance.',
             ]);
@@ -755,18 +777,7 @@ class ReferralController extends Controller
 
     protected function generateReferenceNo(): string
     {
-        $year = now()->format('Y');
-        $month = now()->format('m');
-        $last = Application::whereYear('created_at', $year)
-            ->whereMonth('created_at', $month)
-            ->orderBy('id', 'desc')
-            ->first();
-
-        $nextNumber = $last && $last->reference_no
-            ? ((int) substr($last->reference_no, -6)) + 1
-            : 1;
-
-        return 'APP-'.$year.'-'.$month.'-'.str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
+        return Application::nextReferenceNo();
     }
 
     protected function resolveRequestedAssistanceLabel(int $typeId, int $subtypeId, ?int $detailId): string
@@ -778,23 +789,37 @@ class ReferralController extends Controller
         return collect([$type, $subtype, $detail])->filter()->implode(' - ');
     }
 
-    protected function buildRecommendationStats($referrals): array
+    protected function buildRecommendationStats($query): array
     {
+        $stats = (clone $query)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("SUM(CASE WHEN referral_status = 'pending' THEN 1 ELSE 0 END) as pending")
+            ->selectRaw("SUM(CASE WHEN referral_status = 'in_progress' THEN 1 ELSE 0 END) as in_progress")
+            ->selectRaw("SUM(CASE WHEN referral_status = 'completed' THEN 1 ELSE 0 END) as completed")
+            ->first();
+
         return [
-            'total' => $referrals->count(),
-            'pending' => $referrals->where('referral_status', 'pending')->count(),
-            'in_progress' => $referrals->where('referral_status', 'in_progress')->count(),
-            'completed' => $referrals->where('referral_status', 'completed')->count(),
+            'total' => (int) ($stats?->total ?? 0),
+            'pending' => (int) ($stats?->pending ?? 0),
+            'in_progress' => (int) ($stats?->in_progress ?? 0),
+            'completed' => (int) ($stats?->completed ?? 0),
         ];
     }
 
-    protected function buildInstitutionReferralStats($referrals): array
+    protected function buildInstitutionReferralStats($query): array
     {
+        $stats = (clone $query)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending")
+            ->selectRaw("SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress")
+            ->selectRaw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed")
+            ->first();
+
         return [
-            'total' => $referrals->count(),
-            'pending' => $referrals->where('status', 'pending')->count(),
-            'in_progress' => $referrals->where('status', 'in_progress')->count(),
-            'completed' => $referrals->where('status', 'completed')->count(),
+            'total' => (int) ($stats?->total ?? 0),
+            'pending' => (int) ($stats?->pending ?? 0),
+            'in_progress' => (int) ($stats?->in_progress ?? 0),
+            'completed' => (int) ($stats?->completed ?? 0),
         ];
     }
 

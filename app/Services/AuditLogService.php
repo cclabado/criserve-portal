@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\WriteAuditLog;
 use App\Models\AuditLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -26,7 +27,7 @@ class AuditLogService
             return;
         }
 
-        AuditLog::create([
+        $payload = [
             'user_id' => $user?->id ?? $request?->user()?->id,
             'action' => $action,
             'auditable_type' => $auditable?->getMorphClass(),
@@ -34,7 +35,13 @@ class AuditLogService
             'ip_address' => $request?->ip(),
             'user_agent' => $request?->userAgent(),
             'metadata' => array_merge($this->baseMetadata($request), $metadata),
-        ]);
+        ];
+
+        match ((string) config('security.audit_logs.mode', 'after_response')) {
+            'queue' => WriteAuditLog::dispatch($payload),
+            'sync' => AuditLog::create($payload),
+            default => WriteAuditLog::dispatchAfterResponse($payload),
+        };
     }
 
     public function shouldLogModel(Model $model): bool

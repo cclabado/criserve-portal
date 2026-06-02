@@ -19,6 +19,13 @@ class PayoutBatch extends Model
         'source_filename',
         'upload_disk',
         'upload_path',
+        'import_status',
+        'processed_rows',
+        'progress_message',
+        'error_message',
+        'import_started_at',
+        'import_completed_at',
+        'import_failed_at',
         'summary',
         'notes',
         'is_active',
@@ -28,8 +35,12 @@ class PayoutBatch extends Model
     protected $casts = [
         'payout_date' => 'date',
         'payout_amount' => 'decimal:2',
+        'processed_rows' => 'integer',
         'summary' => 'array',
         'is_active' => 'boolean',
+        'import_started_at' => 'datetime',
+        'import_completed_at' => 'datetime',
+        'import_failed_at' => 'datetime',
         'activated_at' => 'datetime',
     ];
 
@@ -51,5 +62,10 @@ class PayoutBatch extends Model
     public function entries()
     {
         return $this->hasMany(PayoutEntry::class);
+    }
+
+    public function isImportComplete(): bool
+    {
+        return $this->import_status === 'completed';
     }
 }
