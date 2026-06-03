@@ -4,6 +4,7 @@
 
 @php
     $isOfficer = $workspace === 'officer';
+    $readOnlyBatchRecord = $readOnlyBatchRecord ?? false;
     $indexRoute = $isOfficer ? 'cash-officer.gl-payment-reviews' : 'cash-approver.gl-payment-approvals';
     $updateRoute = $indexRoute.'.update';
     $orsRoute = $indexRoute.'.ors';
@@ -20,13 +21,21 @@
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                <a href="{{ route($indexRoute) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
-                    &larr; Back to {{ $isOfficer ? 'Cash Review' : 'Cash Approval' }} List
-                </a>
+                @if($readOnlyBatchRecord)
+                    <a href="{{ $readOnlyBatchBackUrl ?? route('cash-approver.gl-payment-approvals.show', $batch->id) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; Back to Cash Approval Batch
+                    </a>
+                @else
+                    <a href="{{ route($indexRoute) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; Back to {{ $isOfficer ? 'Cash Review' : 'Cash Approval' }} List
+                    </a>
+                @endif
                 <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{{ $pageLabel }}</p>
                 <h1 class="mt-2 text-3xl font-black text-sky-950">{{ $application->reference_no }}</h1>
                 <p class="mt-2 text-sm text-slate-500">
-                    Review the guarantee letter cash-stage details, attachments, fund source tagging, and previous stage remarks.
+                    {{ $readOnlyBatchRecord
+                        ? 'Inspect this included GL record one by one, then return to the batch workspace to make the cash approval decision.'
+                        : 'Review the guarantee letter cash-stage details, attachments, fund source tagging, and previous stage remarks.' }}
                 </p>
             </div>
             @if($application->gl_ors_number || $application->gl_dv_number || $application->gl_lddap_ada_number)
@@ -100,7 +109,9 @@
             <button type="button" x-on:click="activeTab = 'assessment'" x-bind:class="activeTab === 'assessment' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Initial Assessment</button>
             <button type="button" x-on:click="activeTab = 'recommendation'" x-bind:class="activeTab === 'recommendation' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Recommendation</button>
             <button type="button" x-on:click="activeTab = 'attachments'" x-bind:class="activeTab === 'attachments' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Attachments</button>
-            <button type="button" x-on:click="activeTab = 'decision'" x-bind:class="activeTab === 'decision' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">{{ $actionLabel }}</button>
+            @unless($readOnlyBatchRecord)
+                <button type="button" x-on:click="activeTab = 'decision'" x-bind:class="activeTab === 'decision' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">{{ $actionLabel }}</button>
+            @endunless
         </div>
     </section>
 
@@ -233,83 +244,85 @@
         </section>
     </section>
 
-    <section x-show="activeTab === 'decision'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="space-y-6">
-            <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <h2 class="text-2xl font-black text-sky-950">Previous Stage Endorsement</h2>
-                <div class="mt-5 grid gap-4 md:grid-cols-2">
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p class="text-sm font-semibold text-slate-800">Finance Fund Source</p>
-                        <p class="mt-2 text-sm text-slate-600">{{ $application->gl_finance_fund_source ?? '-' }}</p>
+    @unless($readOnlyBatchRecord)
+        <section x-show="activeTab === 'decision'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="space-y-6">
+                <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                    <h2 class="text-2xl font-black text-sky-950">Previous Stage Endorsement</h2>
+                    <div class="mt-5 grid gap-4 md:grid-cols-2">
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                            <p class="text-sm font-semibold text-slate-800">Finance Fund Source</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ $application->gl_finance_fund_source ?? '-' }}</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                            <p class="text-sm font-semibold text-slate-800">{{ $isOfficer ? 'Accounting Remarks' : 'Cash Review Remarks' }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ $isOfficer ? ($application->gl_accounting_remarks ?? 'No remarks added.') : ($application->gl_cash_remarks ?? 'No remarks added.') }}</p>
+                        </div>
                     </div>
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p class="text-sm font-semibold text-slate-800">{{ $isOfficer ? 'Accounting Remarks' : 'Cash Review Remarks' }}</p>
-                        <p class="mt-2 text-sm text-slate-600">{{ $isOfficer ? ($application->gl_accounting_remarks ?? 'No remarks added.') : ($application->gl_cash_remarks ?? 'No remarks added.') }}</p>
-                    </div>
-                </div>
-            </section>
+                </section>
 
-            <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 class="text-2xl font-black text-sky-950">{{ $actionLabel }}</h2>
-                <form method="POST" action="{{ route($updateRoute, $application->id) }}" class="mt-5 space-y-4">
-                    @csrf
-                    @method('PATCH')
-                    @if($isOfficer)
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <label class="label">NCA Number</label>
-                                <input type="text" name="gl_nca_number" class="input" value="{{ old('gl_nca_number', $application->gl_nca_number) }}" placeholder="Enter NCA number">
+                <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 class="text-2xl font-black text-sky-950">{{ $actionLabel }}</h2>
+                    <form method="POST" action="{{ route($updateRoute, $application->id) }}" class="mt-5 space-y-4">
+                        @csrf
+                        @method('PATCH')
+                        @if($isOfficer)
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="label">NCA Number</label>
+                                    <input type="text" name="gl_nca_number" class="input" value="{{ old('gl_nca_number', $application->gl_nca_number) }}" placeholder="Enter NCA number">
+                                </div>
+                                <div>
+                                    <label class="label">NCA Date</label>
+                                    <input type="date" name="gl_nca_date" class="input" value="{{ old('gl_nca_date', optional($application->gl_nca_date)->format('Y-m-d')) }}">
+                                </div>
+                                <div>
+                                    <label class="label">Servicing Bank Branch</label>
+                                    <input type="text" name="gl_servicing_bank_branch" class="input" value="{{ old('gl_servicing_bank_branch', $application->gl_servicing_bank_branch) }}" placeholder="Enter servicing branch">
+                                </div>
+                                <div>
+                                    <label class="label">MDS Sub-Account Number</label>
+                                    <input type="text" name="gl_mds_sub_account_number" class="input" value="{{ old('gl_mds_sub_account_number', $application->gl_mds_sub_account_number) }}" placeholder="Enter MDS sub-account number">
+                                </div>
+                                <div>
+                                    <label class="label">Withholding Tax Amount</label>
+                                    <input type="number" step="0.01" min="0" name="gl_withholding_tax_amount" class="input" value="{{ old('gl_withholding_tax_amount', $application->gl_withholding_tax_amount) }}" placeholder="0.00">
+                                </div>
                             </div>
                             <div>
-                                <label class="label">NCA Date</label>
-                                <input type="date" name="gl_nca_date" class="input" value="{{ old('gl_nca_date', optional($application->gl_nca_date)->format('Y-m-d')) }}">
+                                <label class="label">Cash Review Decision</label>
+                                <select name="decision" class="input">
+                                    <option value="approved" @selected(old('decision') === 'approved')>Submit to Cash Approval</option>
+                                    <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
+                                </select>
                             </div>
                             <div>
-                                <label class="label">Servicing Bank Branch</label>
-                                <input type="text" name="gl_servicing_bank_branch" class="input" value="{{ old('gl_servicing_bank_branch', $application->gl_servicing_bank_branch) }}" placeholder="Enter servicing branch">
+                                <label class="label">Cash Remarks</label>
+                                <textarea name="gl_cash_remarks" class="input h-32" placeholder="Add cash remarks or state what must be corrected before it goes back.">{{ old('gl_cash_remarks', $application->gl_cash_remarks) }}</textarea>
+                            </div>
+                            <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance.</p>
+                            <button type="submit" class="btn-primary">Save Decision</button>
+                        @else
+                            <div>
+                                <label class="label">Approval Decision</label>
+                                <select name="decision" class="input">
+                                    <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
+                                    <option value="approved" @selected(old('decision') === 'approved')>Approved</option>
+                                    <option value="disapproved" @selected(old('decision') === 'disapproved')>Disapproved</option>
+                                </select>
                             </div>
                             <div>
-                                <label class="label">MDS Sub-Account Number</label>
-                                <input type="text" name="gl_mds_sub_account_number" class="input" value="{{ old('gl_mds_sub_account_number', $application->gl_mds_sub_account_number) }}" placeholder="Enter MDS sub-account number">
+                                <label class="label">Remarks / Reason</label>
+                                <textarea name="remarks" class="input h-32" placeholder="Add remarks or the reason for disapproval when needed.">{{ old('remarks', $application->gl_cash_approval_remarks) }}</textarea>
+                                <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance or Disapproved.</p>
                             </div>
-                            <div>
-                                <label class="label">Withholding Tax Amount</label>
-                                <input type="number" step="0.01" min="0" name="gl_withholding_tax_amount" class="input" value="{{ old('gl_withholding_tax_amount', $application->gl_withholding_tax_amount) }}" placeholder="0.00">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="label">Cash Review Decision</label>
-                            <select name="decision" class="input">
-                                <option value="approved" @selected(old('decision') === 'approved')>Submit to Cash Approval</option>
-                                <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="label">Cash Remarks</label>
-                            <textarea name="gl_cash_remarks" class="input h-32" placeholder="Add cash remarks or state what must be corrected before it goes back.">{{ old('gl_cash_remarks', $application->gl_cash_remarks) }}</textarea>
-                        </div>
-                        <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance.</p>
-                        <button type="submit" class="btn-primary">Save Decision</button>
-                    @else
-                        <div>
-                            <label class="label">Approval Decision</label>
-                            <select name="decision" class="input">
-                                <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
-                                <option value="approved" @selected(old('decision') === 'approved')>Approved</option>
-                                <option value="disapproved" @selected(old('decision') === 'disapproved')>Disapproved</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="label">Remarks / Reason</label>
-                            <textarea name="remarks" class="input h-32" placeholder="Add remarks or the reason for disapproval when needed.">{{ old('remarks', $application->gl_cash_approval_remarks) }}</textarea>
-                            <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance or Disapproved.</p>
-                        </div>
-                        <button type="submit" class="btn-primary">Save Decision</button>
-                    @endif
-                </form>
-            </section>
-        </div>
-    </section>
+                            <button type="submit" class="btn-primary">Save Decision</button>
+                        @endif
+                    </form>
+                </section>
+            </div>
+        </section>
+    @endunless
 </main>
 
 @endsection

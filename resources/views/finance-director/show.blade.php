@@ -3,25 +3,40 @@
 @section('content')
 
 @php
+    $readOnlyBatchRecord = $readOnlyBatchRecord ?? false;
     $totalRecommendedAmount = $application->assistanceRecommendations->isNotEmpty()
         ? $application->assistanceRecommendations->sum(fn ($recommendation) => (float) $recommendation->final_amount)
         : (float) ($application->final_amount ?? $application->recommended_amount ?? 0);
     $orsRoute = 'finance-director.gl-payment-approvals.ors';
     $dvRoute = 'finance-director.gl-payment-approvals.dv';
     $lddapAdaRoute = 'finance-director.gl-payment-approvals.lddap-ada';
+    $paymentStatusLabel = match (true) {
+        $application->gl_payment_status === 'paid' => 'Paid',
+        $application->gl_payment_status === 'for_compliance_cash_officer' => 'For Compliance (Cash Officer)',
+        $application->gl_finance_director_status === 'disapproved' => 'Disapproved',
+        default => 'For Processing (Finance Director)',
+    };
 @endphp
 
 <main class="space-y-6" x-data="{ activeTab: 'client' }">
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                <a href="{{ route('finance-director.gl-payment-approvals') }}" class="text-sm text-slate-500 hover:text-[#234E70]">
-                    &larr; Back to Final Approval List
-                </a>
+                @if($readOnlyBatchRecord)
+                    <a href="{{ $readOnlyBatchBackUrl ?? route('finance-director.gl-payment-approvals.show', $batch->id) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; Back to Final Approval Batch
+                    </a>
+                @else
+                    <a href="{{ route('finance-director.gl-payment-approvals') }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; Back to Final Approval List
+                    </a>
+                @endif
                 <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Finance Director</p>
                 <h1 class="mt-2 text-3xl font-black text-sky-950">{{ $application->reference_no }}</h1>
                 <p class="mt-2 text-sm text-slate-500">
-                    Review the final guaranteed payment package, then approve to tag the case as Paid or disapprove with remarks.
+                    {{ $readOnlyBatchRecord
+                        ? 'Inspect this included GL record one by one, then return to the batch workspace to make the finance director decision.'
+                        : 'Review the final guaranteed payment package, then approve to tag the case as Paid or disapprove with remarks.' }}
                 </p>
             </div>
             @if($application->gl_ors_number || $application->gl_dv_number || $application->gl_lddap_ada_number)
@@ -76,7 +91,7 @@
             <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Payment Status</p>
             <div class="mt-3">
                 <span class="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">
-                    For Processing (Finance Director)
+                    {{ $paymentStatusLabel }}
                 </span>
             </div>
         </article>
@@ -95,7 +110,9 @@
             <button type="button" x-on:click="activeTab = 'assessment'" x-bind:class="activeTab === 'assessment' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Initial Assessment</button>
             <button type="button" x-on:click="activeTab = 'recommendation'" x-bind:class="activeTab === 'recommendation' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Recommendation</button>
             <button type="button" x-on:click="activeTab = 'attachments'" x-bind:class="activeTab === 'attachments' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Attachments</button>
-            <button type="button" x-on:click="activeTab = 'decision'" x-bind:class="activeTab === 'decision' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Final Approval</button>
+            @unless($readOnlyBatchRecord)
+                <button type="button" x-on:click="activeTab = 'decision'" x-bind:class="activeTab === 'decision' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Final Approval</button>
+            @endunless
         </div>
     </section>
 
@@ -228,45 +245,47 @@
         </section>
     </section>
 
-    <section x-show="activeTab === 'decision'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="space-y-6">
-            <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <h2 class="text-2xl font-black text-sky-950">Previous Stage Endorsement</h2>
-                <div class="mt-5 grid gap-4 md:grid-cols-2">
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p class="text-sm font-semibold text-slate-800">Finance Fund Source</p>
-                        <p class="mt-2 text-sm text-slate-600">{{ $application->gl_finance_fund_source ?? '-' }}</p>
+    @unless($readOnlyBatchRecord)
+        <section x-show="activeTab === 'decision'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="space-y-6">
+                <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                    <h2 class="text-2xl font-black text-sky-950">Previous Stage Endorsement</h2>
+                    <div class="mt-5 grid gap-4 md:grid-cols-2">
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                            <p class="text-sm font-semibold text-slate-800">Finance Fund Source</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ $application->gl_finance_fund_source ?? '-' }}</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                            <p class="text-sm font-semibold text-slate-800">Accounting Certification Remarks</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ $application->gl_cash_certification_remarks ?? 'No remarks added.' }}</p>
+                        </div>
                     </div>
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p class="text-sm font-semibold text-slate-800">Accounting Certification Remarks</p>
-                        <p class="mt-2 text-sm text-slate-600">{{ $application->gl_cash_certification_remarks ?? 'No remarks added.' }}</p>
-                    </div>
-                </div>
-            </section>
+                </section>
 
-            <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 class="text-2xl font-black text-sky-950">Final Approval</h2>
-                <form method="POST" action="{{ route('finance-director.gl-payment-approvals.update', $application->id) }}" class="mt-5 space-y-4">
-                    @csrf
-                    @method('PATCH')
-                    <div>
-                        <label class="label">Decision</label>
-                        <select name="decision" class="input">
-                            <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
-                            <option value="approved" @selected(old('decision') === 'approved')>Approved</option>
-                            <option value="disapproved" @selected(old('decision') === 'disapproved')>Disapproved</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="label">Remarks / Reason</label>
-                        <textarea name="remarks" class="input h-32" placeholder="Add remarks or the reason for disapproval when needed.">{{ old('remarks', $application->gl_finance_director_remarks) }}</textarea>
-                        <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance or Disapproved.</p>
-                    </div>
-                    <button type="submit" class="btn-primary">Save Final Decision</button>
-                </form>
-            </section>
-        </div>
-    </section>
+                <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 class="text-2xl font-black text-sky-950">Final Approval</h2>
+                    <form method="POST" action="{{ route('finance-director.gl-payment-approvals.update', $application->id) }}" class="mt-5 space-y-4">
+                        @csrf
+                        @method('PATCH')
+                        <div>
+                            <label class="label">Decision</label>
+                            <select name="decision" class="input">
+                                <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
+                                <option value="approved" @selected(old('decision') === 'approved')>Approved</option>
+                                <option value="disapproved" @selected(old('decision') === 'disapproved')>Disapproved</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="label">Remarks / Reason</label>
+                            <textarea name="remarks" class="input h-32" placeholder="Add remarks or the reason for disapproval when needed.">{{ old('remarks', $application->gl_finance_director_remarks) }}</textarea>
+                            <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance or Disapproved.</p>
+                        </div>
+                        <button type="submit" class="btn-primary">Save Final Decision</button>
+                    </form>
+                </section>
+            </div>
+        </section>
+    @endunless
 </main>
 
 @endsection

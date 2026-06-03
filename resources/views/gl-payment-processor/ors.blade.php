@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ORS {{ $application->gl_ors_number }}</title>
+<title>ORS {{ $orsNumber }}</title>
 <style>
     *{box-sizing:border-box}
     body{margin:0;background:#f3f4f6;color:#111;font-family:"Times New Roman",serif}
@@ -39,8 +39,8 @@
 <div class="print-btn"><button onclick="window.print()">Print ORS</button></div>
 <div class="page">
     <div class="topline">
-        <div><strong>No.:</strong> {{ $application->gl_ors_number }}</div>
-        <div><strong>Date:</strong> {{ optional($application->gl_ors_date)->format('Y-m-d') ?? '-' }}</div>
+        <div><strong>No.:</strong> {{ $orsNumber }}</div>
+        <div><strong>Date:</strong> {{ optional($orsDate)->format('Y-m-d') ?? '-' }}</div>
     </div>
     <div class="title">OBLIGATION REQUEST AND STATUS</div>
 
@@ -48,11 +48,11 @@
         <tr>
             <td colspan="2"><strong>{{ $entityName }}</strong></td>
             <td class="label">Fund</td>
-            <td>{{ $application->gl_fund_cluster ?: '-' }}</td>
+            <td>{{ $fundCluster }}</td>
         </tr>
         <tr>
             <td class="label">Payee</td>
-            <td>{{ $application->serviceProvider?->name ?? '-' }}</td>
+            <td>{{ $serviceProviderName }}</td>
             <td class="label">Office</td>
             <td>{{ $officeName }}</td>
         </tr>
@@ -74,15 +74,24 @@
         </thead>
         <tbody>
             <tr>
-                <td>{{ $application->gl_responsibility_center ?: '-' }}</td>
-                <td>{{ $particulars }}</td>
-                <td>{{ $application->gl_mfo_pap ?: '-' }}</td>
+                <td>{{ $responsibilityCenter }}</td>
+                <td>
+                    <strong>{{ $particulars }}</strong>
+                    @if(($documentScopeLabel ?? 'record') === 'batch')
+                        <div style="margin-top:8px;font-size:12px">
+                            @foreach($lineItems as $item)
+                                <div>{{ $item['reference_no'] }} - {{ $item['client_name'] }} (PHP {{ number_format($item['amount'], 2) }})</div>
+                            @endforeach
+                        </div>
+                    @endif
+                </td>
+                <td>{{ $mfoPap }}</td>
                 <td>{{ $uacsCode }}</td>
-                <td style="text-align:right">{{ number_format($amount, 2) }}</td>
+                <td style="text-align:right">{{ number_format($grossAmount, 2) }}</td>
             </tr>
             <tr>
                 <td colspan="4" style="text-align:right"><strong>Total</strong></td>
-                <td style="text-align:right"><strong>{{ number_format($amount, 2) }}</strong></td>
+                <td style="text-align:right"><strong>{{ number_format($grossAmount, 2) }}</strong></td>
             </tr>
         </tbody>
     </table>
@@ -120,12 +129,12 @@
         </thead>
         <tbody>
             <tr>
-                <td>{{ optional($application->gl_ors_date)->format('Y-m-d') ?? '-' }}</td>
-                <td>Obligation</td>
-                <td>{{ $application->gl_ors_number }}</td>
-                <td style="text-align:right">{{ number_format($amount, 2) }}</td>
+                <td>{{ optional($orsDate)->format('Y-m-d') ?? '-' }}</td>
+                <td>{{ ($documentScopeLabel ?? 'record') === 'batch' ? 'Batch Obligation' : 'Obligation' }}</td>
+                <td>{{ $orsNumber }}</td>
+                <td style="text-align:right">{{ number_format($grossAmount, 2) }}</td>
                 <td style="text-align:right">0.00</td>
-                <td style="text-align:right">{{ number_format($amount, 2) }}</td>
+                <td style="text-align:right">{{ number_format($grossAmount, 2) }}</td>
             </tr>
         </tbody>
     </table>

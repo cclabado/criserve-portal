@@ -5,6 +5,8 @@
 @php
     $isOfficer = $workspace === 'officer';
     $isCashCertifier = $workspace === 'cash_certifier';
+    $readOnlyBatchRecord = $readOnlyBatchRecord ?? false;
+    $readOnlyBatchBackText = $readOnlyBatchBackText ?? 'Back to Accounting Approval Batch';
     $indexRoute = $isOfficer
         ? 'accounting-officer.gl-payment-reviews'
         : ($isCashCertifier ? 'accounting-approver.cash-certifications' : 'accounting-approver.gl-payment-approvals');
@@ -30,15 +32,23 @@
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                <a href="{{ route($indexRoute) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
-                    &larr; Back to {{ $listLabel }} List
-                </a>
+                @if($readOnlyBatchRecord)
+                    <a href="{{ $readOnlyBatchBackUrl ?? route('accounting-approver.gl-payment-approvals.show', $batch->id) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; {{ $readOnlyBatchBackText }}
+                    </a>
+                @else
+                    <a href="{{ route($indexRoute) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; Back to {{ $listLabel }} List
+                    </a>
+                @endif
                 <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{{ $pageLabel }}</p>
                 <h1 class="mt-2 text-3xl font-black text-sky-950">{{ $application->reference_no }}</h1>
                 <p class="mt-2 text-sm text-slate-500">
-                    {{ $isCashCertifier
+                    {{ $readOnlyBatchRecord
+                        ? 'Inspect this included GL record one by one, then return to the batch workspace to make the accounting approval decision.'
+                        : ($isCashCertifier
                         ? 'Certify the cash-cleared guarantee letter case, review the attachments again, and record the accounting approver decision for the cash stage.'
-                        : 'Review the guarantee letter accounting details, service provider attachments, fund source tagging, and previous stage remarks.' }}
+                        : 'Review the guarantee letter accounting details, service provider attachments, fund source tagging, and previous stage remarks.') }}
                 </p>
             </div>
             @if($application->gl_ors_number || $application->gl_dv_number || $application->gl_lddap_ada_number)
@@ -112,7 +122,9 @@
             <button type="button" x-on:click="activeTab = 'assessment'" x-bind:class="activeTab === 'assessment' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Initial Assessment</button>
             <button type="button" x-on:click="activeTab = 'recommendation'" x-bind:class="activeTab === 'recommendation' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Recommendation</button>
             <button type="button" x-on:click="activeTab = 'attachments'" x-bind:class="activeTab === 'attachments' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Attachments</button>
-            <button type="button" x-on:click="activeTab = 'decision'" x-bind:class="activeTab === 'decision' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">{{ $actionLabel }}</button>
+            @unless($readOnlyBatchRecord)
+                <button type="button" x-on:click="activeTab = 'decision'" x-bind:class="activeTab === 'decision' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">{{ $actionLabel }}</button>
+            @endunless
         </div>
     </section>
 
@@ -245,61 +257,63 @@
         </section>
     </section>
 
-    <section x-show="activeTab === 'decision'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="space-y-6">
-            <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <h2 class="text-2xl font-black text-sky-950">Previous Stage Endorsement</h2>
-                <div class="mt-5 grid gap-4 md:grid-cols-2">
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p class="text-sm font-semibold text-slate-800">Finance Fund Source</p>
-                        <p class="mt-2 text-sm text-slate-600">{{ $application->gl_finance_fund_source ?? '-' }}</p>
+    @unless($readOnlyBatchRecord)
+        <section x-show="activeTab === 'decision'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="space-y-6">
+                <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                    <h2 class="text-2xl font-black text-sky-950">Previous Stage Endorsement</h2>
+                    <div class="mt-5 grid gap-4 md:grid-cols-2">
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                            <p class="text-sm font-semibold text-slate-800">Finance Fund Source</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ $application->gl_finance_fund_source ?? '-' }}</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                            <p class="text-sm font-semibold text-slate-800">{{ $isOfficer ? 'Processor Remarks' : ($isCashCertifier ? 'Cash Approval Remarks' : 'Accounting Review Remarks') }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ $isOfficer ? ($application->gl_budget_remarks ?? 'No remarks added.') : ($isCashCertifier ? ($application->gl_cash_approval_remarks ?? 'No remarks added.') : ($application->gl_accounting_remarks ?? 'No remarks added.')) }}</p>
+                        </div>
                     </div>
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p class="text-sm font-semibold text-slate-800">{{ $isOfficer ? 'Processor Remarks' : ($isCashCertifier ? 'Cash Approval Remarks' : 'Accounting Review Remarks') }}</p>
-                        <p class="mt-2 text-sm text-slate-600">{{ $isOfficer ? ($application->gl_budget_remarks ?? 'No remarks added.') : ($isCashCertifier ? ($application->gl_cash_approval_remarks ?? 'No remarks added.') : ($application->gl_accounting_remarks ?? 'No remarks added.')) }}</p>
-                    </div>
-                </div>
-            </section>
+                </section>
 
-            <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 class="text-2xl font-black text-sky-950">{{ $actionLabel }}</h2>
-                <form method="POST" action="{{ route($updateRoute, $application->id) }}" class="mt-5 space-y-4">
-                    @csrf
-                    @method('PATCH')
-                    @if($isOfficer)
-                        <div>
-                            <label class="label">Accounting Review Decision</label>
-                            <select name="decision" class="input">
-                                <option value="approved" @selected(old('decision') === 'approved')>Submit to Accounting Approval</option>
-                                <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="label">Accounting Remarks</label>
-                            <textarea name="gl_accounting_remarks" class="input h-32" placeholder="Add accounting remarks or state what must be corrected before it goes back.">{{ old('gl_accounting_remarks', $application->gl_accounting_remarks) }}</textarea>
-                        </div>
-                        <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance.</p>
-                        <button type="submit" class="btn-primary">Save Decision</button>
-                    @else
-                        <div>
-                            <label class="label">{{ $isCashCertifier ? 'Certification Decision' : 'Approval Decision' }}</label>
-                            <select name="decision" class="input">
-                                <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
-                                <option value="approved" @selected(old('decision') === 'approved')>Approved</option>
-                                <option value="disapproved" @selected(old('decision') === 'disapproved')>Disapproved</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="label">Remarks / Reason</label>
-                            <textarea name="remarks" class="input h-32" placeholder="Add remarks or the reason for disapproval when needed.">{{ old('remarks', $isCashCertifier ? $application->gl_cash_certification_remarks : $application->gl_accounting_approval_remarks) }}</textarea>
-                            <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance or Disapproved.</p>
-                        </div>
-                        <button type="submit" class="btn-primary">{{ $isCashCertifier ? 'Save Certification' : 'Save Decision' }}</button>
-                    @endif
-                </form>
-            </section>
-        </div>
-    </section>
+                <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 class="text-2xl font-black text-sky-950">{{ $actionLabel }}</h2>
+                    <form method="POST" action="{{ route($updateRoute, $application->id) }}" class="mt-5 space-y-4">
+                        @csrf
+                        @method('PATCH')
+                        @if($isOfficer)
+                            <div>
+                                <label class="label">Accounting Review Decision</label>
+                                <select name="decision" class="input">
+                                    <option value="approved" @selected(old('decision') === 'approved')>Submit to Accounting Approval</option>
+                                    <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="label">Accounting Remarks</label>
+                                <textarea name="gl_accounting_remarks" class="input h-32" placeholder="Add accounting remarks or state what must be corrected before it goes back.">{{ old('gl_accounting_remarks', $application->gl_accounting_remarks) }}</textarea>
+                            </div>
+                            <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance.</p>
+                            <button type="submit" class="btn-primary">Save Decision</button>
+                        @else
+                            <div>
+                                <label class="label">{{ $isCashCertifier ? 'Certification Decision' : 'Approval Decision' }}</label>
+                                <select name="decision" class="input">
+                                    <option value="for_compliance" @selected(old('decision') === 'for_compliance')>For Compliance</option>
+                                    <option value="approved" @selected(old('decision') === 'approved')>Approved</option>
+                                    <option value="disapproved" @selected(old('decision') === 'disapproved')>Disapproved</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="label">Remarks / Reason</label>
+                                <textarea name="remarks" class="input h-32" placeholder="Add remarks or the reason for disapproval when needed.">{{ old('remarks', $isCashCertifier ? $application->gl_cash_certification_remarks : $application->gl_accounting_approval_remarks) }}</textarea>
+                                <p class="mt-2 text-xs text-slate-500">Remarks are required when the decision is For Compliance or Disapproved.</p>
+                            </div>
+                            <button type="submit" class="btn-primary">{{ $isCashCertifier ? 'Save Certification' : 'Save Decision' }}</button>
+                        @endif
+                    </form>
+                </section>
+            </div>
+        </section>
+    @endunless
 </main>
 
 @endsection

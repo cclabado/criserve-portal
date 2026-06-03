@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\BuildsGlFinanceDocuments;
 use App\Models\Application;
+use App\Models\GlFinanceBatch;
 use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -72,16 +73,7 @@ class CashController extends Controller
 
     public function cashApproverQueue(Request $request): View
     {
-        [$applications, $filters, $fundSources, $queueStats, $paymentStatusOptions] = $this->buildQueuePayload($request, 'approver');
-
-        return view('cash.queue', [
-            'workspace' => 'approver',
-            'applications' => $applications,
-            'filters' => $filters,
-            'fundSources' => $fundSources,
-            'paymentStatusOptions' => $paymentStatusOptions,
-            'queueStats' => $queueStats,
-        ]);
+        return $this->cashApprovalBatches($request);
     }
 
     public function showCashOfficer(Application $application): View
@@ -93,13 +85,16 @@ class CashController extends Controller
         return $this->renderShowView($application, 'officer');
     }
 
-    public function showCashApprover(Application $application): View
+    public function showCashApprover($id): View
     {
-        $application = $this->cashApproverBaseQuery(true, true)
-            ->whereKey($application->id)
-            ->firstOrFail();
+        $batch = $this->cashApprovalBatchQuery(true)
+            ->with('applications')
+            ->findOrFail($id);
 
-        return $this->renderShowView($application, 'approver');
+        return view('cash.batch-show', [
+            'workspace' => 'approver',
+            'batch' => $batch,
+        ]);
     }
 
     public function showCashOfficerOrs(Application $application)
@@ -241,7 +236,80 @@ class CashController extends Controller
                 'gl_payment_status' => 'for_compliance_accounting_officer',
             ];
 
-        $application->update($updatePayload);
+        $now = now();
+
+        DB::transaction(function () use ($application, $updatePayload, $validated, $remarks, $now) {
+            $application->update($updatePayload);
+
+            if (! $application->gl_finance_batch_id) {
+                return;
+            }
+
+            $batch = GlFinanceBatch::query()
+                ->with('applications:id,gl_finance_batch_id,gl_cash_reviewed_at')
+                ->find($application->gl_finance_batch_id);
+
+            if (! $batch) {
+                return;
+            }
+
+            if ($validated['decision'] === 'approved') {
+                $allReviewed = $batch->applications->every(fn ($item) => ! is_null($item->gl_cash_reviewed_at));
+
+                if ($allReviewed) {
+                    $batch->update([
+                        'status' => 'for_processing_cash',
+                        'current_stage' => 'cash_approval',
+                        'cash_approval_status' => 'pending_approval',
+                        'cash_approval_remarks' => null,
+                        'cash_approved_by' => null,
+                        'cash_approved_at' => null,
+                        'decision_notes' => null,
+                    ]);
+                }
+
+                return;
+            }
+
+            $batch->update([
+                'status' => 'for_compliance_accounting_officer',
+                'current_stage' => 'accounting_review',
+                'cash_approval_status' => null,
+                'cash_approval_remarks' => null,
+                'cash_approved_by' => null,
+                'cash_approved_at' => null,
+                'compliance_trigger_application_id' => $application->id,
+                'decision_notes' => $remarks,
+            ]);
+
+            Application::query()
+                ->where('gl_finance_batch_id', $batch->id)
+                ->update([
+                    'gl_payment_status' => 'for_compliance_accounting_officer',
+                    'gl_batch_status' => 'for_compliance_accounting_officer',
+                    'gl_cash_remarks' => $remarks,
+                    'gl_cash_review_status' => 'pending_review',
+                    'gl_cash_reviewed_by' => null,
+                    'gl_cash_reviewed_at' => null,
+                    'gl_cash_approval_status' => null,
+                    'gl_cash_approval_remarks' => null,
+                    'gl_cash_approved_by' => null,
+                    'gl_cash_approved_at' => null,
+                    'gl_accounting_review_status' => 'pending_review',
+                    'gl_accounting_remarks' => $remarks,
+                    'gl_accounting_reviewed_by' => null,
+                    'gl_accounting_reviewed_at' => null,
+                    'gl_accounting_approval_status' => null,
+                    'gl_accounting_approval_remarks' => null,
+                    'gl_accounting_approved_by' => null,
+                    'gl_accounting_approved_at' => null,
+                    'gl_program_amount_approval_status' => null,
+                    'gl_program_amount_approval_remarks' => null,
+                    'gl_program_amount_approved_by' => null,
+                    'gl_program_amount_approved_at' => null,
+                    'updated_at' => $now,
+                ]);
+        }, 3);
 
         $this->auditLogs->log($request, 'gl_payment.cash_review_submitted', $application, [
             'decision' => $validated['decision'],
@@ -257,15 +325,16 @@ class CashController extends Controller
                 : 'Case returned to the accounting officer for compliance.');
     }
 
-    public function submitCashApproverDecision(Request $request, Application $application): RedirectResponse
+    public function submitCashApproverDecision(Request $request, $id): RedirectResponse
     {
-        $application = $this->cashApproverBaseQuery()
-            ->whereKey($application->id)
-            ->firstOrFail();
+        $batch = $this->cashApprovalBatchQuery(false)
+            ->with('applications')
+            ->findOrFail($id);
 
         $validated = $request->validate([
             'decision' => ['required', 'in:for_compliance,approved,disapproved'],
             'remarks' => ['nullable', 'string', 'max:1500'],
+            'trigger_application_id' => ['nullable', 'integer'],
         ]);
 
         if ($validated['decision'] === 'disapproved' && blank($validated['remarks'] ?? null)) {
@@ -280,43 +349,106 @@ class CashController extends Controller
             ]);
         }
 
-        $updatePayload = [
-            'gl_cash_approval_status' => $validated['decision'],
-            'gl_cash_approval_remarks' => filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null,
-            'gl_cash_approved_by' => $request->user()->id,
-            'gl_cash_approved_at' => now(),
-        ];
-
-        if ($validated['decision'] === 'approved') {
-            $updatePayload['gl_cash_certification_status'] = 'pending_approval';
-            $updatePayload['gl_cash_certification_remarks'] = null;
-            $updatePayload['gl_cash_certified_by'] = null;
-            $updatePayload['gl_cash_certified_at'] = null;
-            $updatePayload['gl_payment_status'] = 'for_processing_accounting_certification';
-        } elseif ($validated['decision'] === 'for_compliance') {
-            $updatePayload['gl_cash_review_status'] = 'pending_review';
-            $updatePayload['gl_cash_remarks'] = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
-            $updatePayload['gl_cash_reviewed_by'] = null;
-            $updatePayload['gl_cash_reviewed_at'] = null;
-            $updatePayload['gl_cash_approval_status'] = null;
-            $updatePayload['gl_cash_approved_by'] = null;
-            $updatePayload['gl_cash_approved_at'] = null;
-            $updatePayload['gl_payment_status'] = 'for_compliance_cash_officer';
-        } else {
-            $updatePayload['gl_payment_status'] = 'for_processing_cash';
+        if ($validated['decision'] === 'for_compliance' && blank($validated['trigger_application_id'] ?? null)) {
+            throw ValidationException::withMessages([
+                'trigger_application_id' => 'Select the specific record that triggered the compliance return.',
+            ]);
         }
 
-        $application->update($updatePayload);
+        $triggerApplicationId = filled($validated['trigger_application_id'] ?? null)
+            ? (int) $validated['trigger_application_id']
+            : null;
 
-        $this->auditLogs->log($request, 'gl_payment.cash_approval_updated', $application, [
+        if ($triggerApplicationId && ! $batch->applications->contains('id', $triggerApplicationId)) {
+            throw ValidationException::withMessages([
+                'trigger_application_id' => 'The selected compliance trigger record is not part of this batch.',
+            ]);
+        }
+
+        $remarks = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+        $now = now();
+
+        DB::transaction(function () use ($batch, $validated, $remarks, $triggerApplicationId, $now, $request) {
+            $batchPayload = [
+                'cash_approval_status' => $validated['decision'],
+                'cash_approval_remarks' => $remarks,
+                'cash_approved_by' => $request->user()->id,
+                'cash_approved_at' => $now,
+                'compliance_trigger_application_id' => $validated['decision'] === 'for_compliance' ? $triggerApplicationId : null,
+                'decision_notes' => $remarks,
+            ];
+
+            $applicationPayload = [
+                'gl_cash_approval_status' => $validated['decision'],
+                'gl_cash_approval_remarks' => $remarks,
+                'gl_cash_approved_by' => $request->user()->id,
+                'gl_cash_approved_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if ($validated['decision'] === 'approved') {
+                $batchPayload['status'] = 'for_processing_accounting_certification';
+                $batchPayload['current_stage'] = 'accounting_certification';
+                $applicationPayload['gl_cash_certification_status'] = 'pending_approval';
+                $applicationPayload['gl_cash_certification_remarks'] = null;
+                $applicationPayload['gl_cash_certified_by'] = null;
+                $applicationPayload['gl_cash_certified_at'] = null;
+                $applicationPayload['gl_payment_status'] = 'for_processing_accounting_certification';
+                $applicationPayload['gl_batch_status'] = 'for_processing_accounting_certification';
+            } elseif ($validated['decision'] === 'for_compliance') {
+                $batchPayload['status'] = 'for_compliance_cash_officer';
+                $batchPayload['current_stage'] = 'cash_review';
+                $applicationPayload['gl_cash_review_status'] = 'pending_review';
+                $applicationPayload['gl_cash_remarks'] = $remarks;
+                $applicationPayload['gl_cash_reviewed_by'] = null;
+                $applicationPayload['gl_cash_reviewed_at'] = null;
+                $applicationPayload['gl_cash_approval_status'] = null;
+                $applicationPayload['gl_cash_approved_by'] = null;
+                $applicationPayload['gl_cash_approved_at'] = null;
+                $applicationPayload['gl_payment_status'] = 'for_compliance_cash_officer';
+                $applicationPayload['gl_batch_status'] = 'for_compliance_cash_officer';
+            } else {
+                $batchPayload['status'] = 'disapproved';
+                $batchPayload['current_stage'] = null;
+                $applicationPayload['gl_batch_status'] = 'disapproved';
+            }
+
+            $batch->update($batchPayload);
+
+            Application::query()
+                ->whereIn('id', $batch->applications->pluck('id'))
+                ->update($applicationPayload);
+        }, 3);
+
+        $this->auditLogs->log($request, 'gl_finance_batch.cash_approval_updated', $batch, [
             'decision' => $validated['decision'],
-            'remarks' => $validated['remarks'] ?? null,
-            'payment_status' => $updatePayload['gl_payment_status'],
+            'remarks' => $remarks,
+            'trigger_application_id' => $triggerApplicationId,
+            'batch_no' => $batch->batch_no,
         ]);
 
         return redirect()
             ->route('cash-approver.gl-payment-approvals')
-            ->with('success', 'Cash approval decision saved successfully.');
+            ->with('success', 'Cash batch approval decision saved successfully.');
+    }
+
+    public function showCashApproverBatchRecord($batchId, $applicationId): View
+    {
+        $batch = $this->cashApprovalBatchQuery(true)->findOrFail($batchId);
+
+        $application = $this->baseQuery(true)
+            ->whereIn('applications.id', $batch->applications->pluck('id'))
+            ->whereKey($applicationId)
+            ->firstOrFail();
+
+        return view('cash.show', array_merge(
+            $this->renderShowView($application, 'approver')->getData(),
+            [
+                'batch' => $batch,
+                'readOnlyBatchRecord' => true,
+                'readOnlyBatchBackUrl' => route('cash-approver.gl-payment-approvals.show', $batch->id),
+            ]
+        ));
     }
 
     protected function buildQueuePayload(Request $request, string $workspace): array
@@ -403,6 +535,85 @@ class CashController extends Controller
             ->where('gl_cash_approved_by', auth()->id());
     }
 
+    protected function cashApprovalBatches(Request $request): View
+    {
+        $filters = [
+            'search' => trim((string) $request->input('search', '')),
+            'fund_source' => trim((string) $request->input('fund_source', 'all')),
+            'payment_status' => trim((string) $request->input('payment_status', 'all')),
+            'scope' => trim((string) $request->input('scope', 'active')),
+        ];
+
+        $sourceQuery = $filters['scope'] === 'finished'
+            ? $this->cashApprovalBatchFinishedQuery()
+            : $this->cashApprovalBatchQuery(false);
+
+        $query = clone $sourceQuery;
+
+        if ($filters['search'] !== '') {
+            $search = $filters['search'];
+
+            $query->where(function ($inner) use ($search) {
+                $inner->where('batch_no', 'like', "%{$search}%")
+                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('applications', function ($applicationQuery) use ($search) {
+                        $applicationQuery->where('reference_no', 'like', "%{$search}%")
+                            ->orWhereHas('client', function ($clientQuery) use ($search) {
+                                $clientQuery->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%")
+                                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                            });
+                    });
+            });
+        }
+
+        if ($filters['fund_source'] !== '' && $filters['fund_source'] !== 'all') {
+            $query->where('finance_fund_source_name', $filters['fund_source']);
+        }
+
+        if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
+            $query->where('status', $filters['payment_status']);
+        }
+
+        $batches = $query
+            ->latest('updated_at')
+            ->paginate(10)
+            ->withQueryString();
+
+        $fundSources = (clone $sourceQuery)
+            ->whereNotNull('finance_fund_source_name')
+            ->distinct()
+            ->orderBy('finance_fund_source_name')
+            ->pluck('finance_fund_source_name');
+
+        $paymentStatusOptions = (clone $sourceQuery)
+            ->whereNotNull('status')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status');
+
+        $queueStats = [
+            'total' => (clone $sourceQuery)->count(),
+            'with_remarks' => (clone $sourceQuery)
+                ->where(function ($remarkQuery) {
+                    $remarkQuery->whereNotNull('decision_notes')->where('decision_notes', '!=', '')
+                        ->orWhere(function ($inner) {
+                            $inner->whereNotNull('cash_approval_remarks')->where('cash_approval_remarks', '!=', '');
+                        });
+                })
+                ->count(),
+        ];
+
+        return view('cash.batch-queue', [
+            'workspace' => 'approver',
+            'batches' => $batches,
+            'filters' => $filters,
+            'fundSources' => $fundSources,
+            'paymentStatusOptions' => $paymentStatusOptions,
+            'queueStats' => $queueStats,
+        ]);
+    }
+
     protected function renderShowView(Application $application, string $workspace): View
     {
         return view('cash.show', [
@@ -471,6 +682,40 @@ class CashController extends Controller
                     $query->orWhere('gl_cash_approved_by', auth()->id());
                 }
             });
+    }
+
+    protected function cashApprovalBatchQuery(bool $includeHandled = false)
+    {
+        return GlFinanceBatch::query()
+            ->with([
+                'serviceProvider',
+                'bankAccount.bank',
+                'applications.client',
+                'applications.serviceProvider',
+                'applications.assistanceType',
+                'applications.assistanceDetail',
+            ])
+            ->where(function ($query) use ($includeHandled) {
+                $query->where(function ($activeQuery) {
+                    $activeQuery->where('current_stage', 'cash_approval')
+                        ->where(function ($statusQuery) {
+                            $statusQuery->whereNull('cash_approval_status')
+                                ->orWhere('cash_approval_status', 'pending_approval')
+                                ->orWhere('cash_approval_status', 'for_compliance');
+                        })
+                        ->whereIn('status', ['for_processing_cash', 'for_compliance_cash_officer']);
+                });
+
+                if ($includeHandled) {
+                    $query->orWhere('cash_approved_by', auth()->id());
+                }
+            });
+    }
+
+    protected function cashApprovalBatchFinishedQuery()
+    {
+        return $this->cashApprovalBatchQuery(true)
+            ->where('cash_approved_by', auth()->id());
     }
 
     protected function baseQuery(bool $withDocuments = false)

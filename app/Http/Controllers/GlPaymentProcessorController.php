@@ -6,8 +6,11 @@ use App\Http\Controllers\Concerns\BuildsGlFinanceDocuments;
 use App\Models\Application;
 use App\Models\Document;
 use App\Models\FinanceFundSource;
+use App\Models\GlFinanceBatch;
 use App\Services\AuditLogService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -110,6 +113,193 @@ class GlPaymentProcessorController extends Controller
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->pluck('name'),
+        ]);
+    }
+
+    public function readyForBatch(Request $request): View
+    {
+        $filters = [
+            'search' => trim((string) $request->input('search', '')),
+            'service_provider_id' => (string) $request->input('service_provider_id', ''),
+            'fund_source' => trim((string) $request->input('fund_source', '')),
+            'bank_account_id' => (string) $request->input('bank_account_id', ''),
+        ];
+
+        $applications = $this->readyForBatchQuery($filters)
+            ->orderBy('service_provider_id')
+            ->orderBy('gl_finance_fund_source')
+            ->orderBy('reference_no')
+            ->paginate(20)
+            ->withQueryString();
+
+        $eligibleApplicationIds = $this->readyForBatchQuery([], false)->select('applications.id');
+
+        $draftBatches = GlFinanceBatch::query()
+            ->with(['serviceProvider', 'bankAccount.bank'])
+            ->where('status', 'draft')
+            ->latest('updated_at')
+            ->take(8)
+            ->get();
+
+        return view('gl-payment-processor.finance-batches-ready', [
+            'applications' => $applications,
+            'draftBatches' => $draftBatches,
+            'filters' => $filters,
+            'serviceProviders' => DB::table('applications')
+                ->join('service_providers', 'service_providers.id', '=', 'applications.service_provider_id')
+                ->whereIn('applications.id', $eligibleApplicationIds)
+                ->distinct()
+                ->orderBy('service_providers.name')
+                ->pluck('service_providers.name', 'service_providers.id'),
+            'fundSources' => DB::table('applications')
+                ->whereIn('applications.id', $eligibleApplicationIds)
+                ->whereNotNull('gl_finance_fund_source')
+                ->distinct()
+                ->orderBy('gl_finance_fund_source')
+                ->pluck('gl_finance_fund_source'),
+            'bankAccountOptions' => DB::table('applications')
+                ->join('documents', function ($join) {
+                    $join->on('documents.application_id', '=', 'applications.id')
+                        ->where('documents.document_type', '=', 'Updated Statement of Account');
+                })
+                ->join('service_provider_bank_accounts', 'service_provider_bank_accounts.id', '=', 'documents.service_provider_bank_account_id')
+                ->leftJoin('banks', 'banks.id', '=', 'service_provider_bank_accounts.bank_id')
+                ->whereIn('applications.id', $eligibleApplicationIds)
+                ->whereNotNull('documents.service_provider_bank_account_id')
+                ->selectRaw("service_provider_bank_accounts.id as id, CONCAT(COALESCE(banks.name, service_provider_bank_accounts.bank_name), ' - ', service_provider_bank_accounts.account_name) as label")
+                ->distinct()
+                ->orderBy('label')
+                ->pluck('label', 'id'),
+        ]);
+    }
+
+    public function storeFinanceBatch(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'application_ids' => ['required', 'array', 'min:1'],
+            'application_ids.*' => ['integer', 'distinct'],
+        ]);
+
+        $applications = $this->readyForBatchQuery([], true)
+            ->whereIn('applications.id', $validated['application_ids'])
+            ->orderBy('reference_no')
+            ->get();
+
+        if ($applications->count() !== count($validated['application_ids'])) {
+            return back()->withErrors([
+                'application_ids' => 'One or more selected applications are no longer eligible for finance batching.',
+            ])->withInput();
+        }
+
+        $firstApplication = $applications->first();
+        $firstProviderId = (int) $firstApplication->service_provider_id;
+        $firstFundSource = (string) $firstApplication->gl_finance_fund_source;
+        $firstBankAccountId = (int) $firstApplication->latest_statement_bank_account_id;
+
+        $mismatched = $applications->first(function (Application $application) use ($firstProviderId, $firstFundSource, $firstBankAccountId) {
+            return (int) $application->service_provider_id !== $firstProviderId
+                || (string) $application->gl_finance_fund_source !== $firstFundSource
+                || (int) $application->latest_statement_bank_account_id !== $firstBankAccountId;
+        });
+
+        if ($mismatched) {
+            return back()->withErrors([
+                'application_ids' => 'Selected applications must have the same service provider, finance fund source, and bank account.',
+            ])->withInput();
+        }
+
+        $batch = DB::transaction(function () use ($applications, $request, $firstApplication, $firstFundSource, $firstBankAccountId) {
+            $batch = GlFinanceBatch::create([
+                'batch_no' => GlFinanceBatch::nextBatchNo(),
+                'service_provider_id' => $firstApplication->service_provider_id,
+                'service_provider_bank_account_id' => $firstBankAccountId,
+                'finance_fund_source_name' => $firstFundSource,
+                'status' => 'draft',
+                'current_stage' => 'program_approval',
+                'total_amount' => $applications->sum(fn (Application $application) => (float) $application->effectiveDisplayedAmount()),
+                'application_count' => $applications->count(),
+                'created_by_user_id' => $request->user()->id,
+                'batched_by_user_id' => $request->user()->id,
+                'fund_cluster' => $firstApplication->gl_fund_cluster,
+                'responsibility_center' => $firstApplication->gl_responsibility_center,
+                'mfo_pap' => $firstApplication->gl_mfo_pap,
+                'mode_of_payment' => $firstApplication->gl_mode_of_payment,
+                'payee_tin' => $firstApplication->gl_payee_tin,
+                'ors_number' => $firstApplication->gl_ors_number,
+                'ors_date' => $firstApplication->gl_ors_date,
+                'dv_number' => $firstApplication->gl_dv_number,
+                'dv_date' => $firstApplication->gl_dv_date,
+                'lddap_ada_number' => $firstApplication->gl_lddap_ada_number,
+                'lddap_ada_date' => $firstApplication->gl_lddap_ada_date,
+                'nca_number' => $firstApplication->gl_nca_number,
+                'nca_date' => $firstApplication->gl_nca_date,
+                'servicing_bank_branch' => $firstApplication->gl_servicing_bank_branch,
+                'mds_sub_account_number' => $firstApplication->gl_mds_sub_account_number,
+                'withholding_tax_amount' => $firstApplication->gl_withholding_tax_amount,
+            ]);
+
+            $now = now();
+            $batchItems = [];
+
+            foreach ($applications->values() as $index => $application) {
+                $batchItems[] = [
+                    'gl_finance_batch_id' => $batch->id,
+                    'application_id' => $application->id,
+                    'sequence_no' => $index + 1,
+                    'utilized_amount' => $application->effectiveDisplayedAmount(),
+                    'item_status' => 'included',
+                    'flagged_for_compliance' => false,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+
+            DB::table('gl_finance_batch_items')->insert($batchItems);
+
+            Application::query()
+                ->whereIn('id', $applications->pluck('id'))
+                ->update([
+                    'gl_finance_batch_id' => $batch->id,
+                    'gl_batch_status' => 'batched',
+                    'gl_ready_for_batch_at' => DB::raw('COALESCE(gl_ready_for_batch_at, CURRENT_TIMESTAMP)'),
+                    'updated_at' => $now,
+                ]);
+
+            return $batch;
+        }, 3);
+
+        $this->auditLogs->log($request, 'gl_finance_batch.created', $batch, [
+            'batch_no' => $batch->batch_no,
+            'application_ids' => $applications->pluck('id')->all(),
+            'reference_numbers' => $applications->pluck('reference_no')->all(),
+            'service_provider_id' => $batch->service_provider_id,
+            'bank_account_id' => $batch->service_provider_bank_account_id,
+            'fund_source' => $batch->finance_fund_source_name,
+            'application_count' => $batch->application_count,
+            'total_amount' => (float) $batch->total_amount,
+        ]);
+
+        return redirect()
+            ->route('gl-payment-processor.finance-batches.show', $batch)
+            ->with('success', 'Finance batch created successfully.');
+    }
+
+    public function showFinanceBatch(GlFinanceBatch $batch): View
+    {
+        $batch->load([
+            'serviceProvider',
+            'bankAccount.bank',
+            'createdBy',
+            'batchedBy',
+            'applications.client',
+            'applications.beneficiary.relationshipData',
+            'applications.assistanceType',
+            'applications.assistanceSubtype',
+            'applications.assistanceDetail',
+        ]);
+
+        return view('gl-payment-processor.finance-batches-show', [
+            'batch' => $batch,
         ]);
     }
 
@@ -237,6 +427,8 @@ class GlPaymentProcessorController extends Controller
             'gl_program_approval_remarks' => null,
             'gl_program_approved_by' => null,
             'gl_program_approved_at' => null,
+            'gl_batch_status' => 'ready_for_batch',
+            'gl_ready_for_batch_at' => now(),
             'gl_payment_status' => 'for_processing_program_approval',
         ]);
 
@@ -375,5 +567,68 @@ class GlPaymentProcessorController extends Controller
         $stamp = Carbon::now()->format('Y-m');
 
         return sprintf('DV-%s-%05d', $stamp, (int) $application->id);
+    }
+
+    protected function readyForBatchQuery(array $filters = [], bool $withRelations = true): Builder
+    {
+        return Application::query()
+            ->when($withRelations, function (Builder $builder) {
+                $builder->with([
+                    'client',
+                    'serviceProvider',
+                    'documents',
+                    'glFinanceBatch',
+                ]);
+            })
+            ->whereHas('modeOfAssistance', fn ($modeQuery) => $modeQuery->where('name', 'Guarantee Letter'))
+            ->whereIn('status', ['approved', 'released'])
+            ->whereNotNull('service_provider_id')
+            ->whereNotNull('gl_finance_fund_source')
+            ->whereNotNull('gl_actual_utilized_amount')
+            ->where('gl_actual_utilized_amount', '>', 0)
+            ->whereNull('gl_finance_batch_id')
+            ->whereNotIn('gl_payment_status', ['paid', 'for_compliance_service_provider', 'for_compliance_gl_processor'])
+            ->where('gl_payment_status', 'for_processing_program_approval')
+            ->whereHas('documents', function ($documentQuery) {
+                $documentQuery->where('document_type', 'Updated Statement of Account')
+                    ->whereNotNull('service_provider_bank_account_id');
+            })
+            ->addSelect([
+                'latest_statement_document_id' => Document::query()
+                    ->select('id')
+                    ->whereColumn('application_id', 'applications.id')
+                    ->where('document_type', 'Updated Statement of Account')
+                    ->whereNotNull('service_provider_bank_account_id')
+                    ->latest('created_at')
+                    ->limit(1),
+                'latest_statement_bank_account_id' => Document::query()
+                    ->select('service_provider_bank_account_id')
+                    ->whereColumn('application_id', 'applications.id')
+                    ->where('document_type', 'Updated Statement of Account')
+                    ->whereNotNull('service_provider_bank_account_id')
+                    ->latest('created_at')
+                    ->limit(1),
+            ])
+            ->when(($filters['search'] ?? '') !== '', function (Builder $builder) use ($filters) {
+                $search = trim((string) $filters['search']);
+
+                $builder->where(function (Builder $searchQuery) use ($search) {
+                    $searchQuery->where('reference_no', 'like', "%{$search}%")
+                        ->orWhereHas('client', function (Builder $clientQuery) use ($search) {
+                            $clientQuery->where('first_name', 'like', "%{$search}%")
+                                ->orWhere('last_name', 'like', "%{$search}%")
+                                ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                        })
+                        ->orWhereHas('serviceProvider', fn (Builder $providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->when(($filters['service_provider_id'] ?? '') !== '', fn (Builder $builder) => $builder->where('service_provider_id', $filters['service_provider_id']))
+            ->when(($filters['fund_source'] ?? '') !== '', fn (Builder $builder) => $builder->where('gl_finance_fund_source', $filters['fund_source']))
+            ->when(($filters['bank_account_id'] ?? '') !== '', function (Builder $builder) use ($filters) {
+                $builder->whereHas('documents', function ($documentQuery) use ($filters) {
+                    $documentQuery->where('document_type', 'Updated Statement of Account')
+                        ->where('service_provider_bank_account_id', $filters['bank_account_id']);
+                });
+            });
     }
 }

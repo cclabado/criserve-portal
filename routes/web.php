@@ -8,6 +8,7 @@ use App\Http\Controllers\CashController;
 use App\Http\Controllers\ClientDashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\FinanceDirectorController;
+use App\Http\Controllers\GlFinanceBatchDocumentController;
 use App\Http\Controllers\GlPaymentProcessorController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PayoutController;
@@ -46,6 +47,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
     Route::get('/documents/{document}/stream', [DocumentController::class, 'stream'])->name('documents.stream');
     Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
+    Route::get('/gl-finance-batches/{batch}/ors', [GlFinanceBatchDocumentController::class, 'showOrs'])
+        ->name('gl-finance-batches.documents.ors');
+    Route::get('/gl-finance-batches/{batch}/dv', [GlFinanceBatchDocumentController::class, 'showDv'])
+        ->name('gl-finance-batches.documents.dv');
+    Route::get('/gl-finance-batches/{batch}/lddap-ada', [GlFinanceBatchDocumentController::class, 'showLddapAda'])
+        ->name('gl-finance-batches.documents.lddap-ada');
 });
 
 /*
@@ -362,6 +369,12 @@ Route::middleware(['auth', 'role:gl_payment_processor'])->prefix('gl-payment-pro
         ->name('gl-payment-processor.dashboard');
     Route::get('/guarantee-letters', [GlPaymentProcessorController::class, 'queue'])
         ->name('gl-payment-processor.queue');
+    Route::get('/finance-batches/ready', [GlPaymentProcessorController::class, 'readyForBatch'])
+        ->name('gl-payment-processor.finance-batches.ready');
+    Route::post('/finance-batches', [GlPaymentProcessorController::class, 'storeFinanceBatch'])
+        ->name('gl-payment-processor.finance-batches.store');
+    Route::get('/finance-batches/{batch}', [GlPaymentProcessorController::class, 'showFinanceBatch'])
+        ->name('gl-payment-processor.finance-batches.show');
     Route::get('/payouts', [PayoutController::class, 'index'])
         ->name('gl-payment-processor.payouts.index');
     Route::get('/payouts/{batch}', [PayoutController::class, 'show'])
@@ -424,6 +437,8 @@ Route::middleware(['auth', 'role:approving_officer'])->group(function () {
             ->name('approving.gl-payment-approvals');
         Route::get('/gl-payment-approvals/{id}', [ApprovingOfficerController::class, 'showGlPaymentApproval'])
             ->name('approving.gl-payment-approvals.show');
+        Route::get('/gl-payment-approvals/{batchId}/records/{applicationId}', [ApprovingOfficerController::class, 'showGlPaymentApprovalBatchRecord'])
+            ->name('approving.gl-payment-approvals.records.show');
         Route::get('/gl-payment-approvals/{id}/ors', [ApprovingOfficerController::class, 'showGlFinanceOrs'])
             ->name('approving.gl-payment-approvals.ors');
         Route::get('/gl-payment-approvals/{id}/dv', [ApprovingOfficerController::class, 'showGlFinanceDv'])
@@ -434,6 +449,8 @@ Route::middleware(['auth', 'role:approving_officer'])->group(function () {
             ->name('approving.gl-payment-approvals.update');
         Route::get('/gl-program-amount-approvals', [ApprovingOfficerController::class, 'glProgramAmountApprovals'])
             ->name('approving.gl-program-amount-approvals');
+        Route::get('/gl-program-amount-approvals/{batchId}/records/{applicationId}', [ApprovingOfficerController::class, 'showGlProgramAmountApprovalBatchRecord'])
+            ->name('approving.gl-program-amount-approvals.records.show');
         Route::get('/gl-program-amount-approvals/{id}', [ApprovingOfficerController::class, 'showGlProgramAmountApproval'])
             ->name('approving.gl-program-amount-approvals.show');
         Route::get('/gl-program-amount-approvals/{id}/ors', [ApprovingOfficerController::class, 'showGlFinanceOrs'])
@@ -493,6 +510,8 @@ Route::middleware(['auth', 'role:budget_approver'])->prefix('budget-approver')->
         ->name('budget-approver.gl-payment-approvals');
     Route::get('/gl-payment-approvals/{id}', [ApprovingOfficerController::class, 'showGlPaymentApproval'])
         ->name('budget-approver.gl-payment-approvals.show');
+    Route::get('/gl-payment-approvals/{batchId}/records/{applicationId}', [ApprovingOfficerController::class, 'showGlPaymentApprovalBatchRecord'])
+        ->name('budget-approver.gl-payment-approvals.records.show');
     Route::get('/gl-payment-approvals/{id}/ors', [ApprovingOfficerController::class, 'showGlFinanceOrs'])
         ->name('budget-approver.gl-payment-approvals.ors');
     Route::get('/gl-payment-approvals/{id}/dv', [ApprovingOfficerController::class, 'showGlFinanceDv'])
@@ -525,7 +544,9 @@ Route::middleware(['auth', 'role:accounting_approver'])->prefix('accounting-appr
         ->name('accounting-approver.dashboard');
     Route::get('/gl-payment-approvals', [AccountingController::class, 'accountingApproverQueue'])
         ->name('accounting-approver.gl-payment-approvals');
-    Route::get('/gl-payment-approvals/{application}', [AccountingController::class, 'showAccountingApprover'])
+    Route::get('/gl-payment-approvals/{batchId}/records/{applicationId}', [AccountingController::class, 'showAccountingApproverBatchRecord'])
+        ->name('accounting-approver.gl-payment-approvals.records.show');
+    Route::get('/gl-payment-approvals/{id}', [AccountingController::class, 'showAccountingApprover'])
         ->name('accounting-approver.gl-payment-approvals.show');
     Route::get('/gl-payment-approvals/{application}/ors', [AccountingController::class, 'showAccountingApproverOrs'])
         ->name('accounting-approver.gl-payment-approvals.ors');
@@ -533,11 +554,13 @@ Route::middleware(['auth', 'role:accounting_approver'])->prefix('accounting-appr
         ->name('accounting-approver.gl-payment-approvals.dv');
     Route::get('/gl-payment-approvals/{application}/lddap-ada', [AccountingController::class, 'showAccountingApproverLddapAda'])
         ->name('accounting-approver.gl-payment-approvals.lddap-ada');
-    Route::patch('/gl-payment-approvals/{application}', [AccountingController::class, 'submitAccountingApproverDecision'])
+    Route::patch('/gl-payment-approvals/{id}', [AccountingController::class, 'submitAccountingApproverDecision'])
         ->name('accounting-approver.gl-payment-approvals.update');
     Route::get('/cash-certifications', [AccountingController::class, 'cashCertificationQueue'])
         ->name('accounting-approver.cash-certifications');
-    Route::get('/cash-certifications/{application}', [AccountingController::class, 'showCashCertification'])
+    Route::get('/cash-certifications/{batchId}/records/{applicationId}', [AccountingController::class, 'showCashCertificationBatchRecord'])
+        ->name('accounting-approver.cash-certifications.records.show');
+    Route::get('/cash-certifications/{id}', [AccountingController::class, 'showCashCertification'])
         ->name('accounting-approver.cash-certifications.show');
     Route::get('/cash-certifications/{application}/ors', [AccountingController::class, 'showCashCertificationOrs'])
         ->name('accounting-approver.cash-certifications.ors');
@@ -545,7 +568,7 @@ Route::middleware(['auth', 'role:accounting_approver'])->prefix('accounting-appr
         ->name('accounting-approver.cash-certifications.dv');
     Route::get('/cash-certifications/{application}/lddap-ada', [AccountingController::class, 'showCashCertificationLddapAda'])
         ->name('accounting-approver.cash-certifications.lddap-ada');
-    Route::patch('/cash-certifications/{application}', [AccountingController::class, 'submitCashCertificationDecision'])
+    Route::patch('/cash-certifications/{id}', [AccountingController::class, 'submitCashCertificationDecision'])
         ->name('accounting-approver.cash-certifications.update');
 });
 
@@ -571,7 +594,9 @@ Route::middleware(['auth', 'role:cash_approver'])->prefix('cash-approver')->grou
         ->name('cash-approver.dashboard');
     Route::get('/gl-payment-approvals', [CashController::class, 'cashApproverQueue'])
         ->name('cash-approver.gl-payment-approvals');
-    Route::get('/gl-payment-approvals/{application}', [CashController::class, 'showCashApprover'])
+    Route::get('/gl-payment-approvals/{batchId}/records/{applicationId}', [CashController::class, 'showCashApproverBatchRecord'])
+        ->name('cash-approver.gl-payment-approvals.records.show');
+    Route::get('/gl-payment-approvals/{id}', [CashController::class, 'showCashApprover'])
         ->name('cash-approver.gl-payment-approvals.show');
     Route::get('/gl-payment-approvals/{application}/ors', [CashController::class, 'showCashApproverOrs'])
         ->name('cash-approver.gl-payment-approvals.ors');
@@ -579,7 +604,7 @@ Route::middleware(['auth', 'role:cash_approver'])->prefix('cash-approver')->grou
         ->name('cash-approver.gl-payment-approvals.dv');
     Route::get('/gl-payment-approvals/{application}/lddap-ada', [CashController::class, 'showCashApproverLddapAda'])
         ->name('cash-approver.gl-payment-approvals.lddap-ada');
-    Route::patch('/gl-payment-approvals/{application}', [CashController::class, 'submitCashApproverDecision'])
+    Route::patch('/gl-payment-approvals/{id}', [CashController::class, 'submitCashApproverDecision'])
         ->name('cash-approver.gl-payment-approvals.update');
 });
 
@@ -588,15 +613,17 @@ Route::middleware(['auth', 'role:finance_director'])->prefix('finance-director')
         ->name('finance-director.dashboard');
     Route::get('/gl-payment-approvals', [FinanceDirectorController::class, 'queue'])
         ->name('finance-director.gl-payment-approvals');
-    Route::get('/gl-payment-approvals/{application}', [FinanceDirectorController::class, 'show'])
-        ->name('finance-director.gl-payment-approvals.show');
+    Route::get('/gl-payment-approvals/{batchId}/records/{applicationId}', [FinanceDirectorController::class, 'showBatchRecord'])
+        ->name('finance-director.gl-payment-approvals.records.show');
     Route::get('/gl-payment-approvals/{application}/ors', [FinanceDirectorController::class, 'showOrs'])
         ->name('finance-director.gl-payment-approvals.ors');
     Route::get('/gl-payment-approvals/{application}/dv', [FinanceDirectorController::class, 'showDv'])
         ->name('finance-director.gl-payment-approvals.dv');
     Route::get('/gl-payment-approvals/{application}/lddap-ada', [FinanceDirectorController::class, 'showLddapAda'])
         ->name('finance-director.gl-payment-approvals.lddap-ada');
-    Route::patch('/gl-payment-approvals/{application}', [FinanceDirectorController::class, 'update'])
+    Route::get('/gl-payment-approvals/{id}', [FinanceDirectorController::class, 'show'])
+        ->name('finance-director.gl-payment-approvals.show');
+    Route::patch('/gl-payment-approvals/{id}', [FinanceDirectorController::class, 'update'])
         ->name('finance-director.gl-payment-approvals.update');
 });
 

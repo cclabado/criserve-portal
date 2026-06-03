@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Concerns\BuildsGlFinanceDocuments;
 use App\Models\Application;
+use App\Models\GlFinanceBatch;
 use App\Models\ModeOfAssistance;
 use App\Notifications\GuaranteeLetterApprovedNotification;
 use App\Services\AuditLogService;
@@ -147,6 +148,15 @@ class ApprovingOfficerController extends Controller
     public function glPaymentApprovals(Request $request)
     {
         $user = auth()->user();
+
+        if ($user->role === 'approving_officer') {
+            return $this->glProgramApprovalBatches($request);
+        }
+
+        if ($user->role === 'budget_approver') {
+            return $this->glBudgetApprovalBatches($request);
+        }
+
         $filters = [
             'search' => trim((string) $request->input('search', '')),
             'fund_source' => trim((string) $request->input('fund_source', 'all')),
@@ -219,6 +229,11 @@ class ApprovingOfficerController extends Controller
 
     public function glProgramAmountApprovals(Request $request)
     {
+        return $this->glProgramAmountApprovalBatches($request);
+    }
+
+    protected function glProgramAmountApprovalBatches(Request $request)
+    {
         $filters = [
             'search' => trim((string) $request->input('search', '')),
             'fund_source' => trim((string) $request->input('fund_source', 'all')),
@@ -227,8 +242,8 @@ class ApprovingOfficerController extends Controller
         ];
 
         $sourceQuery = $filters['scope'] === 'finished'
-            ? $this->glProgramAmountFinishedQuery()
-            : $this->glProgramAmountApprovalQuery(false);
+            ? $this->glProgramAmountApprovalBatchFinishedQuery()
+            : $this->glProgramAmountApprovalBatchQuery(false);
 
         $query = clone $sourceQuery;
 
@@ -236,56 +251,58 @@ class ApprovingOfficerController extends Controller
             $search = $filters['search'];
 
             $query->where(function ($inner) use ($search) {
-                $inner->where('reference_no', 'like', "%{$search}%")
-                    ->orWhereHas('client', function ($clientQuery) use ($search) {
-                        $clientQuery->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%")
-                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
-                    })
-                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"));
+                $inner->where('batch_no', 'like', "%{$search}%")
+                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('applications', function ($applicationQuery) use ($search) {
+                        $applicationQuery->where('reference_no', 'like', "%{$search}%")
+                            ->orWhereHas('client', function ($clientQuery) use ($search) {
+                                $clientQuery->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%")
+                                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                            });
+                    });
             });
         }
 
         if ($filters['fund_source'] !== '' && $filters['fund_source'] !== 'all') {
-            $query->where('gl_finance_fund_source', $filters['fund_source']);
+            $query->where('finance_fund_source_name', $filters['fund_source']);
         }
 
         if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
-            $query->where('gl_payment_status', $filters['payment_status']);
+            $query->where('status', $filters['payment_status']);
         }
 
-        $applications = $query
-            ->latest('gl_accounting_approved_at')
+        $batches = $query
             ->latest('updated_at')
             ->paginate(10)
             ->withQueryString();
 
         $fundSources = (clone $sourceQuery)
-            ->whereNotNull('gl_finance_fund_source')
+            ->whereNotNull('finance_fund_source_name')
             ->distinct()
-            ->orderBy('gl_finance_fund_source')
-            ->pluck('gl_finance_fund_source');
+            ->orderBy('finance_fund_source_name')
+            ->pluck('finance_fund_source_name');
 
         $paymentStatusOptions = (clone $sourceQuery)
-            ->whereNotNull('gl_payment_status')
+            ->whereNotNull('status')
             ->distinct()
-            ->orderBy('gl_payment_status')
-            ->pluck('gl_payment_status');
+            ->orderBy('status')
+            ->pluck('status');
 
         $queueStats = [
             'total' => (clone $sourceQuery)->count(),
             'with_remarks' => (clone $sourceQuery)
                 ->where(function ($remarkQuery) {
-                    $remarkQuery->whereNotNull('gl_budget_remarks')->where('gl_budget_remarks', '!=', '')
+                    $remarkQuery->whereNotNull('decision_notes')->where('decision_notes', '!=', '')
                         ->orWhere(function ($inner) {
-                            $inner->whereNotNull('gl_accounting_remarks')->where('gl_accounting_remarks', '!=', '');
+                            $inner->whereNotNull('program_amount_approval_remarks')->where('program_amount_approval_remarks', '!=', '');
                         });
                 })
                 ->count(),
         ];
 
-        return view('approving-officer.gl-program-amount-approvals', [
-            'applications' => $applications,
+        return view('approving-officer.gl-program-amount-approval-batches', [
+            'batches' => $batches,
             'filters' => $filters,
             'fundSources' => $fundSources,
             'paymentStatusOptions' => $paymentStatusOptions,
@@ -352,9 +369,176 @@ class ApprovingOfficerController extends Controller
         ]);
     }
 
+    protected function glProgramApprovalBatches(Request $request)
+    {
+        $filters = [
+            'search' => trim((string) $request->input('search', '')),
+            'fund_source' => trim((string) $request->input('fund_source', 'all')),
+            'payment_status' => trim((string) $request->input('payment_status', 'all')),
+            'scope' => trim((string) $request->input('scope', 'active')),
+        ];
+
+        $sourceQuery = $filters['scope'] === 'finished'
+            ? $this->glProgramApprovalBatchFinishedQuery()
+            : $this->glProgramApprovalBatchQuery(false);
+
+        $query = clone $sourceQuery;
+
+        if ($filters['search'] !== '') {
+            $search = $filters['search'];
+
+            $query->where(function ($inner) use ($search) {
+                $inner->where('batch_no', 'like', "%{$search}%")
+                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('applications', function ($applicationQuery) use ($search) {
+                        $applicationQuery->where('reference_no', 'like', "%{$search}%")
+                            ->orWhereHas('client', function ($clientQuery) use ($search) {
+                                $clientQuery->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%")
+                                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                            });
+                    });
+            });
+        }
+
+        if ($filters['fund_source'] !== '' && $filters['fund_source'] !== 'all') {
+            $query->where('finance_fund_source_name', $filters['fund_source']);
+        }
+
+        if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
+            $query->where('status', $filters['payment_status']);
+        }
+
+        $batches = $query
+            ->latest('program_approved_at')
+            ->latest('updated_at')
+            ->paginate(10)
+            ->withQueryString();
+
+        $fundSources = (clone $sourceQuery)
+            ->whereNotNull('finance_fund_source_name')
+            ->distinct()
+            ->orderBy('finance_fund_source_name')
+            ->pluck('finance_fund_source_name');
+
+        $paymentStatusOptions = (clone $sourceQuery)
+            ->whereNotNull('status')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status');
+
+        $queueStats = [
+            'total' => (clone $sourceQuery)->count(),
+            'with_remarks' => (clone $sourceQuery)
+                ->whereNotNull('decision_notes')
+                ->where('decision_notes', '!=', '')
+                ->count(),
+        ];
+
+        return view('approving-officer.gl-payment-batches', [
+            'batches' => $batches,
+            'filters' => $filters,
+            'fundSources' => $fundSources,
+            'paymentStatusOptions' => $paymentStatusOptions,
+            'queueStats' => $queueStats,
+        ]);
+    }
+
+    protected function glBudgetApprovalBatches(Request $request)
+    {
+        $filters = [
+            'search' => trim((string) $request->input('search', '')),
+            'fund_source' => trim((string) $request->input('fund_source', 'all')),
+            'payment_status' => trim((string) $request->input('payment_status', 'all')),
+            'scope' => trim((string) $request->input('scope', 'active')),
+        ];
+
+        $sourceQuery = $filters['scope'] === 'finished'
+            ? $this->glBudgetApprovalBatchFinishedQuery()
+            : $this->glBudgetApprovalBatchQuery(false);
+
+        $query = clone $sourceQuery;
+
+        if ($filters['search'] !== '') {
+            $search = $filters['search'];
+
+            $query->where(function ($inner) use ($search) {
+                $inner->where('batch_no', 'like', "%{$search}%")
+                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('applications', function ($applicationQuery) use ($search) {
+                        $applicationQuery->where('reference_no', 'like', "%{$search}%")
+                            ->orWhereHas('client', function ($clientQuery) use ($search) {
+                                $clientQuery->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%")
+                                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                            });
+                    });
+            });
+        }
+
+        if ($filters['fund_source'] !== '' && $filters['fund_source'] !== 'all') {
+            $query->where('finance_fund_source_name', $filters['fund_source']);
+        }
+
+        if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
+            $query->where('status', $filters['payment_status']);
+        }
+
+        $batches = $query
+            ->latest('budget_approved_at')
+            ->latest('updated_at')
+            ->paginate(10)
+            ->withQueryString();
+
+        $fundSources = (clone $sourceQuery)
+            ->whereNotNull('finance_fund_source_name')
+            ->distinct()
+            ->orderBy('finance_fund_source_name')
+            ->pluck('finance_fund_source_name');
+
+        $paymentStatusOptions = (clone $sourceQuery)
+            ->whereNotNull('status')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status');
+
+        $queueStats = [
+            'total' => (clone $sourceQuery)->count(),
+            'with_remarks' => (clone $sourceQuery)
+                ->whereNotNull('decision_notes')
+                ->where('decision_notes', '!=', '')
+                ->count(),
+        ];
+
+        return view('approving-officer.gl-budget-approval-batches', [
+            'batches' => $batches,
+            'filters' => $filters,
+            'fundSources' => $fundSources,
+            'paymentStatusOptions' => $paymentStatusOptions,
+            'queueStats' => $queueStats,
+        ]);
+    }
+
     public function showGlPaymentApproval($id)
     {
         $user = auth()->user();
+
+        if ($user->role === 'approving_officer') {
+            $batch = $this->glProgramApprovalBatchQuery(true)->findOrFail($id);
+
+            return view('approving-officer.gl-payment-batch-show', [
+                'batch' => $batch,
+            ]);
+        }
+
+        if ($user->role === 'budget_approver') {
+            $batch = $this->glBudgetApprovalBatchQuery(true)->findOrFail($id);
+
+            return view('approving-officer.gl-budget-approval-batch-show', [
+                'batch' => $batch,
+            ]);
+        }
+
         $application = $this->glPaymentApprovalQuery($user, true, true)->findOrFail($id);
 
         $this->ensureOfficerCanHandleAmount(auth()->user(), $application->approvalRoutingAmount());
@@ -372,11 +556,81 @@ class ApprovingOfficerController extends Controller
         ]);
     }
 
+    public function showGlPaymentApprovalBatchRecord($batchId, $applicationId)
+    {
+        $role = auth()->user()?->role;
+        $batch = $role === 'budget_approver'
+            ? $this->glBudgetApprovalBatchQuery(true)->findOrFail($batchId)
+            : $this->glProgramApprovalBatchQuery(true)->findOrFail($batchId);
+        $application = $batch->applications()
+            ->whereKey($applicationId)
+            ->with([
+                'client',
+                'beneficiary.relationshipData',
+                'assistanceType',
+                'assistanceSubtype',
+                'assistanceDetail',
+                'assistanceRecommendations.assistanceType',
+                'assistanceRecommendations.assistanceSubtype',
+                'assistanceRecommendations.assistanceDetail',
+                'assistanceRecommendations.modeOfAssistance',
+                'serviceProvider',
+                'modeOfAssistance',
+                'documents',
+            ])
+            ->firstOrFail();
+
+        return view('approving-officer.gl-payment-approval-show', [
+            'application' => $application,
+            'statementDocuments' => $application->documents
+                ->where('document_type', 'Updated Statement of Account')
+                ->sortByDesc('created_at')
+                ->values(),
+            'supportingDocuments' => $application->documents
+                ->where('document_type', 'Other Supporting Document')
+                ->sortByDesc('created_at')
+                ->values(),
+            'readOnlyBatchRecord' => true,
+            'batch' => $batch,
+            'readOnlyBatchBackUrl' => $role === 'budget_approver'
+                ? route('budget-approver.gl-payment-approvals.show', $batch->id)
+                : route('approving.gl-payment-approvals.show', $batch->id),
+        ]);
+    }
+
     public function showGlProgramAmountApproval($id)
     {
-        $application = $this->glProgramAmountApprovalQuery(true, true)->findOrFail($id);
+        $batch = $this->glProgramAmountApprovalBatchQuery(true)
+            ->with('applications')
+            ->findOrFail($id);
 
-        $this->ensureOfficerCanHandleAmount(auth()->user(), $application->approvalRoutingAmount());
+        return view('approving-officer.gl-program-amount-approval-batch-show', [
+            'batch' => $batch,
+        ]);
+    }
+
+    public function showGlProgramAmountApprovalBatchRecord($batchId, $applicationId)
+    {
+        $batch = $this->glProgramAmountApprovalBatchQuery(true)->findOrFail($batchId);
+
+        $application = Application::query()
+            ->whereIn('applications.id', $batch->applications->pluck('id'))
+            ->with([
+                'client',
+                'beneficiary.relationshipData',
+                'assistanceType',
+                'assistanceSubtype',
+                'assistanceDetail',
+                'assistanceRecommendations.assistanceType',
+                'assistanceRecommendations.assistanceSubtype',
+                'assistanceRecommendations.assistanceDetail',
+                'assistanceRecommendations.modeOfAssistance',
+                'serviceProvider',
+                'modeOfAssistance',
+                'documents',
+            ])
+            ->whereKey($applicationId)
+            ->firstOrFail();
 
         return view('approving-officer.gl-program-amount-approval-show', [
             'application' => $application,
@@ -388,6 +642,9 @@ class ApprovingOfficerController extends Controller
                 ->where('document_type', 'Other Supporting Document')
                 ->sortByDesc('created_at')
                 ->values(),
+            'readOnlyBatchRecord' => true,
+            'batch' => $batch,
+            'readOnlyBatchBackUrl' => route('approving.gl-program-amount-approvals.show', $batch->id),
         ]);
     }
 
@@ -415,6 +672,15 @@ class ApprovingOfficerController extends Controller
     public function updateGlPaymentApproval(Request $request, $id)
     {
         $user = auth()->user();
+
+        if ($user->role === 'approving_officer') {
+            return $this->updateGlProgramApprovalBatch($request, $id);
+        }
+
+        if ($user->role === 'budget_approver') {
+            return $this->updateGlBudgetApprovalBatch($request, $id);
+        }
+
         $application = $this->glPaymentApprovalQuery($user, false)->with('modeOfAssistance')->findOrFail($id);
 
         $this->ensureOfficerCanHandleAmount(auth()->user(), $application->approvalRoutingAmount());
@@ -432,16 +698,18 @@ class ApprovingOfficerController extends Controller
             }
 
             $remarks = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+            $now = now();
             $updatePayload = $validated['decision'] === 'approved'
                 ? [
                     'gl_budget_remarks' => $remarks,
                     'gl_budget_reviewed_by' => auth()->id(),
-                    'gl_budget_reviewed_at' => now(),
+                    'gl_budget_reviewed_at' => $now,
                     'gl_budget_approval_status' => 'pending_approval',
                     'gl_budget_approval_remarks' => null,
                     'gl_budget_approved_by' => null,
                     'gl_budget_approved_at' => null,
                     'gl_payment_status' => 'for_processing_budget',
+                    'gl_batch_status' => 'for_processing_budget',
                 ]
                 : [
                     'gl_budget_remarks' => $remarks,
@@ -454,11 +722,70 @@ class ApprovingOfficerController extends Controller
                     'gl_program_approval_status' => 'for_compliance',
                     'gl_program_approval_remarks' => $remarks,
                     'gl_program_approved_by' => auth()->id(),
-                    'gl_program_approved_at' => now(),
+                    'gl_program_approved_at' => $now,
                     'gl_payment_status' => 'for_compliance_gl_processor',
+                    'gl_batch_status' => 'for_compliance_gl_processor',
                 ];
 
-            $application->update($updatePayload);
+            DB::transaction(function () use ($application, $validated, $updatePayload, $remarks, $now) {
+                $application->update($updatePayload);
+
+                if (! $application->gl_finance_batch_id) {
+                    return;
+                }
+
+                $batch = GlFinanceBatch::query()
+                    ->with('applications:id,gl_finance_batch_id,gl_budget_reviewed_at')
+                    ->find($application->gl_finance_batch_id);
+
+                if (! $batch) {
+                    return;
+                }
+
+                if ($validated['decision'] === 'approved') {
+                    $allReviewed = $batch->applications->every(fn ($item) => ! is_null($item->gl_budget_reviewed_at));
+
+                    if ($allReviewed) {
+                        $batch->update([
+                            'status' => 'for_processing_budget',
+                            'current_stage' => 'budget_approval',
+                            'budget_approval_status' => 'pending_approval',
+                            'budget_approval_remarks' => null,
+                            'budget_approved_by' => null,
+                            'budget_approved_at' => null,
+                            'decision_notes' => null,
+                        ]);
+                    }
+
+                    return;
+                }
+
+                $batch->update([
+                    'status' => 'for_compliance_gl_processor',
+                    'current_stage' => 'gl_processor',
+                    'budget_approval_status' => null,
+                    'budget_approval_remarks' => null,
+                    'budget_approved_by' => null,
+                    'budget_approved_at' => null,
+                    'compliance_trigger_application_id' => $application->id,
+                    'decision_notes' => $remarks,
+                ]);
+
+                Application::query()
+                    ->where('gl_finance_batch_id', $batch->id)
+                    ->update([
+                        'gl_payment_status' => 'for_compliance_gl_processor',
+                        'gl_batch_status' => 'for_compliance_gl_processor',
+                        'gl_budget_remarks' => $remarks,
+                        'gl_budget_reviewed_by' => null,
+                        'gl_budget_reviewed_at' => null,
+                        'gl_budget_approval_status' => null,
+                        'gl_budget_approval_remarks' => null,
+                        'gl_budget_approved_by' => null,
+                        'gl_budget_approved_at' => null,
+                        'updated_at' => $now,
+                    ]);
+            }, 3);
 
             $this->auditLogs->log($request, 'gl_payment.budget_review_submitted', $application, [
                 'decision' => $validated['decision'],
@@ -567,13 +894,14 @@ class ApprovingOfficerController extends Controller
 
     public function updateGlProgramAmountApproval(Request $request, $id)
     {
-        $application = $this->glProgramAmountApprovalQuery(false)->with('modeOfAssistance')->findOrFail($id);
-
-        $this->ensureOfficerCanHandleAmount(auth()->user(), $application->approvalRoutingAmount());
+        $batch = $this->glProgramAmountApprovalBatchQuery(false)
+            ->with('applications')
+            ->findOrFail($id);
 
         $validated = $request->validate([
             'decision' => ['required', 'in:for_compliance,approved,disapproved'],
             'remarks' => ['nullable', 'string', 'max:1500'],
+            'trigger_application_id' => ['nullable', 'integer'],
         ]);
 
         if ($validated['decision'] === 'disapproved' && blank($validated['remarks'] ?? null)) {
@@ -588,48 +916,293 @@ class ApprovingOfficerController extends Controller
             ]);
         }
 
-        $updatePayload = [
-            'gl_program_amount_approval_status' => $validated['decision'],
-            'gl_program_amount_approval_remarks' => filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null,
-            'gl_program_amount_approved_by' => auth()->id(),
-            'gl_program_amount_approved_at' => now(),
-        ];
-
-        if ($validated['decision'] === 'approved') {
-            $updatePayload['gl_payment_status'] = 'for_processing_cash';
-            $updatePayload['gl_cash_review_status'] = 'pending_review';
-            $updatePayload['gl_cash_remarks'] = null;
-            $updatePayload['gl_cash_reviewed_by'] = null;
-            $updatePayload['gl_cash_reviewed_at'] = null;
-            $updatePayload['gl_cash_approval_status'] = null;
-            $updatePayload['gl_cash_approval_remarks'] = null;
-            $updatePayload['gl_cash_approved_by'] = null;
-            $updatePayload['gl_cash_approved_at'] = null;
-        } elseif ($validated['decision'] === 'for_compliance') {
-            $updatePayload['gl_payment_status'] = 'for_compliance_accounting_officer';
-            $updatePayload['gl_accounting_review_status'] = 'pending_review';
-            $updatePayload['gl_accounting_remarks'] = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
-            $updatePayload['gl_accounting_reviewed_by'] = null;
-            $updatePayload['gl_accounting_reviewed_at'] = null;
-            $updatePayload['gl_accounting_approval_status'] = null;
-            $updatePayload['gl_accounting_approval_remarks'] = null;
-            $updatePayload['gl_accounting_approved_by'] = null;
-            $updatePayload['gl_accounting_approved_at'] = null;
-        } else {
-            $updatePayload['gl_payment_status'] = 'for_processing_program_amount_approval';
+        if ($validated['decision'] === 'for_compliance' && blank($validated['trigger_application_id'] ?? null)) {
+            throw ValidationException::withMessages([
+                'trigger_application_id' => 'Select the specific record that triggered the compliance return.',
+            ]);
         }
 
-        $application->update($updatePayload);
+        $triggerApplicationId = filled($validated['trigger_application_id'] ?? null)
+            ? (int) $validated['trigger_application_id']
+            : null;
 
-        $this->auditLogs->log($request, 'gl_payment.program_amount_approval_updated', $application, [
+        if ($triggerApplicationId && ! $batch->applications->contains('id', $triggerApplicationId)) {
+            throw ValidationException::withMessages([
+                'trigger_application_id' => 'The selected compliance trigger record is not part of this batch.',
+            ]);
+        }
+
+        $remarks = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+        $now = now();
+
+        DB::transaction(function () use ($batch, $validated, $remarks, $triggerApplicationId, $now) {
+            $batchPayload = [
+                'program_amount_approval_status' => $validated['decision'],
+                'program_amount_approval_remarks' => $remarks,
+                'program_amount_approved_by' => auth()->id(),
+                'program_amount_approved_at' => $now,
+                'compliance_trigger_application_id' => $validated['decision'] === 'for_compliance' ? $triggerApplicationId : null,
+                'decision_notes' => $remarks,
+            ];
+
+            $applicationPayload = [
+                'gl_program_amount_approval_status' => $validated['decision'],
+                'gl_program_amount_approval_remarks' => $remarks,
+                'gl_program_amount_approved_by' => auth()->id(),
+                'gl_program_amount_approved_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if ($validated['decision'] === 'approved') {
+                $batchPayload['status'] = 'for_processing_cash';
+                $batchPayload['current_stage'] = 'cash_review';
+                $applicationPayload['gl_payment_status'] = 'for_processing_cash';
+                $applicationPayload['gl_batch_status'] = 'for_processing_cash';
+                $applicationPayload['gl_cash_review_status'] = 'pending_review';
+                $applicationPayload['gl_cash_remarks'] = null;
+                $applicationPayload['gl_cash_reviewed_by'] = null;
+                $applicationPayload['gl_cash_reviewed_at'] = null;
+                $applicationPayload['gl_cash_approval_status'] = null;
+                $applicationPayload['gl_cash_approval_remarks'] = null;
+                $applicationPayload['gl_cash_approved_by'] = null;
+                $applicationPayload['gl_cash_approved_at'] = null;
+            } elseif ($validated['decision'] === 'for_compliance') {
+                $batchPayload['status'] = 'for_compliance_accounting_officer';
+                $batchPayload['current_stage'] = 'accounting_review';
+                $applicationPayload['gl_payment_status'] = 'for_compliance_accounting_officer';
+                $applicationPayload['gl_batch_status'] = 'for_compliance_accounting_officer';
+                $applicationPayload['gl_accounting_review_status'] = 'pending_review';
+                $applicationPayload['gl_accounting_remarks'] = $remarks;
+                $applicationPayload['gl_accounting_reviewed_by'] = null;
+                $applicationPayload['gl_accounting_reviewed_at'] = null;
+                $applicationPayload['gl_accounting_approval_status'] = null;
+                $applicationPayload['gl_accounting_approval_remarks'] = null;
+                $applicationPayload['gl_accounting_approved_by'] = null;
+                $applicationPayload['gl_accounting_approved_at'] = null;
+            } else {
+                $batchPayload['status'] = 'disapproved';
+                $batchPayload['current_stage'] = null;
+                $applicationPayload['gl_batch_status'] = 'disapproved';
+            }
+
+            $batch->update($batchPayload);
+
+            Application::query()
+                ->whereIn('id', $batch->applications->pluck('id'))
+                ->update($applicationPayload);
+        }, 3);
+
+        $this->auditLogs->log($request, 'gl_finance_batch.program_amount_approval_updated', $batch, [
             'decision' => $validated['decision'],
-            'remarks' => $validated['remarks'] ?? null,
-            'payment_status' => $updatePayload['gl_payment_status'],
+            'remarks' => $remarks,
+            'trigger_application_id' => $triggerApplicationId,
+            'batch_no' => $batch->batch_no,
         ]);
 
         return redirect()
             ->route('approving.gl-program-amount-approvals')
-            ->with('success', 'Program amount approval decision saved successfully.');
+            ->with('success', 'Program amount batch approval decision saved successfully.');
+    }
+
+    protected function updateGlProgramApprovalBatch(Request $request, int $id)
+    {
+        $batch = $this->glProgramApprovalBatchQuery(false)
+            ->with('applications')
+            ->findOrFail($id);
+
+        $validated = $request->validate([
+            'decision' => ['required', 'in:for_compliance,approved,disapproved'],
+            'remarks' => ['nullable', 'string', 'max:1500'],
+            'trigger_application_id' => ['nullable', 'integer'],
+        ]);
+
+        if (in_array($validated['decision'], ['for_compliance', 'disapproved'], true) && blank($validated['remarks'] ?? null)) {
+            throw ValidationException::withMessages([
+                'remarks' => 'Remarks are required when the batch is returned for compliance or disapproved.',
+            ]);
+        }
+
+        if ($validated['decision'] === 'for_compliance' && blank($validated['trigger_application_id'] ?? null)) {
+            throw ValidationException::withMessages([
+                'trigger_application_id' => 'Select the specific record that triggered the compliance return.',
+            ]);
+        }
+
+        $triggerApplicationId = filled($validated['trigger_application_id'] ?? null)
+            ? (int) $validated['trigger_application_id']
+            : null;
+
+        if ($triggerApplicationId && ! $batch->applications->contains('id', $triggerApplicationId)) {
+            throw ValidationException::withMessages([
+                'trigger_application_id' => 'The selected compliance trigger record is not part of this batch.',
+            ]);
+        }
+
+        $remarks = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+        $now = now();
+
+        DB::transaction(function () use ($batch, $validated, $remarks, $triggerApplicationId, $now) {
+            $batchPayload = [
+                'program_approval_status' => $validated['decision'],
+                'program_approval_remarks' => $remarks,
+                'program_approved_by' => auth()->id(),
+                'program_approved_at' => $now,
+                'compliance_trigger_application_id' => $validated['decision'] === 'for_compliance' ? $triggerApplicationId : null,
+                'decision_notes' => $remarks,
+            ];
+
+            $applicationPayload = [
+                'gl_program_approval_status' => $validated['decision'],
+                'gl_program_approval_remarks' => $remarks,
+                'gl_program_approved_by' => auth()->id(),
+                'gl_program_approved_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if ($validated['decision'] === 'approved') {
+                $batchPayload['status'] = 'for_processing_budget';
+                $batchPayload['current_stage'] = 'budget_review';
+                $applicationPayload['gl_payment_status'] = 'for_processing_budget';
+                $applicationPayload['gl_batch_status'] = 'for_processing_budget';
+                $applicationPayload['gl_budget_remarks'] = null;
+                $applicationPayload['gl_budget_reviewed_by'] = null;
+                $applicationPayload['gl_budget_reviewed_at'] = null;
+                $applicationPayload['gl_budget_approval_status'] = null;
+                $applicationPayload['gl_budget_approval_remarks'] = null;
+                $applicationPayload['gl_budget_approved_by'] = null;
+                $applicationPayload['gl_budget_approved_at'] = null;
+            } elseif ($validated['decision'] === 'for_compliance') {
+                $batchPayload['status'] = 'for_compliance_gl_processor';
+                $batchPayload['current_stage'] = 'gl_processor';
+                $applicationPayload['gl_payment_status'] = 'for_compliance_gl_processor';
+                $applicationPayload['gl_batch_status'] = 'for_compliance_gl_processor';
+            } else {
+                $batchPayload['status'] = 'disapproved';
+                $batchPayload['current_stage'] = null;
+                $applicationPayload['gl_batch_status'] = 'disapproved';
+            }
+
+            $batch->update($batchPayload);
+
+            Application::query()
+                ->whereIn('id', $batch->applications->pluck('id'))
+                ->update($applicationPayload);
+        }, 3);
+
+        $this->auditLogs->log($request, 'gl_finance_batch.program_approval_updated', $batch, [
+            'decision' => $validated['decision'],
+            'remarks' => $remarks,
+            'trigger_application_id' => $triggerApplicationId,
+            'batch_no' => $batch->batch_no,
+        ]);
+
+        return redirect()
+            ->route('approving.gl-payment-approvals')
+            ->with('success', 'Finance batch approval decision saved successfully.');
+    }
+
+    protected function updateGlBudgetApprovalBatch(Request $request, int $id)
+    {
+        $batch = $this->glBudgetApprovalBatchQuery(false)
+            ->with('applications')
+            ->findOrFail($id);
+
+        $validated = $request->validate([
+            'decision' => ['required', 'in:for_compliance,approved,disapproved'],
+            'remarks' => ['nullable', 'string', 'max:1500'],
+            'trigger_application_id' => ['nullable', 'integer'],
+        ]);
+
+        if (in_array($validated['decision'], ['for_compliance', 'disapproved'], true) && blank($validated['remarks'] ?? null)) {
+            throw ValidationException::withMessages([
+                'remarks' => 'Remarks are required when the batch is returned for compliance or disapproved.',
+            ]);
+        }
+
+        if ($validated['decision'] === 'for_compliance' && blank($validated['trigger_application_id'] ?? null)) {
+            throw ValidationException::withMessages([
+                'trigger_application_id' => 'Select the specific record that triggered the compliance return.',
+            ]);
+        }
+
+        $triggerApplicationId = filled($validated['trigger_application_id'] ?? null)
+            ? (int) $validated['trigger_application_id']
+            : null;
+
+        if ($triggerApplicationId && ! $batch->applications->contains('id', $triggerApplicationId)) {
+            throw ValidationException::withMessages([
+                'trigger_application_id' => 'The selected compliance trigger record is not part of this batch.',
+            ]);
+        }
+
+        $remarks = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+        $now = now();
+
+        DB::transaction(function () use ($batch, $validated, $remarks, $triggerApplicationId, $now) {
+            $batchPayload = [
+                'budget_approval_status' => $validated['decision'],
+                'budget_approval_remarks' => $remarks,
+                'budget_approved_by' => auth()->id(),
+                'budget_approved_at' => $now,
+                'compliance_trigger_application_id' => $validated['decision'] === 'for_compliance' ? $triggerApplicationId : null,
+                'decision_notes' => $remarks,
+            ];
+
+            $applicationPayload = [
+                'gl_budget_approval_status' => $validated['decision'],
+                'gl_budget_approval_remarks' => $remarks,
+                'gl_budget_approved_by' => auth()->id(),
+                'gl_budget_approved_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if ($validated['decision'] === 'approved') {
+                $batchPayload['status'] = 'for_processing_accounting';
+                $batchPayload['current_stage'] = 'accounting_review';
+                $applicationPayload['gl_payment_status'] = 'for_processing_accounting';
+                $applicationPayload['gl_batch_status'] = 'for_processing_accounting';
+                $applicationPayload['gl_accounting_review_status'] = 'pending_review';
+                $applicationPayload['gl_accounting_remarks'] = null;
+                $applicationPayload['gl_accounting_reviewed_by'] = null;
+                $applicationPayload['gl_accounting_reviewed_at'] = null;
+                $applicationPayload['gl_accounting_approval_status'] = null;
+                $applicationPayload['gl_accounting_approval_remarks'] = null;
+                $applicationPayload['gl_accounting_approved_by'] = null;
+                $applicationPayload['gl_accounting_approved_at'] = null;
+            } elseif ($validated['decision'] === 'for_compliance') {
+                $batchPayload['status'] = 'for_compliance_budget_officer';
+                $batchPayload['current_stage'] = 'budget_review';
+                $applicationPayload['gl_payment_status'] = 'for_compliance_budget_officer';
+                $applicationPayload['gl_batch_status'] = 'for_compliance_budget_officer';
+                $applicationPayload['gl_budget_remarks'] = $remarks;
+                $applicationPayload['gl_budget_reviewed_by'] = null;
+                $applicationPayload['gl_budget_reviewed_at'] = null;
+                $applicationPayload['gl_budget_approval_status'] = null;
+                $applicationPayload['gl_budget_approved_by'] = null;
+                $applicationPayload['gl_budget_approved_at'] = null;
+            } else {
+                $batchPayload['status'] = 'disapproved';
+                $batchPayload['current_stage'] = null;
+                $applicationPayload['gl_batch_status'] = 'disapproved';
+            }
+
+            $batch->update($batchPayload);
+
+            Application::query()
+                ->whereIn('id', $batch->applications->pluck('id'))
+                ->update($applicationPayload);
+        }, 3);
+
+        $this->auditLogs->log($request, 'gl_finance_batch.budget_approval_updated', $batch, [
+            'decision' => $validated['decision'],
+            'remarks' => $remarks,
+            'trigger_application_id' => $triggerApplicationId,
+            'batch_no' => $batch->batch_no,
+        ]);
+
+        return redirect()
+            ->route('budget-approver.gl-payment-approvals')
+            ->with('success', 'Budget batch approval decision saved successfully.');
     }
 
     public function show($id)
@@ -681,6 +1254,75 @@ class ApprovingOfficerController extends Controller
         }
 
         return $this->glProgramAmountApprovalQuery(true, true)->whereKey($id)->firstOrFail();
+    }
+
+    protected function glProgramApprovalBatchQuery(bool $includeHandled = false)
+    {
+        return GlFinanceBatch::query()
+            ->with([
+                'serviceProvider',
+                'bankAccount.bank',
+                'programApprover.position',
+                'applications.client',
+                'applications.serviceProvider',
+                'applications.assistanceType',
+                'applications.assistanceDetail',
+            ])
+            ->where(function ($query) use ($includeHandled) {
+                $query->where(function ($activeQuery) {
+                    $activeQuery->where('current_stage', 'program_approval')
+                        ->where(function ($statusQuery) {
+                        $statusQuery->whereNull('program_approval_status')
+                            ->orWhere('program_approval_status', 'pending_approval')
+                            ->orWhere('program_approval_status', 'for_compliance');
+                        })->whereIn('status', ['draft', 'for_compliance_gl_processor']);
+                });
+
+                if ($includeHandled) {
+                    $query->orWhere('program_approved_by', auth()->id());
+                }
+            });
+    }
+
+    protected function glProgramApprovalBatchFinishedQuery()
+    {
+        return $this->glProgramApprovalBatchQuery(true)
+            ->where('program_approved_by', auth()->id());
+    }
+
+    protected function glBudgetApprovalBatchQuery(bool $includeHandled = false)
+    {
+        return GlFinanceBatch::query()
+            ->with([
+                'serviceProvider',
+                'bankAccount.bank',
+                'batchedBy.position',
+                'applications.client',
+                'applications.serviceProvider',
+                'applications.assistanceType',
+                'applications.assistanceDetail',
+            ])
+            ->where(function ($query) use ($includeHandled) {
+                $query->where(function ($activeQuery) {
+                    $activeQuery->where('current_stage', 'budget_approval')
+                        ->where(function ($statusQuery) {
+                            $statusQuery->whereNull('budget_approval_status')
+                                ->orWhere('budget_approval_status', 'pending_approval')
+                                ->orWhere('budget_approval_status', 'for_compliance');
+                        })
+                        ->whereIn('status', ['for_processing_budget', 'for_compliance_budget_officer']);
+                });
+
+                if ($includeHandled) {
+                    $query->orWhere('budget_approved_by', auth()->id());
+                }
+            });
+    }
+
+    protected function glBudgetApprovalBatchFinishedQuery()
+    {
+        return $this->glBudgetApprovalBatchQuery(true)
+            ->where('budget_approved_by', auth()->id());
     }
 
     protected function glPaymentApprovalQuery($user, bool $includeHandled = false, bool $withDocuments = false)
@@ -821,6 +1463,40 @@ class ApprovingOfficerController extends Controller
     {
         return $this->glProgramAmountApprovalQuery(true)
             ->where('gl_program_amount_approved_by', auth()->id());
+    }
+
+    protected function glProgramAmountApprovalBatchQuery(bool $includeHandled = false)
+    {
+        return GlFinanceBatch::query()
+            ->with([
+                'serviceProvider',
+                'bankAccount.bank',
+                'applications.client',
+                'applications.serviceProvider',
+                'applications.assistanceType',
+                'applications.assistanceDetail',
+            ])
+            ->where(function ($query) use ($includeHandled) {
+                $query->where(function ($activeQuery) {
+                    $activeQuery->where('current_stage', 'program_amount_approval')
+                        ->where(function ($statusQuery) {
+                            $statusQuery->whereNull('program_amount_approval_status')
+                                ->orWhere('program_amount_approval_status', 'pending_approval')
+                                ->orWhere('program_amount_approval_status', 'for_compliance');
+                        })
+                        ->whereIn('status', ['for_processing_program_amount_approval', 'for_compliance_accounting_officer']);
+                });
+
+                if ($includeHandled) {
+                    $query->orWhere('program_amount_approved_by', auth()->id());
+                }
+            });
+    }
+
+    protected function glProgramAmountApprovalBatchFinishedQuery()
+    {
+        return $this->glProgramAmountApprovalBatchQuery(true)
+            ->where('program_amount_approved_by', auth()->id());
     }
 
     public function approve(Request $request, $id)

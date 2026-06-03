@@ -6,6 +6,7 @@
     $role = auth()->user()?->role;
     $isBudgetOfficer = $role === 'budget_officer';
     $isBudgetApprover = $role === 'budget_approver';
+    $readOnlyBatchRecord = $readOnlyBatchRecord ?? false;
     $glApprovalIndexRoute = $isBudgetOfficer
         ? 'budget-officer.gl-payment-approvals'
         : ($isBudgetApprover ? 'budget-approver.gl-payment-approvals' : 'approving.gl-payment-approvals');
@@ -33,9 +34,15 @@
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                <a href="{{ route($glApprovalIndexRoute) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
-                    &larr; Back to GL Payment Approvals
-                </a>
+                @if($readOnlyBatchRecord)
+                    <a href="{{ $readOnlyBatchBackUrl ?? route('approving.gl-payment-approvals.show', $batch->id) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; Back to Finance Batch
+                    </a>
+                @else
+                    <a href="{{ route($glApprovalIndexRoute) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; Back to GL Payment Approvals
+                    </a>
+                @endif
                 <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{{ $isBudgetOfficer ? 'Budget Officer' : ($isBudgetApprover ? 'Budget Approver' : 'Approving Officer') }}</p>
                 <h1 class="mt-2 text-3xl font-black text-sky-950">{{ $application->reference_no }}</h1>
                 <p class="mt-2 text-sm text-slate-500">
@@ -43,7 +50,9 @@
                         ? 'Review the guarantee letter payment details after program approval, including service provider attachments, finance fund source, and processor remarks.'
                         : ($isBudgetApprover
                             ? 'Approve the budget-reviewed guarantee letter case before it proceeds to accounting.'
-                            : 'Review the guarantee letter payment approval details, including service provider attachments, finance fund source, and processor remarks.') }}
+                            : ($readOnlyBatchRecord
+                                ? 'Inspect this included GL record one by one before returning to the batch-level decision workspace.'
+                                : 'Review the guarantee letter payment approval details, including service provider attachments, finance fund source, and processor remarks.')) }}
                 </p>
             </div>
             @if($application->gl_ors_number || $application->gl_dv_number || $application->gl_lddap_ada_number)
@@ -117,7 +126,9 @@
             <button type="button" x-on:click="activeTab = 'assessment'" x-bind:class="activeTab === 'assessment' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Initial Assessment</button>
             <button type="button" x-on:click="activeTab = 'recommendation'" x-bind:class="activeTab === 'recommendation' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Recommendation</button>
             <button type="button" x-on:click="activeTab = 'attachments'" x-bind:class="activeTab === 'attachments' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Attachments</button>
-            <button type="button" x-on:click="activeTab = 'decision'" x-bind:class="activeTab === 'decision' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Decision</button>
+            @unless($readOnlyBatchRecord)
+                <button type="button" x-on:click="activeTab = 'decision'" x-bind:class="activeTab === 'decision' ? 'bg-[#234E70] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="rounded-2xl px-4 py-2 text-sm font-semibold transition">Decision</button>
+            @endunless
         </div>
     </section>
 
@@ -252,6 +263,7 @@
         </div>
     </section>
 
+    @unless($readOnlyBatchRecord)
     <section x-show="activeTab === 'decision'" x-cloak class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="space-y-6">
             <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
@@ -307,6 +319,7 @@
             </section>
         </div>
     </section>
+    @endunless
 </main>
 
 @endsection

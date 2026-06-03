@@ -553,6 +553,16 @@
             <span class="text-sm tracking-wide">GL Queue</span>
         </a>
 
+        <a href="{{ route('gl-payment-processor.finance-batches.ready') }}"
+           class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass(['gl-payment-processor/finance-batches*']) }}">
+
+            <span class="material-symbols-outlined {{ $iconClass(['gl-payment-processor/finance-batches*']) }}">
+                layers
+            </span>
+
+            <span class="text-sm tracking-wide">Finance Batches</span>
+        </a>
+
         @if($hasActivePayouts)
         <a href="/gl-payment-processor/payouts"
            class="group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 {{ $navClass('gl-payment-processor/payouts*') }}">

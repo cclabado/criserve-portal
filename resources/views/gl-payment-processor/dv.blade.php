@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DV {{ $application->gl_dv_number }}</title>
+<title>DV {{ $dvNumber }}</title>
 <style>
     *{box-sizing:border-box}
     body{margin:0;background:#f3f4f6;color:#111;font-family:"Times New Roman",serif}
@@ -47,25 +47,25 @@
     <table class="meta">
         <tr>
             <td class="label">Fund Cluster</td>
-            <td>{{ $application->gl_fund_cluster ?: '-' }}</td>
+            <td>{{ $fundCluster }}</td>
             <td class="label">Date</td>
-            <td>{{ optional($application->gl_dv_date)->format('Y-m-d') ?? '-' }}</td>
+            <td>{{ optional($dvDate)->format('Y-m-d') ?? '-' }}</td>
         </tr>
         <tr>
             <td class="label">DV No.</td>
-            <td>{{ $application->gl_dv_number ?: '-' }}</td>
+            <td>{{ $dvNumber ?: '-' }}</td>
             <td class="label">Mode of Payment</td>
-            <td>{{ $application->gl_mode_of_payment ?: '-' }}</td>
+            <td>{{ $modeOfPayment }}</td>
         </tr>
         <tr>
             <td class="label">Payee</td>
-            <td>{{ $application->serviceProvider?->name ?? '-' }}</td>
+            <td>{{ $serviceProviderName }}</td>
             <td class="label">TIN / Employee No.</td>
-            <td>{{ $application->gl_payee_tin ?: '-' }}</td>
+            <td>{{ $payeeTin }}</td>
         </tr>
         <tr>
             <td class="label">ORS/BURS No.</td>
-            <td>{{ $application->gl_ors_number ?: '-' }}</td>
+            <td>{{ $orsNumber ?: '-' }}</td>
             <td class="label">Address</td>
             <td>{{ $payeeAddress }}</td>
         </tr>
@@ -82,10 +82,19 @@
         </thead>
         <tbody>
             <tr>
-                <td>{{ $particulars }}</td>
-                <td>{{ $application->gl_responsibility_center ?: '-' }}</td>
-                <td>{{ $application->gl_mfo_pap ?: '-' }}</td>
-                <td style="text-align:right">{{ number_format($amount, 2) }}</td>
+                <td>
+                    <strong>{{ $particulars }}</strong>
+                    @if(($documentScopeLabel ?? 'record') === 'batch')
+                        <div style="margin-top:8px;font-size:12px">
+                            @foreach($lineItems as $item)
+                                <div>{{ $item['reference_no'] }} - {{ $item['client_name'] }} (PHP {{ number_format($item['amount'], 2) }})</div>
+                            @endforeach
+                        </div>
+                    @endif
+                </td>
+                <td>{{ $responsibilityCenter }}</td>
+                <td>{{ $mfoPap }}</td>
+                <td style="text-align:right">{{ number_format($grossAmount, 2) }}</td>
             </tr>
         </tbody>
     </table>
@@ -121,14 +130,14 @@
             <tr>
                 <td>Subsidies - Others</td>
                 <td>50214990</td>
-                <td style="text-align:right">{{ number_format($amount, 2) }}</td>
+                <td style="text-align:right">{{ number_format($grossAmount, 2) }}</td>
                 <td></td>
             </tr>
             <tr>
                 <td>Cash - Modified Disbursement System (MDS)</td>
                 <td>10104040</td>
                 <td></td>
-                <td style="text-align:right">{{ number_format($amount, 2) }}</td>
+                <td style="text-align:right">{{ number_format($grossAmount, 2) }}</td>
             </tr>
             <tr>
                 <td>Due to BIR</td>

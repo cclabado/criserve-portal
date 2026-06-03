@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LDDAP-ADA {{ $application->gl_lddap_ada_number }}</title>
+<title>LDDAP-ADA {{ $lddapAdaNumber }}</title>
 <style>
     *{box-sizing:border-box}
     body{margin:0;background:#f3f4f6;color:#111;font-family:"Times New Roman",serif}
@@ -55,28 +55,28 @@
             <td class="label">Servicing Bank</td>
             <td>{{ $servicingBankDisplay ?: '-' }}</td>
             <td class="label">MDS Sub-Account No.</td>
-            <td>{{ $application->gl_mds_sub_account_number ?: '-' }}</td>
+            <td>{{ data_get($batch ?? null, 'mds_sub_account_number') ?: ($application->gl_mds_sub_account_number ?: '-') }}</td>
         </tr>
         <tr>
             <td class="label">NCA No.</td>
-            <td>{{ $application->gl_nca_number ?: '-' }}</td>
+            <td>{{ $ncaNumber }}</td>
             <td class="label">NCA Date</td>
-            <td>{{ optional($application->gl_nca_date)->format('M d, Y') ?? '-' }}</td>
+            <td>{{ optional($ncaDate)->format('M d, Y') ?? '-' }}</td>
             <td class="label">LDDAP-ADA No.</td>
-            <td>{{ $application->gl_lddap_ada_number ?: '-' }}</td>
+            <td>{{ $lddapAdaNumber ?: '-' }}</td>
         </tr>
         <tr>
             <td class="label">Date of Issue</td>
-            <td>{{ optional($application->gl_lddap_ada_date)->format('M d, Y') ?? '-' }}</td>
+            <td>{{ optional($lddapAdaDate)->format('M d, Y') ?? '-' }}</td>
             <td class="label">Reference No.</td>
-            <td>{{ $application->reference_no }}</td>
+            <td>{{ $documentBatchNo ?: $documentReferenceNumber }}</td>
             <td class="label">ORS No.</td>
-            <td>{{ $application->gl_ors_number ?: '-' }}</td>
+            <td>{{ $orsNumber ?: '-' }}</td>
         </tr>
     </table>
 
     <div class="note">
-        Please debit MDS Sub-Account Number <strong>{{ $application->gl_mds_sub_account_number ?: '-' }}</strong> and credit the account of the creditor listed below to cover payment of due and demandable accounts payable.
+        Please debit MDS Sub-Account Number <strong>{{ data_get($batch ?? null, 'mds_sub_account_number') ?: ($application->gl_mds_sub_account_number ?: '-') }}</strong> and credit the account of the creditor listed below to cover payment of due and demandable accounts payable.
         <br>
         <strong>Total Net Amount:</strong> {{ $totalAmountInWords }} (PHP {{ number_format($netAmount, 2) }})
     </div>
@@ -84,6 +84,8 @@
     <table class="listing">
         <thead>
             <tr>
+                <th style="width:7%">Seq</th>
+                <th style="width:11%">GL Ref.</th>
                 <th style="width:19%">Name of Creditor</th>
                 <th style="width:16%">Preferred Servicing Bank</th>
                 <th style="width:13%">Savings / Current Account No.</th>
@@ -96,24 +98,32 @@
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td>{{ $application->serviceProvider?->name ?? '-' }}</td>
-                <td>{{ $servicingBankName ?: '-' }}</td>
-                <td>{{ $creditorAccountNumber ?: '-' }}</td>
-                <td>{{ $application->gl_ors_number ?: '-' }}</td>
-                <td>{{ $allotmentClass }}</td>
-                <td class="num">{{ number_format($amount, 2) }}</td>
-                <td class="num">{{ number_format($withholdingTaxAmount, 2) }}</td>
-                <td class="num">{{ number_format($netAmount, 2) }}</td>
-                <td>{{ $paymentNature }}</td>
-            </tr>
+            @foreach($lineItems as $item)
+                @php
+                    $lineWithholding = $grossAmount > 0 ? round($withholdingTaxAmount * ($item['amount'] / $grossAmount), 2) : 0;
+                    $lineNet = max($item['amount'] - $lineWithholding, 0);
+                @endphp
+                <tr>
+                    <td>{{ $item['sequence_no'] }}</td>
+                    <td>{{ $item['reference_no'] }}</td>
+                    <td>{{ $serviceProviderName }}</td>
+                    <td>{{ $item['bank_name'] ?: '-' }}</td>
+                    <td>{{ $item['account_number'] ?: '-' }}</td>
+                    <td>{{ $orsNumber ?: '-' }}</td>
+                    <td>{{ $item['allotment_class'] }}</td>
+                    <td class="num">{{ number_format($item['amount'], 2) }}</td>
+                    <td class="num">{{ number_format($lineWithholding, 2) }}</td>
+                    <td class="num">{{ number_format($lineNet, 2) }}</td>
+                    <td>{{ $item['remarks'] }}</td>
+                </tr>
+            @endforeach
         </tbody>
     </table>
 
     <table class="summary">
         <tr>
-            <td style="width:68%;text-align:right">TOTAL</td>
-            <td style="width:9%;text-align:right">{{ number_format($amount, 2) }}</td>
+            <td style="width:75%;text-align:right">TOTAL</td>
+            <td style="width:9%;text-align:right">{{ number_format($grossAmount, 2) }}</td>
             <td style="width:9%;text-align:right">{{ number_format($withholdingTaxAmount, 2) }}</td>
             <td style="width:9%;text-align:right">{{ number_format($netAmount, 2) }}</td>
             <td style="width:5%"></td>

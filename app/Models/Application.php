@@ -55,6 +55,7 @@ class Application extends Model
         'assistance_detail_id',
         'mode_of_assistance_id',
         'service_provider_id',
+        'gl_finance_batch_id',
         'frequency_rule_id',
         'frequency_basis_application_id',
         'mode_of_assistance',
@@ -119,6 +120,8 @@ class Application extends Model
         'final_amount',
         'gl_actual_utilized_amount',
         'gl_payment_status',
+        'gl_batch_status',
+        'gl_ready_for_batch_at',
         'gl_soa_status',
         'gl_soa_review_notes',
         'gl_soa_reviewed_by',
@@ -200,6 +203,7 @@ class Application extends Model
         'final_amount' => 'decimal:2',
         'gl_actual_utilized_amount' => 'decimal:2',
         'gl_soa_reviewed_at' => 'datetime',
+        'gl_ready_for_batch_at' => 'datetime',
         'gl_ors_date' => 'date',
         'gl_dv_date' => 'date',
         'gl_lddap_ada_date' => 'date',
@@ -272,6 +276,11 @@ class Application extends Model
     public function serviceProvider()
     {
         return $this->belongsTo(ServiceProvider::class, 'service_provider_id');
+    }
+
+    public function glFinanceBatch()
+    {
+        return $this->belongsTo(GlFinanceBatch::class, 'gl_finance_batch_id');
     }
 
     public function frequencyBasisApplication()
@@ -404,6 +413,11 @@ class Application extends Model
     public function documents()
     {
         return $this->hasMany(Document::class);
+    }
+
+    public function glFinanceBatchItem()
+    {
+        return $this->hasOne(GlFinanceBatchItem::class);
     }
 
     public function assistanceRecommendations()

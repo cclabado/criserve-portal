@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\BuildsGlFinanceDocuments;
 use App\Models\Application;
+use App\Models\GlFinanceBatch;
 use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,6 +53,11 @@ class FinanceDirectorController extends Controller
 
     public function queue(Request $request): View
     {
+        return $this->batchQueue($request);
+    }
+
+    protected function batchQueue(Request $request): View
+    {
         $filters = [
             'search' => trim((string) $request->input('search', '')),
             'fund_source' => trim((string) $request->input('fund_source', 'all')),
@@ -60,8 +66,8 @@ class FinanceDirectorController extends Controller
         ];
 
         $sourceQuery = $filters['scope'] === 'finished'
-            ? $this->finishedQuery()
-            : $this->baseQuery(false);
+            ? $this->finishedBatchQuery()
+            : $this->batchBaseQuery(false);
 
         $query = clone $sourceQuery;
 
@@ -69,46 +75,48 @@ class FinanceDirectorController extends Controller
             $search = $filters['search'];
 
             $query->where(function ($inner) use ($search) {
-                $inner->where('reference_no', 'like', "%{$search}%")
-                    ->orWhereHas('client', function ($clientQuery) use ($search) {
-                        $clientQuery->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%")
-                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
-                    })
-                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"));
+                $inner->where('batch_no', 'like', "%{$search}%")
+                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('applications', function ($applicationQuery) use ($search) {
+                        $applicationQuery->where('reference_no', 'like', "%{$search}%")
+                            ->orWhereHas('client', function ($clientQuery) use ($search) {
+                                $clientQuery->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%")
+                                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                            });
+                    });
             });
         }
 
         if ($filters['fund_source'] !== '' && $filters['fund_source'] !== 'all') {
-            $query->where('gl_finance_fund_source', $filters['fund_source']);
+            $query->where('finance_fund_source_name', $filters['fund_source']);
         }
 
         if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
-            $query->where('gl_payment_status', $filters['payment_status']);
+            $query->where('status', $filters['payment_status']);
         }
 
-        $applications = $query
-            ->latest('gl_cash_certified_at')
+        $batches = $query
             ->latest('updated_at')
             ->paginate(10)
             ->withQueryString();
 
         $fundSources = (clone $sourceQuery)
-            ->whereNotNull('gl_finance_fund_source')
+            ->whereNotNull('finance_fund_source_name')
             ->distinct()
-            ->orderBy('gl_finance_fund_source')
-            ->pluck('gl_finance_fund_source');
+            ->orderBy('finance_fund_source_name')
+            ->pluck('finance_fund_source_name');
 
         $paymentStatusOptions = (clone $sourceQuery)
-            ->whereNotNull('gl_payment_status')
+            ->whereNotNull('status')
             ->distinct()
-            ->orderBy('gl_payment_status')
-            ->pluck('gl_payment_status');
+            ->orderBy('status')
+            ->pluck('status');
 
         $statsQuery = clone $sourceQuery;
 
-        return view('finance-director.queue', [
-            'applications' => $applications,
+        return view('finance-director.batch-queue', [
+            'batches' => $batches,
             'filters' => $filters,
             'fundSources' => $fundSources,
             'paymentStatusOptions' => $paymentStatusOptions,
@@ -116,9 +124,9 @@ class FinanceDirectorController extends Controller
                 'total' => (clone $statsQuery)->count(),
                 'with_remarks' => (clone $statsQuery)
                     ->where(function ($remarkQuery) {
-                        $remarkQuery->whereNotNull('gl_cash_approval_remarks')->where('gl_cash_approval_remarks', '!=', '')
+                        $remarkQuery->whereNotNull('decision_notes')->where('decision_notes', '!=', '')
                             ->orWhere(function ($inner) {
-                                $inner->whereNotNull('gl_cash_certification_remarks')->where('gl_cash_certification_remarks', '!=', '');
+                                $inner->whereNotNull('finance_director_remarks')->where('finance_director_remarks', '!=', '');
                             });
                     })
                     ->count(),
@@ -132,10 +140,30 @@ class FinanceDirectorController extends Controller
             ->where('gl_finance_director_approved_by', auth()->id());
     }
 
-    public function show(Application $application): View
+    protected function finishedBatchQuery()
     {
+        return $this->batchBaseQuery(true)
+            ->where('finance_director_approved_by', auth()->id());
+    }
+
+    public function show($id): View
+    {
+        $batch = $this->batchBaseQuery(true)
+            ->with('applications')
+            ->findOrFail($id);
+
+        return view('finance-director.batch-show', [
+            'batch' => $batch,
+        ]);
+    }
+
+    public function showBatchRecord($batchId, $applicationId): View
+    {
+        $batch = $this->batchBaseQuery(true)->findOrFail($batchId);
+
         $application = $this->baseQuery(true, true)
-            ->whereKey($application->id)
+            ->whereIn('applications.id', $batch->applications->pluck('id'))
+            ->whereKey($applicationId)
             ->firstOrFail();
 
         return view('finance-director.show', [
@@ -148,6 +176,9 @@ class FinanceDirectorController extends Controller
                 ->where('document_type', 'Other Supporting Document')
                 ->sortByDesc('created_at')
                 ->values(),
+            'readOnlyBatchRecord' => true,
+            'batch' => $batch,
+            'readOnlyBatchBackUrl' => route('finance-director.gl-payment-approvals.show', $batch->id),
         ]);
     }
 
@@ -178,15 +209,16 @@ class FinanceDirectorController extends Controller
         return $this->renderGlLddapAdaView($application);
     }
 
-    public function update(Request $request, Application $application): RedirectResponse
+    public function update(Request $request, $id): RedirectResponse
     {
-        $application = $this->baseQuery()
-            ->whereKey($application->id)
-            ->firstOrFail();
+        $batch = $this->batchBaseQuery(false)
+            ->with('applications')
+            ->findOrFail($id);
 
         $validated = $request->validate([
             'decision' => ['required', 'in:for_compliance,approved,disapproved'],
             'remarks' => ['nullable', 'string', 'max:1500'],
+            'trigger_application_id' => ['nullable', 'integer'],
         ]);
 
         if ($validated['decision'] === 'disapproved' && blank($validated['remarks'] ?? null)) {
@@ -201,52 +233,125 @@ class FinanceDirectorController extends Controller
             ]);
         }
 
-        $updatePayload = [
-            'gl_finance_director_status' => $validated['decision'],
-            'gl_finance_director_remarks' => filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null,
-            'gl_finance_director_approved_by' => $request->user()->id,
-            'gl_finance_director_approved_at' => now(),
-        ];
-
-        if ($validated['decision'] === 'approved') {
-            $updatePayload['gl_payment_status'] = 'paid';
-        } elseif ($validated['decision'] === 'for_compliance') {
-            $updatePayload['gl_payment_status'] = 'for_compliance_cash_officer';
-            $updatePayload['gl_cash_review_status'] = 'pending_review';
-            $updatePayload['gl_cash_remarks'] = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
-            $updatePayload['gl_cash_reviewed_by'] = null;
-            $updatePayload['gl_cash_reviewed_at'] = null;
-            $updatePayload['gl_cash_approval_status'] = null;
-            $updatePayload['gl_cash_approval_remarks'] = null;
-            $updatePayload['gl_cash_approved_by'] = null;
-            $updatePayload['gl_cash_approved_at'] = null;
-            $updatePayload['gl_cash_certification_status'] = null;
-            $updatePayload['gl_cash_certification_remarks'] = null;
-            $updatePayload['gl_cash_certified_by'] = null;
-            $updatePayload['gl_cash_certified_at'] = null;
-            $updatePayload['gl_finance_director_status'] = null;
-            $updatePayload['gl_finance_director_remarks'] = null;
-            $updatePayload['gl_finance_director_approved_by'] = null;
-            $updatePayload['gl_finance_director_approved_at'] = null;
-        } else {
-            $updatePayload['gl_payment_status'] = 'for_processing_finance_director';
+        if ($validated['decision'] === 'for_compliance' && blank($validated['trigger_application_id'] ?? null)) {
+            throw ValidationException::withMessages([
+                'trigger_application_id' => 'Select the specific record that triggered the compliance return.',
+            ]);
         }
 
-        $application->update($updatePayload);
+        $triggerApplicationId = filled($validated['trigger_application_id'] ?? null)
+            ? (int) $validated['trigger_application_id']
+            : null;
 
-        $this->auditLogs->log($request, 'gl_payment.finance_director_updated', $application, [
+        if ($triggerApplicationId && ! $batch->applications->contains('id', $triggerApplicationId)) {
+            throw ValidationException::withMessages([
+                'trigger_application_id' => 'The selected compliance trigger record is not part of this batch.',
+            ]);
+        }
+
+        $remarks = filled($validated['remarks'] ?? null) ? trim((string) $validated['remarks']) : null;
+        $now = now();
+
+        DB::transaction(function () use ($batch, $validated, $remarks, $triggerApplicationId, $now, $request) {
+            $batchPayload = [
+                'finance_director_status' => $validated['decision'],
+                'finance_director_remarks' => $remarks,
+                'finance_director_approved_by' => $request->user()->id,
+                'finance_director_approved_at' => $now,
+                'compliance_trigger_application_id' => $validated['decision'] === 'for_compliance' ? $triggerApplicationId : null,
+                'decision_notes' => $remarks,
+            ];
+
+            $applicationPayload = [
+                'gl_finance_director_status' => $validated['decision'],
+                'gl_finance_director_remarks' => $remarks,
+                'gl_finance_director_approved_by' => $request->user()->id,
+                'gl_finance_director_approved_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if ($validated['decision'] === 'approved') {
+                $batchPayload['status'] = 'paid';
+                $batchPayload['current_stage'] = 'completed';
+                $batchPayload['completed_at'] = $now;
+                $applicationPayload['gl_payment_status'] = 'paid';
+                $applicationPayload['gl_batch_status'] = 'paid';
+            } elseif ($validated['decision'] === 'for_compliance') {
+                $batchPayload['status'] = 'for_compliance_cash_officer';
+                $batchPayload['current_stage'] = 'cash_review';
+                $applicationPayload['gl_payment_status'] = 'for_compliance_cash_officer';
+                $applicationPayload['gl_batch_status'] = 'for_compliance_cash_officer';
+                $applicationPayload['gl_cash_review_status'] = 'pending_review';
+                $applicationPayload['gl_cash_remarks'] = $remarks;
+                $applicationPayload['gl_cash_reviewed_by'] = null;
+                $applicationPayload['gl_cash_reviewed_at'] = null;
+                $applicationPayload['gl_cash_approval_status'] = null;
+                $applicationPayload['gl_cash_approval_remarks'] = null;
+                $applicationPayload['gl_cash_approved_by'] = null;
+                $applicationPayload['gl_cash_approved_at'] = null;
+                $applicationPayload['gl_cash_certification_status'] = null;
+                $applicationPayload['gl_cash_certification_remarks'] = null;
+                $applicationPayload['gl_cash_certified_by'] = null;
+                $applicationPayload['gl_cash_certified_at'] = null;
+                $applicationPayload['gl_finance_director_status'] = null;
+                $applicationPayload['gl_finance_director_remarks'] = null;
+                $applicationPayload['gl_finance_director_approved_by'] = null;
+                $applicationPayload['gl_finance_director_approved_at'] = null;
+            } else {
+                $batchPayload['status'] = 'disapproved';
+                $batchPayload['current_stage'] = null;
+                $applicationPayload['gl_batch_status'] = 'disapproved';
+            }
+
+            $batch->update($batchPayload);
+
+            Application::query()
+                ->whereIn('id', $batch->applications->pluck('id'))
+                ->update($applicationPayload);
+        }, 3);
+
+        $this->auditLogs->log($request, 'gl_finance_batch.finance_director_updated', $batch, [
             'decision' => $validated['decision'],
-            'remarks' => $validated['remarks'] ?? null,
-            'payment_status' => $updatePayload['gl_payment_status'],
+            'remarks' => $remarks,
+            'trigger_application_id' => $triggerApplicationId,
+            'batch_no' => $batch->batch_no,
         ]);
 
         return redirect()
             ->route('finance-director.gl-payment-approvals')
             ->with('success', $validated['decision'] === 'approved'
-                ? 'Final approval saved and the case is now tagged as Paid.'
+                ? 'Final batch approval saved and the cases are now tagged as Paid.'
                 : ($validated['decision'] === 'for_compliance'
-                    ? 'Case returned to the cash officer for compliance.'
-                    : 'Finance director decision saved successfully.'));
+                    ? 'Batch returned to the cash officer for compliance.'
+                    : 'Finance director batch decision saved successfully.'));
+    }
+
+    protected function batchBaseQuery(bool $includeHandled = false)
+    {
+        return GlFinanceBatch::query()
+            ->with([
+                'serviceProvider',
+                'bankAccount.bank',
+                'applications.client',
+                'applications.serviceProvider',
+                'applications.assistanceType',
+                'applications.assistanceDetail',
+            ])
+            ->where(function ($rootQuery) use ($includeHandled) {
+                $rootQuery->where(function ($statusQuery) {
+                    $statusQuery->where('status', 'for_processing_finance_director')
+                        ->where('current_stage', 'finance_director')
+                        ->where(function ($inner) {
+                            $inner->where('finance_director_status', 'pending_approval')
+                                ->orWhereNull('finance_director_status')
+                                ->orWhere('finance_director_status', 'for_compliance');
+                        });
+                });
+
+                if ($includeHandled) {
+                    $rootQuery->orWhere('finance_director_approved_by', auth()->id());
+                }
+            });
     }
 
     protected function baseQuery(bool $includeHandled = false, bool $withDocuments = false)

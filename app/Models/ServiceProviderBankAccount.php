@@ -37,6 +37,11 @@ class ServiceProviderBankAccount extends Model
         return $this->hasMany(Document::class, 'service_provider_bank_account_id');
     }
 
+    public function glFinanceBatches()
+    {
+        return $this->hasMany(GlFinanceBatch::class, 'service_provider_bank_account_id');
+    }
+
     public function resolvedBankName(): ?string
     {
         return $this->bank?->name ?: $this->bank_name;
