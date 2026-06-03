@@ -526,7 +526,11 @@ class SocialWorkerController extends Controller
                 ]);
             }
 
-            if ($application->beneficiary && $application->beneficiary->relationship_id != 1) {
+            $selfRelationshipId = Relationship::query()
+                ->whereRaw('LOWER(name) = ?', ['self'])
+                ->value('id');
+
+            if ($application->beneficiary && (int) $application->beneficiary->relationship_id !== (int) $selfRelationshipId) {
                 $beneficiaryProfile = $application->beneficiaryProfile
                     ?? BeneficiaryProfile::firstOrNew([
                         'client_id' => $application->client_id,
@@ -1456,12 +1460,15 @@ class SocialWorkerController extends Controller
             'disability_types' => in_array('PWD', $validated['client_sectors'] ?? [], true)
                 ? array_values($validated['disability_types'] ?? [])
                 : [],
-            'total_income_past_six_months' => $validated['total_income_past_six_months'] ?? null,
             'income_sources' => collect($validated['income_sources'] ?? [])
                 ->filter(fn (array $row) => filled($row['source'] ?? null) || filled($row['amount'] ?? null))
                 ->values()
                 ->all(),
         ];
+
+        $payload['total_income_past_six_months'] = $this->calculateTotalIncomePastSixMonths($payload['income_sources']);
+
+        return $payload;
     }
 
     protected function resolveServiceProviderSelection(Request $request, ModeOfAssistance $mode, ?int $subtypeId = null, ?int $detailId = null): ?int
@@ -1494,6 +1501,20 @@ class SocialWorkerController extends Controller
         $this->validateServiceProviderCategoryMatch($provider, $subtypeId, $detailId);
 
         return $provider->id;
+    }
+
+    protected function calculateTotalIncomePastSixMonths(array $incomeSources): ?float
+    {
+        $amounts = collect($incomeSources)
+            ->pluck('amount')
+            ->filter(fn ($amount) => $amount !== null && $amount !== '')
+            ->map(fn ($amount) => (float) $amount);
+
+        if ($amounts->isEmpty()) {
+            return null;
+        }
+
+        return round($amounts->sum(), 2);
     }
 
     protected function validateModeAmountRule(ModeOfAssistance $mode, float $amount, string $field): void

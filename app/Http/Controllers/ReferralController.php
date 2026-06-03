@@ -15,6 +15,7 @@ use App\Models\Document;
 use App\Models\FamilyMember;
 use App\Models\InstitutionReferral;
 use App\Models\ModeOfAssistance;
+use App\Models\Relationship;
 use App\Models\ReferralInstitution;
 use App\Models\ServiceProvider;
 use App\Services\AuditLogService;
@@ -177,7 +178,9 @@ class ReferralController extends Controller
             isset($validated['assistance_detail_id']) ? (int) $validated['assistance_detail_id'] : null
         );
 
-        if ((int) $request->relationship_id !== 1) {
+        $isSelfRelationship = $this->isSelfRelationshipId((int) $request->relationship_id);
+
+        if (! $isSelfRelationship) {
             $request->validate([
                 'bene_last_name' => ['required', 'string', 'max:255'],
                 'bene_first_name' => ['required', 'string', 'max:255'],
@@ -206,7 +209,7 @@ class ReferralController extends Controller
 
         $beneficiaryProfile = null;
 
-        if ((int) $request->relationship_id !== 1) {
+        if (! $isSelfRelationship) {
             $beneficiaryProfile = $this->createBeneficiaryProfile($client, $request);
         }
 
@@ -233,7 +236,7 @@ class ReferralController extends Controller
             'status' => 'submitted',
         ]);
 
-        if ((int) $request->relationship_id === 1) {
+        if ($isSelfRelationship) {
             Beneficiary::create([
                 'application_id' => $application->id,
                 'relationship_id' => $request->relationship_id,
@@ -276,7 +279,7 @@ class ReferralController extends Controller
             'referral_institution_id' => $institution->id,
             'referred_by_user_id' => $request->user()->id,
             'application_id' => $application->id,
-            'subject_type' => (int) $request->relationship_id === 1 ? 'client' : 'beneficiary',
+            'subject_type' => $isSelfRelationship ? 'client' : 'beneficiary',
             'client_last_name' => $request->last_name,
             'client_first_name' => $request->first_name,
             'client_middle_name' => $request->middle_name,
@@ -311,6 +314,15 @@ class ReferralController extends Controller
         return redirect()
             ->route('referral-institution.dashboard')
             ->with('success', 'Referred application submitted successfully.');
+    }
+
+    protected function isSelfRelationshipId(int $relationshipId): bool
+    {
+        $selfRelationshipId = Relationship::query()
+            ->whereRaw('LOWER(name) = ?', ['self'])
+            ->value('id');
+
+        return $selfRelationshipId !== null && $relationshipId === (int) $selfRelationshipId;
     }
 
     public function updateReferral(Request $request, ApplicationAssistanceRecommendation $recommendation): RedirectResponse

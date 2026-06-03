@@ -23,31 +23,24 @@ class FinanceDirectorController extends Controller
 
     public function dashboard(): View
     {
-        $baseQuery = $this->baseQuery(true);
-        $amountSql = Application::effectiveDisplayedAmountSql();
+        $baseQuery = $this->batchBaseQuery(true);
 
         return view('finance-director.dashboard', [
             'stats' => [
                 'total' => (clone $baseQuery)->count(),
-                'with_remarks' => (clone $baseQuery)->whereNotNull('gl_cash_certification_remarks')->where('gl_cash_certification_remarks', '!=', '')->count(),
-                'with_supporting_docs' => (clone $baseQuery)->whereHas('documents', fn ($query) => $query->where('document_type', 'Other Supporting Document'))->count(),
-                'total_amount' => (float) ((clone $baseQuery)->sum(DB::raw($amountSql))),
+                'with_remarks' => (clone $baseQuery)
+                    ->where(function ($remarkQuery) {
+                        $remarkQuery->whereNotNull('decision_notes')->where('decision_notes', '!=', '')
+                            ->orWhere(function ($inner) {
+                                $inner->whereNotNull('finance_director_remarks')->where('finance_director_remarks', '!=', '');
+                            });
+                    })
+                    ->count(),
+                'with_supporting_docs' => (clone $baseQuery)->whereHas('applications.documents', fn ($query) => $query->where('document_type', 'Other Supporting Document'))->count(),
+                'total_amount' => (float) ((clone $baseQuery)->sum('total_amount')),
             ],
-            'recentCases' => (clone $baseQuery)->latest('gl_cash_certified_at')->latest('updated_at')->take(6)->get(),
-            'providerLoad' => (clone $baseQuery)
-                ->selectRaw('service_provider_id')
-                ->selectRaw('COUNT(*) as total')
-                ->selectRaw('SUM('.$amountSql.') as amount')
-                ->groupBy('service_provider_id')
-                ->orderByDesc('total')
-                ->limit(5)
-                ->get()
-                ->map(fn ($row) => [
-                    'provider' => $row->serviceProvider?->name ?? 'Unassigned Provider',
-                    'total' => (int) $row->total,
-                    'amount' => (float) $row->amount,
-                ])
-                ->values(),
+            'recentBatches' => (clone $baseQuery)->latest('updated_at')->take(6)->get(),
+            'providerLoad' => $this->batchProviderLoadRows(clone $baseQuery),
         ]);
     }
 
@@ -138,6 +131,24 @@ class FinanceDirectorController extends Controller
     {
         return $this->baseQuery(true)
             ->where('gl_finance_director_approved_by', auth()->id());
+    }
+
+    protected function batchProviderLoadRows($query, int $limit = 5)
+    {
+        return $query
+            ->selectRaw('service_provider_id')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(total_amount) as amount')
+            ->groupBy('service_provider_id')
+            ->orderByDesc('total')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($row) => [
+                'provider' => $row->serviceProvider?->name ?? 'Unassigned Provider',
+                'total' => (int) $row->total,
+                'amount' => (float) $row->amount,
+            ])
+            ->values();
     }
 
     protected function finishedBatchQuery()

@@ -23,19 +23,18 @@ class CashController extends Controller
 
     public function cashOfficerDashboard(): View
     {
-        $baseQuery = $this->cashOfficerBaseQuery(true);
-        $amountSql = Application::effectiveDisplayedAmountSql();
+        $baseQuery = $this->cashOfficerBatchQuery(true);
 
         return view('cash.dashboard', [
             'workspace' => 'officer',
             'stats' => [
                 'total' => (clone $baseQuery)->count(),
-                'with_previous_remarks' => (clone $baseQuery)->whereNotNull('gl_accounting_remarks')->where('gl_accounting_remarks', '!=', '')->count(),
-                'with_supporting_docs' => (clone $baseQuery)->whereHas('documents', fn ($query) => $query->where('document_type', 'Other Supporting Document'))->count(),
-                'total_amount' => (float) ((clone $baseQuery)->sum(DB::raw($amountSql))),
+                'with_previous_remarks' => (clone $baseQuery)->whereHas('applications', fn ($query) => $query->whereNotNull('gl_accounting_remarks')->where('gl_accounting_remarks', '!=', ''))->count(),
+                'with_supporting_docs' => (clone $baseQuery)->whereHas('applications.documents', fn ($query) => $query->where('document_type', 'Other Supporting Document'))->count(),
+                'total_amount' => (float) ((clone $baseQuery)->sum('total_amount')),
             ],
-            'recentCases' => (clone $baseQuery)->latest('gl_program_amount_approved_at')->latest('updated_at')->take(6)->get(),
-            'providerLoad' => $this->providerLoadRows($baseQuery, 5),
+            'recentCases' => (clone $baseQuery)->latest('updated_at')->take(6)->get(),
+            'providerLoad' => $this->batchProviderLoadRows($baseQuery, 5),
         ]);
     }
 
@@ -59,16 +58,7 @@ class CashController extends Controller
 
     public function cashOfficerQueue(Request $request): View
     {
-        [$applications, $filters, $fundSources, $queueStats, $paymentStatusOptions] = $this->buildQueuePayload($request, 'officer');
-
-        return view('cash.queue', [
-            'workspace' => 'officer',
-            'applications' => $applications,
-            'filters' => $filters,
-            'fundSources' => $fundSources,
-            'paymentStatusOptions' => $paymentStatusOptions,
-            'queueStats' => $queueStats,
-        ]);
+        return $this->cashOfficerBatches($request);
     }
 
     public function cashApproverQueue(Request $request): View
@@ -76,13 +66,53 @@ class CashController extends Controller
         return $this->cashApprovalBatches($request);
     }
 
-    public function showCashOfficer(Application $application): View
+    public function showCashOfficer($id): View
     {
-        $application = $this->cashOfficerBaseQuery(true, true)
-            ->whereKey($application->id)
+        $batch = $this->cashOfficerBatchQuery(true)
+            ->with('applications')
+            ->findOrFail($id);
+
+        return view('cash.officer-batch-show', [
+            'batch' => $batch,
+        ]);
+    }
+
+    public function showCashOfficerBatchRecord($batchId, $applicationId): View
+    {
+        $batch = $this->cashOfficerBatchQuery(true)->findOrFail($batchId);
+        $application = $batch->applications()
+            ->whereKey($applicationId)
+            ->with([
+                'client',
+                'beneficiary.relationshipData',
+                'assistanceType',
+                'assistanceSubtype',
+                'assistanceDetail',
+                'assistanceRecommendations.assistanceType',
+                'assistanceRecommendations.assistanceSubtype',
+                'assistanceRecommendations.assistanceDetail',
+                'assistanceRecommendations.modeOfAssistance',
+                'serviceProvider',
+                'modeOfAssistance',
+                'documents',
+            ])
             ->firstOrFail();
 
-        return $this->renderShowView($application, 'officer');
+        return view('cash.show', [
+            'workspace' => 'officer',
+            'application' => $application,
+            'statementDocuments' => $application->documents
+                ->where('document_type', 'Updated Statement of Account')
+                ->sortByDesc('created_at')
+                ->values(),
+            'supportingDocuments' => $application->documents
+                ->where('document_type', 'Other Supporting Document')
+                ->sortByDesc('created_at')
+                ->values(),
+            'batch' => $batch,
+            'batchBackUrl' => route('cash-officer.gl-payment-reviews.show', $batch->id),
+            'batchBackText' => 'Back to Cash Review Batch',
+        ]);
     }
 
     public function showCashApprover($id): View
@@ -318,8 +348,12 @@ class CashController extends Controller
             'lddap_ada_number' => $updatePayload['gl_lddap_ada_number'] ?? null,
         ]);
 
+        $redirectRoute = $request->filled('batch_id')
+            ? route('cash-officer.gl-payment-reviews.show', $request->input('batch_id'))
+            : route('cash-officer.gl-payment-reviews');
+
         return redirect()
-            ->route('cash-officer.gl-payment-reviews')
+            ->to($redirectRoute)
             ->with('success', $validated['decision'] === 'approved'
                 ? 'Case submitted to the cash approver successfully.'
                 : 'Case returned to the accounting officer for compliance.');
@@ -523,6 +557,62 @@ class CashController extends Controller
         return [$applications, $filters, $fundSources, $queueStats, $paymentStatusOptions];
     }
 
+    protected function cashOfficerBatches(Request $request): View
+    {
+        $filters = [
+            'search' => trim((string) $request->input('search', '')),
+            'fund_source' => trim((string) $request->input('fund_source', 'all')),
+            'payment_status' => trim((string) $request->input('payment_status', 'all')),
+            'scope' => trim((string) $request->input('scope', 'active')),
+        ];
+
+        $sourceQuery = $filters['scope'] === 'finished'
+            ? $this->cashOfficerBatchFinishedQuery()
+            : $this->cashOfficerBatchQuery(false);
+
+        $query = clone $sourceQuery;
+
+        if ($filters['search'] !== '') {
+            $search = $filters['search'];
+
+            $query->where(function ($inner) use ($search) {
+                $inner->where('batch_no', 'like', "%{$search}%")
+                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('applications', function ($applicationQuery) use ($search) {
+                        $applicationQuery->where('reference_no', 'like', "%{$search}%")
+                            ->orWhereHas('client', function ($clientQuery) use ($search) {
+                                $clientQuery->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%")
+                                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                            });
+                    });
+            });
+        }
+
+        if ($filters['fund_source'] !== '' && $filters['fund_source'] !== 'all') {
+            $query->where('finance_fund_source_name', $filters['fund_source']);
+        }
+
+        if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
+            $query->where('status', $filters['payment_status']);
+        }
+
+        $batches = $query->latest('updated_at')->paginate(10)->withQueryString();
+        $fundSources = (clone $sourceQuery)->whereNotNull('finance_fund_source_name')->distinct()->orderBy('finance_fund_source_name')->pluck('finance_fund_source_name');
+        $paymentStatusOptions = (clone $sourceQuery)->whereNotNull('status')->distinct()->orderBy('status')->pluck('status');
+        $queueStats = [
+            'total' => (clone $sourceQuery)->count(),
+            'with_remarks' => (clone $sourceQuery)
+                ->where(function ($remarkQuery) {
+                    $remarkQuery->whereNotNull('decision_notes')->where('decision_notes', '!=', '')
+                        ->orWhereHas('applications', fn ($applicationQuery) => $applicationQuery->whereNotNull('gl_cash_remarks')->where('gl_cash_remarks', '!=', ''));
+                })
+                ->count(),
+        ];
+
+        return view('cash.officer-batch-queue', compact('batches', 'filters', 'fundSources', 'paymentStatusOptions', 'queueStats'));
+    }
+
     protected function cashOfficerFinishedQuery()
     {
         return $this->cashOfficerBaseQuery(true)
@@ -650,6 +740,24 @@ class CashController extends Controller
             ->values();
     }
 
+    protected function batchProviderLoadRows($query, int $limit = 5)
+    {
+        return (clone $query)
+            ->selectRaw('service_provider_id')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(total_amount) as amount')
+            ->groupBy('service_provider_id')
+            ->orderByDesc('total')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($row) => [
+                'provider' => $row->serviceProvider?->name ?? 'Unassigned Provider',
+                'total' => (int) $row->total,
+                'amount' => (float) $row->amount,
+            ])
+            ->values();
+    }
+
     protected function cashOfficerBaseQuery(bool $includeHandled = false, bool $withDocuments = false)
     {
         return $this->baseQuery($withDocuments)
@@ -666,6 +774,35 @@ class CashController extends Controller
                     $query->orWhere('gl_cash_reviewed_by', auth()->id());
                 }
             });
+    }
+
+    protected function cashOfficerBatchQuery(bool $includeHandled = false)
+    {
+        return GlFinanceBatch::query()
+            ->with([
+                'serviceProvider',
+                'bankAccount.bank',
+                'applications.client',
+                'applications.serviceProvider',
+                'applications.assistanceType',
+                'applications.assistanceDetail',
+            ])
+            ->where(function ($query) use ($includeHandled) {
+                $query->where(function ($activeQuery) {
+                    $activeQuery->where('current_stage', 'cash_review')
+                        ->whereIn('status', ['for_processing_cash', 'for_compliance_cash_officer']);
+                });
+
+                if ($includeHandled) {
+                    $query->orWhereHas('applications', fn ($applicationQuery) => $applicationQuery->where('gl_cash_reviewed_by', auth()->id()));
+                }
+            });
+    }
+
+    protected function cashOfficerBatchFinishedQuery()
+    {
+        return $this->cashOfficerBatchQuery(true)
+            ->whereHas('applications', fn ($applicationQuery) => $applicationQuery->where('gl_cash_reviewed_by', auth()->id()));
     }
 
     protected function cashApproverBaseQuery(bool $includeHandled = false, bool $withDocuments = false)

@@ -6,7 +6,7 @@
     $isOfficer = $workspace === 'officer';
     $workspaceLabel = $isOfficer ? 'Accounting Officer' : 'Accounting Approver';
     $listRoute = $isOfficer ? 'accounting-officer.gl-payment-reviews' : 'accounting-approver.gl-payment-approvals';
-    $listLabel = $isOfficer ? 'For Review' : 'For Approval';
+    $listLabel = $isOfficer ? 'Accounting Review Batches' : 'Accounting Approval Batches';
     $cashCertificationRoute = 'accounting-approver.cash-certifications';
 @endphp
 
@@ -23,12 +23,12 @@
                 <div class="mt-6 flex flex-wrap gap-3">
                     <a href="{{ route($listRoute) }}"
                        class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#18384f]">
-                        Open {{ $listLabel }} List
+                        Open {{ $listLabel }}
                     </a>
                     @if(! $isOfficer)
                         <a href="{{ route($cashCertificationRoute) }}"
                            class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                            Open Cash Certifications
+                            Open Certification Batches
                         </a>
                     @endif
                 </div>
@@ -51,7 +51,7 @@
 
     <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <article class="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-            <span class="inline-flex rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">{{ $listLabel }}</span>
+            <span class="inline-flex rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">{{ $isOfficer ? 'Review Batches' : 'Approval Batches' }}</span>
             <p class="mt-3 text-3xl font-black text-blue-950">{{ $stats['total'] }}</p>
             <p class="mt-2 text-sm text-blue-800">Active cases in this accounting workspace.</p>
         </article>
@@ -90,12 +90,12 @@
                 </div>
                 <a href="{{ route($listRoute) }}"
                    class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                    Open List
+                    Open Batches
                 </a>
             </div>
 
             <div class="mt-6 space-y-4">
-                @forelse($recentCases as $application)
+                @forelse($recentCases as $batch)
                     <article class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
@@ -103,18 +103,18 @@
                                     <span class="inline-flex rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">
                                         For Processing (Accounting)
                                     </span>
-                                    <span class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{{ $application->reference_no }}</span>
+                                    <span class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{{ $batch->batch_no }}</span>
                                 </div>
-                                <h3 class="mt-3 text-xl font-black text-slate-950">{{ trim(($application->client?->first_name ?? '').' '.($application->client?->last_name ?? '')) ?: '-' }}</h3>
-                                <p class="mt-1 text-sm text-slate-500">{{ $application->serviceProvider?->name ?? 'No provider assigned' }}</p>
+                                <h3 class="mt-3 text-xl font-black text-slate-950">{{ $batch->serviceProvider?->name ?? 'No provider assigned' }}</h3>
+                                <p class="mt-1 text-sm text-slate-500">{{ $batch->application_count }} record{{ $batch->application_count === 1 ? '' : 's' }}</p>
                                 <div class="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-slate-500">
-                                    <span>Fund Source: {{ $application->gl_finance_fund_source ?? '-' }}</span>
-                                    <span>Amount: PHP {{ number_format($application->effectiveDisplayedAmount(), 2) }}</span>
+                                    <span>Fund Source: {{ $batch->finance_fund_source_name ?? '-' }}</span>
+                                    <span>Amount: PHP {{ number_format((float) $batch->total_amount, 2) }}</span>
                                 </div>
                             </div>
-                            <a href="{{ route($listRoute.'.show', $application->id) }}"
+                            <a href="{{ route($listRoute.'.show', $batch->id) }}"
                                class="inline-flex items-center rounded-xl bg-[#234E70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#18384f]">
-                                Review Case
+                                Open Batch
                             </a>
                         </div>
                     </article>
@@ -160,7 +160,7 @@
                     </div>
                     <a href="{{ route($cashCertificationRoute) }}"
                        class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                        Open List
+                    Open Batches
                     </a>
                 </div>
 

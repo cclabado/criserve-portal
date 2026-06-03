@@ -23,19 +23,18 @@ class AccountingController extends Controller
 
     public function accountingOfficerDashboard(): View
     {
-        $baseQuery = $this->accountingOfficerBaseQuery(true);
-        $amountSql = Application::effectiveDisplayedAmountSql();
+        $baseQuery = $this->accountingOfficerBatchQuery(true);
 
         return view('accounting.dashboard', [
             'workspace' => 'officer',
             'stats' => [
                 'total' => (clone $baseQuery)->count(),
-                'with_processor_remarks' => (clone $baseQuery)->whereNotNull('gl_budget_remarks')->where('gl_budget_remarks', '!=', '')->count(),
-                'with_supporting_docs' => (clone $baseQuery)->whereHas('documents', fn ($query) => $query->where('document_type', 'Other Supporting Document'))->count(),
-                'total_amount' => (float) ((clone $baseQuery)->sum(DB::raw($amountSql))),
+                'with_processor_remarks' => (clone $baseQuery)->whereHas('applications', fn ($query) => $query->whereNotNull('gl_budget_remarks')->where('gl_budget_remarks', '!=', ''))->count(),
+                'with_supporting_docs' => (clone $baseQuery)->whereHas('applications.documents', fn ($query) => $query->where('document_type', 'Other Supporting Document'))->count(),
+                'total_amount' => (float) ((clone $baseQuery)->sum('total_amount')),
             ],
-            'recentCases' => (clone $baseQuery)->latest('gl_program_approved_at')->latest('updated_at')->take(6)->get(),
-            'providerLoad' => $this->providerLoadRows($baseQuery, 5),
+            'recentCases' => (clone $baseQuery)->latest('updated_at')->take(6)->get(),
+            'providerLoad' => $this->batchProviderLoadRows($baseQuery, 5),
         ]);
     }
 
@@ -62,16 +61,7 @@ class AccountingController extends Controller
 
     public function accountingOfficerQueue(Request $request): View
     {
-        [$applications, $filters, $fundSources, $queueStats, $paymentStatusOptions] = $this->buildQueuePayload($request, 'officer');
-
-        return view('accounting.queue', [
-            'workspace' => 'officer',
-            'applications' => $applications,
-            'filters' => $filters,
-            'fundSources' => $fundSources,
-            'paymentStatusOptions' => $paymentStatusOptions,
-            'queueStats' => $queueStats,
-        ]);
+        return $this->accountingOfficerBatches($request);
     }
 
     public function accountingApproverQueue(Request $request): View
@@ -84,13 +74,53 @@ class AccountingController extends Controller
         return $this->cashCertificationBatches($request);
     }
 
-    public function showAccountingOfficer(Application $application): View
+    public function showAccountingOfficer($id): View
     {
-        $application = $this->accountingOfficerBaseQuery(true, true)
-            ->whereKey($application->id)
+        $batch = $this->accountingOfficerBatchQuery(true)
+            ->with('applications')
+            ->findOrFail($id);
+
+        return view('accounting.officer-batch-show', [
+            'batch' => $batch,
+        ]);
+    }
+
+    public function showAccountingOfficerBatchRecord($batchId, $applicationId): View
+    {
+        $batch = $this->accountingOfficerBatchQuery(true)->findOrFail($batchId);
+        $application = $batch->applications()
+            ->whereKey($applicationId)
+            ->with([
+                'client',
+                'beneficiary.relationshipData',
+                'assistanceType',
+                'assistanceSubtype',
+                'assistanceDetail',
+                'assistanceRecommendations.assistanceType',
+                'assistanceRecommendations.assistanceSubtype',
+                'assistanceRecommendations.assistanceDetail',
+                'assistanceRecommendations.modeOfAssistance',
+                'serviceProvider',
+                'modeOfAssistance',
+                'documents',
+            ])
             ->firstOrFail();
 
-        return $this->renderShowView($application, 'officer');
+        return view('accounting.show', [
+            'workspace' => 'officer',
+            'application' => $application,
+            'statementDocuments' => $application->documents
+                ->where('document_type', 'Updated Statement of Account')
+                ->sortByDesc('created_at')
+                ->values(),
+            'supportingDocuments' => $application->documents
+                ->where('document_type', 'Other Supporting Document')
+                ->sortByDesc('created_at')
+                ->values(),
+            'batch' => $batch,
+            'batchBackUrl' => route('accounting-officer.gl-payment-reviews.show', $batch->id),
+            'batchBackText' => 'Back to Accounting Review Batch',
+        ]);
     }
 
     public function showAccountingApprover($id): View
@@ -302,8 +332,12 @@ class AccountingController extends Controller
             'payment_status' => $updatePayload['gl_payment_status'],
         ]);
 
+        $redirectRoute = $request->filled('batch_id')
+            ? route('accounting-officer.gl-payment-reviews.show', $request->input('batch_id'))
+            : route('accounting-officer.gl-payment-reviews');
+
         return redirect()
-            ->route('accounting-officer.gl-payment-reviews')
+            ->to($redirectRoute)
             ->with('success', $validated['decision'] === 'approved'
                 ? 'Case submitted to the accounting approver successfully.'
                 : 'Case returned to the budget officer for compliance.');
@@ -649,10 +683,72 @@ class AccountingController extends Controller
         return [$applications, $filters, $fundSources, $queueStats, $paymentStatusOptions];
     }
 
+    protected function accountingOfficerBatches(Request $request): View
+    {
+        $filters = [
+            'search' => trim((string) $request->input('search', '')),
+            'fund_source' => trim((string) $request->input('fund_source', 'all')),
+            'payment_status' => trim((string) $request->input('payment_status', 'all')),
+            'scope' => trim((string) $request->input('scope', 'active')),
+        ];
+
+        $sourceQuery = $filters['scope'] === 'finished'
+            ? $this->accountingOfficerBatchFinishedQuery()
+            : $this->accountingOfficerBatchQuery(false);
+
+        $query = clone $sourceQuery;
+
+        if ($filters['search'] !== '') {
+            $search = $filters['search'];
+
+            $query->where(function ($inner) use ($search) {
+                $inner->where('batch_no', 'like', "%{$search}%")
+                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('applications', function ($applicationQuery) use ($search) {
+                        $applicationQuery->where('reference_no', 'like', "%{$search}%")
+                            ->orWhereHas('client', function ($clientQuery) use ($search) {
+                                $clientQuery->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%")
+                                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                            });
+                    });
+            });
+        }
+
+        if ($filters['fund_source'] !== '' && $filters['fund_source'] !== 'all') {
+            $query->where('finance_fund_source_name', $filters['fund_source']);
+        }
+
+        if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
+            $query->where('status', $filters['payment_status']);
+        }
+
+        $batches = $query->latest('updated_at')->paginate(10)->withQueryString();
+        $fundSources = (clone $sourceQuery)->whereNotNull('finance_fund_source_name')->distinct()->orderBy('finance_fund_source_name')->pluck('finance_fund_source_name');
+        $paymentStatusOptions = (clone $sourceQuery)->whereNotNull('status')->distinct()->orderBy('status')->pluck('status');
+        $queueStats = [
+            'total' => (clone $sourceQuery)->count(),
+            'with_remarks' => (clone $sourceQuery)
+                ->where(function ($remarkQuery) {
+                    $remarkQuery->whereNotNull('decision_notes')->where('decision_notes', '!=', '')
+                        ->orWhereHas('applications', fn ($applicationQuery) => $applicationQuery->whereNotNull('gl_accounting_remarks')->where('gl_accounting_remarks', '!=', ''));
+                })
+                ->count(),
+        ];
+
+        return view('accounting.officer-batch-queue', compact('batches', 'filters', 'fundSources', 'paymentStatusOptions', 'queueStats'));
+    }
+
     protected function accountingOfficerFinishedQuery()
     {
         return $this->accountingOfficerBaseQuery(true)
             ->where('gl_accounting_reviewed_by', auth()->id());
+    }
+
+    protected function accountingOfficerBatchFinishedQuery()
+    {
+        return $this->accountingOfficerBatchQuery(true)
+            ->whereHas('applications', fn ($applicationQuery) => $applicationQuery->where('gl_accounting_reviewed_by', auth()->id()));
     }
 
     protected function accountingApproverFinishedQuery()
@@ -867,6 +963,24 @@ class AccountingController extends Controller
             ->values();
     }
 
+    protected function batchProviderLoadRows($query, int $limit = 5)
+    {
+        return (clone $query)
+            ->selectRaw('service_provider_id')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(total_amount) as amount')
+            ->groupBy('service_provider_id')
+            ->orderByDesc('total')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($row) => [
+                'provider' => $row->serviceProvider?->name ?? 'Unassigned Provider',
+                'total' => (int) $row->total,
+                'amount' => (float) $row->amount,
+            ])
+            ->values();
+    }
+
     protected function accountingOfficerBaseQuery(bool $includeHandled = false, bool $withDocuments = false)
     {
         return $this->baseQuery($withDocuments)
@@ -881,6 +995,29 @@ class AccountingController extends Controller
 
                 if ($includeHandled) {
                     $query->orWhere('gl_accounting_reviewed_by', auth()->id());
+                }
+            });
+    }
+
+    protected function accountingOfficerBatchQuery(bool $includeHandled = false)
+    {
+        return GlFinanceBatch::query()
+            ->with([
+                'serviceProvider',
+                'bankAccount.bank',
+                'applications.client',
+                'applications.serviceProvider',
+                'applications.assistanceType',
+                'applications.assistanceDetail',
+            ])
+            ->where(function ($query) use ($includeHandled) {
+                $query->where(function ($activeQuery) {
+                    $activeQuery->where('current_stage', 'accounting_review')
+                        ->whereIn('status', ['for_processing_accounting', 'for_compliance_accounting_officer']);
+                });
+
+                if ($includeHandled) {
+                    $query->orWhereHas('applications', fn ($applicationQuery) => $applicationQuery->where('gl_accounting_reviewed_by', auth()->id()));
                 }
             });
     }

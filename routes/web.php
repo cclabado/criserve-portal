@@ -491,6 +491,8 @@ Route::middleware(['auth', 'role:budget_officer'])->prefix('budget-officer')->gr
         ->name('budget-officer.dashboard');
     Route::get('/gl-payment-approvals', [ApprovingOfficerController::class, 'glPaymentApprovals'])
         ->name('budget-officer.gl-payment-approvals');
+    Route::get('/gl-payment-approvals/{batchId}/records/{applicationId}', [ApprovingOfficerController::class, 'showGlPaymentApprovalBatchRecord'])
+        ->name('budget-officer.gl-payment-approvals.records.show');
     Route::get('/gl-payment-approvals/{id}', [ApprovingOfficerController::class, 'showGlPaymentApproval'])
         ->name('budget-officer.gl-payment-approvals.show');
     Route::get('/gl-payment-approvals/{id}/ors', [ApprovingOfficerController::class, 'showGlFinanceOrs'])
@@ -527,7 +529,9 @@ Route::middleware(['auth', 'role:accounting_officer'])->prefix('accounting-offic
         ->name('accounting-officer.dashboard');
     Route::get('/gl-payment-reviews', [AccountingController::class, 'accountingOfficerQueue'])
         ->name('accounting-officer.gl-payment-reviews');
-    Route::get('/gl-payment-reviews/{application}', [AccountingController::class, 'showAccountingOfficer'])
+    Route::get('/gl-payment-reviews/{batchId}/records/{applicationId}', [AccountingController::class, 'showAccountingOfficerBatchRecord'])
+        ->name('accounting-officer.gl-payment-reviews.records.show');
+    Route::get('/gl-payment-reviews/{id}', [AccountingController::class, 'showAccountingOfficer'])
         ->name('accounting-officer.gl-payment-reviews.show');
     Route::get('/gl-payment-reviews/{application}/ors', [AccountingController::class, 'showAccountingOfficerOrs'])
         ->name('accounting-officer.gl-payment-reviews.ors');
@@ -577,7 +581,9 @@ Route::middleware(['auth', 'role:cash_officer'])->prefix('cash-officer')->group(
         ->name('cash-officer.dashboard');
     Route::get('/gl-payment-reviews', [CashController::class, 'cashOfficerQueue'])
         ->name('cash-officer.gl-payment-reviews');
-    Route::get('/gl-payment-reviews/{application}', [CashController::class, 'showCashOfficer'])
+    Route::get('/gl-payment-reviews/{batchId}/records/{applicationId}', [CashController::class, 'showCashOfficerBatchRecord'])
+        ->name('cash-officer.gl-payment-reviews.records.show');
+    Route::get('/gl-payment-reviews/{id}', [CashController::class, 'showCashOfficer'])
         ->name('cash-officer.gl-payment-reviews.show');
     Route::get('/gl-payment-reviews/{application}/ors', [CashController::class, 'showCashOfficerOrs'])
         ->name('cash-officer.gl-payment-reviews.ors');

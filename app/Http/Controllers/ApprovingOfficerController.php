@@ -153,78 +153,13 @@ class ApprovingOfficerController extends Controller
             return $this->glProgramApprovalBatches($request);
         }
 
+        if ($user->role === 'budget_officer') {
+            return $this->glBudgetReviewBatches($request);
+        }
+
         if ($user->role === 'budget_approver') {
             return $this->glBudgetApprovalBatches($request);
         }
-
-        $filters = [
-            'search' => trim((string) $request->input('search', '')),
-            'fund_source' => trim((string) $request->input('fund_source', 'all')),
-            'payment_status' => trim((string) $request->input('payment_status', 'all')),
-            'scope' => trim((string) $request->input('scope', 'active')),
-        ];
-
-        $sourceQuery = $filters['scope'] === 'finished'
-            ? $this->glPaymentFinishedQuery($user)
-            : $this->glPaymentApprovalQuery($user, false);
-
-        $query = clone $sourceQuery;
-
-        if ($filters['search'] !== '') {
-            $search = $filters['search'];
-
-            $query->where(function ($inner) use ($search) {
-                $inner->where('reference_no', 'like', "%{$search}%")
-                    ->orWhereHas('client', function ($clientQuery) use ($search) {
-                        $clientQuery->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%")
-                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
-                    })
-                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"));
-            });
-        }
-
-        if ($filters['fund_source'] !== '' && $filters['fund_source'] !== 'all') {
-            $query->where('gl_finance_fund_source', $filters['fund_source']);
-        }
-
-        if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
-            $query->where('gl_payment_status', $filters['payment_status']);
-        }
-
-        $applications = $query
-            ->latest($user->role === 'budget_officer' ? 'gl_program_approved_at' : 'gl_budget_reviewed_at')
-            ->latest('updated_at')
-            ->paginate(10)
-            ->withQueryString();
-
-        $fundSources = (clone $sourceQuery)
-            ->whereNotNull('gl_finance_fund_source')
-            ->distinct()
-            ->orderBy('gl_finance_fund_source')
-            ->pluck('gl_finance_fund_source');
-
-        $paymentStatusOptions = (clone $sourceQuery)
-            ->whereNotNull('gl_payment_status')
-            ->distinct()
-            ->orderBy('gl_payment_status')
-            ->pluck('gl_payment_status');
-
-        $queueStats = [
-            'total' => (clone $sourceQuery)->count(),
-            'with_remarks' => (clone $sourceQuery)
-                ->whereNotNull('gl_budget_remarks')
-                ->where('gl_budget_remarks', '!=', '')
-                ->count(),
-        ];
-
-        return view('approving-officer.gl-payment-approvals', [
-            'applications' => $applications,
-            'filters' => $filters,
-            'fundSources' => $fundSources,
-            'paymentStatusOptions' => $paymentStatusOptions,
-            'queueStats' => $queueStats,
-        ]);
     }
 
     public function glProgramAmountApprovals(Request $request)
@@ -313,27 +248,33 @@ class ApprovingOfficerController extends Controller
     public function budgetOfficerDashboard()
     {
         $user = auth()->user();
-        $baseQuery = $this->glPaymentApprovalQuery($user, true);
-        $supportingDocsConstraint = fn ($query) => $query->where('document_type', 'Other Supporting Document');
-        $amountSql = Application::effectiveDisplayedAmountSql();
+        $isApprover = $user?->role === 'budget_approver';
+        $baseQuery = $isApprover
+            ? $this->glBudgetApprovalBatchQuery(true)
+            : $this->glBudgetReviewBatchQuery(true);
 
         $stats = [
             'for_review' => (clone $baseQuery)->count(),
-            'with_remarks' => (clone $baseQuery)->whereNotNull('gl_budget_remarks')->where('gl_budget_remarks', '!=', '')->count(),
-            'with_supporting_docs' => (clone $baseQuery)->whereHas('documents', $supportingDocsConstraint)->count(),
-            'total_amount' => (float) ((clone $baseQuery)->sum(DB::raw($amountSql))),
+            'with_remarks' => (clone $baseQuery)
+                ->where(function ($query) {
+                    $query->whereNotNull('decision_notes')->where('decision_notes', '!=', '')
+                        ->orWhereHas('applications', fn ($applicationQuery) => $applicationQuery->whereNotNull('gl_budget_remarks')->where('gl_budget_remarks', '!=', ''));
+                })
+                ->count(),
+            'with_supporting_docs' => (clone $baseQuery)->whereHas('applications.documents', fn ($query) => $query->where('document_type', 'Other Supporting Document'))->count(),
+            'total_amount' => (float) ((clone $baseQuery)->sum('total_amount')),
         ];
 
         $recentEndorsements = (clone $baseQuery)
-            ->latest($user?->role === 'budget_officer' ? 'gl_program_approved_at' : 'gl_budget_reviewed_at')
+            ->latest('updated_at')
             ->latest('updated_at')
             ->take(6)
             ->get();
 
         $fundSourceBreakdown = (clone $baseQuery)
-            ->selectRaw("COALESCE(gl_finance_fund_source, 'Unspecified Fund Source') as fund_source")
+            ->selectRaw("COALESCE(finance_fund_source_name, 'Unspecified Fund Source') as fund_source")
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM('.$amountSql.') as amount')
+            ->selectRaw('SUM(total_amount) as amount')
             ->groupBy('fund_source')
             ->orderByDesc('total')
             ->limit(6)
@@ -345,20 +286,7 @@ class ApprovingOfficerController extends Controller
             ])
             ->values();
 
-        $providerLoad = (clone $baseQuery)
-            ->selectRaw('service_provider_id')
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw('SUM('.$amountSql.') as amount')
-            ->groupBy('service_provider_id')
-            ->orderByDesc('total')
-            ->limit(5)
-            ->get()
-            ->map(fn ($row) => [
-                'provider' => $row->serviceProvider?->name ?? 'Unassigned Provider',
-                'total' => (int) $row->total,
-                'amount' => (float) $row->amount,
-            ])
-            ->values();
+        $providerLoad = $this->batchProviderLoadRows($baseQuery, 5);
 
         return view('budget-officer.dashboard', [
             'workspace' => $user?->role === 'budget_approver' ? 'approver' : 'officer',
@@ -367,6 +295,24 @@ class ApprovingOfficerController extends Controller
             'fundSourceBreakdown' => $fundSourceBreakdown,
             'providerLoad' => $providerLoad,
         ]);
+    }
+
+    protected function batchProviderLoadRows($query, int $limit = 5)
+    {
+        return (clone $query)
+            ->selectRaw('service_provider_id')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(total_amount) as amount')
+            ->groupBy('service_provider_id')
+            ->orderByDesc('total')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($row) => [
+                'provider' => $row->serviceProvider?->name ?? 'Unassigned Provider',
+                'total' => (int) $row->total,
+                'amount' => (float) $row->amount,
+            ])
+            ->values();
     }
 
     protected function glProgramApprovalBatches(Request $request)
@@ -539,6 +485,14 @@ class ApprovingOfficerController extends Controller
             ]);
         }
 
+        if ($user->role === 'budget_officer') {
+            $batch = $this->glBudgetReviewBatchQuery(true)->findOrFail($id);
+
+            return view('approving-officer.gl-budget-review-batch-show', [
+                'batch' => $batch,
+            ]);
+        }
+
         $application = $this->glPaymentApprovalQuery($user, true, true)->findOrFail($id);
 
         $this->ensureOfficerCanHandleAmount(auth()->user(), $application->approvalRoutingAmount());
@@ -559,6 +513,42 @@ class ApprovingOfficerController extends Controller
     public function showGlPaymentApprovalBatchRecord($batchId, $applicationId)
     {
         $role = auth()->user()?->role;
+        if ($role === 'budget_officer') {
+            $batch = $this->glBudgetReviewBatchQuery(true)->findOrFail($batchId);
+            $application = $batch->applications()
+                ->whereKey($applicationId)
+                ->with([
+                    'client',
+                    'beneficiary.relationshipData',
+                    'assistanceType',
+                    'assistanceSubtype',
+                    'assistanceDetail',
+                    'assistanceRecommendations.assistanceType',
+                    'assistanceRecommendations.assistanceSubtype',
+                    'assistanceRecommendations.assistanceDetail',
+                    'assistanceRecommendations.modeOfAssistance',
+                    'serviceProvider',
+                    'modeOfAssistance',
+                    'documents',
+                ])
+                ->firstOrFail();
+
+            return view('approving-officer.gl-payment-approval-show', [
+                'application' => $application,
+                'statementDocuments' => $application->documents
+                    ->where('document_type', 'Updated Statement of Account')
+                    ->sortByDesc('created_at')
+                    ->values(),
+                'supportingDocuments' => $application->documents
+                    ->where('document_type', 'Other Supporting Document')
+                    ->sortByDesc('created_at')
+                    ->values(),
+                'batch' => $batch,
+                'batchBackUrl' => route('budget-officer.gl-payment-approvals.show', $batch->id),
+                'batchBackText' => 'Back to Budget Review Batch',
+            ]);
+        }
+
         $batch = $role === 'budget_approver'
             ? $this->glBudgetApprovalBatchQuery(true)->findOrFail($batchId)
             : $this->glProgramApprovalBatchQuery(true)->findOrFail($batchId);
@@ -595,6 +585,84 @@ class ApprovingOfficerController extends Controller
             'readOnlyBatchBackUrl' => $role === 'budget_approver'
                 ? route('budget-approver.gl-payment-approvals.show', $batch->id)
                 : route('approving.gl-payment-approvals.show', $batch->id),
+        ]);
+    }
+
+    protected function glBudgetReviewBatches(Request $request)
+    {
+        $filters = [
+            'search' => trim((string) $request->input('search', '')),
+            'fund_source' => trim((string) $request->input('fund_source', 'all')),
+            'payment_status' => trim((string) $request->input('payment_status', 'all')),
+            'scope' => trim((string) $request->input('scope', 'active')),
+        ];
+
+        $sourceQuery = $filters['scope'] === 'finished'
+            ? $this->glBudgetReviewBatchFinishedQuery()
+            : $this->glBudgetReviewBatchQuery(false);
+
+        $query = clone $sourceQuery;
+
+        if ($filters['search'] !== '') {
+            $search = $filters['search'];
+
+            $query->where(function ($inner) use ($search) {
+                $inner->where('batch_no', 'like', "%{$search}%")
+                    ->orWhereHas('serviceProvider', fn ($providerQuery) => $providerQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('applications', function ($applicationQuery) use ($search) {
+                        $applicationQuery->where('reference_no', 'like', "%{$search}%")
+                            ->orWhereHas('client', function ($clientQuery) use ($search) {
+                                $clientQuery->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%")
+                                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                            });
+                    });
+            });
+        }
+
+        if ($filters['fund_source'] !== '' && $filters['fund_source'] !== 'all') {
+            $query->where('finance_fund_source_name', $filters['fund_source']);
+        }
+
+        if ($filters['payment_status'] !== '' && $filters['payment_status'] !== 'all') {
+            $query->where('status', $filters['payment_status']);
+        }
+
+        $batches = $query
+            ->latest('updated_at')
+            ->paginate(10)
+            ->withQueryString();
+
+        $fundSources = (clone $sourceQuery)
+            ->whereNotNull('finance_fund_source_name')
+            ->distinct()
+            ->orderBy('finance_fund_source_name')
+            ->pluck('finance_fund_source_name');
+
+        $paymentStatusOptions = (clone $sourceQuery)
+            ->whereNotNull('status')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status');
+
+        $queueStats = [
+            'total' => (clone $sourceQuery)->count(),
+            'with_remarks' => (clone $sourceQuery)
+                ->where(function ($remarkQuery) {
+                    $remarkQuery->whereNotNull('decision_notes')->where('decision_notes', '!=', '')
+                        ->orWhereHas('applications', function ($applicationQuery) {
+                            $applicationQuery->whereNotNull('gl_budget_remarks')->where('gl_budget_remarks', '!=', '');
+                        });
+                })
+                ->count(),
+        ];
+
+        return view('approving-officer.gl-budget-review-batches', [
+            'batches' => $batches,
+            'filters' => $filters,
+            'fundSources' => $fundSources,
+            'paymentStatusOptions' => $paymentStatusOptions,
+            'queueStats' => $queueStats,
         ]);
     }
 
@@ -793,8 +861,12 @@ class ApprovingOfficerController extends Controller
                 'payment_status' => $updatePayload['gl_payment_status'],
             ]);
 
+            $redirectRoute = $request->filled('batch_id')
+                ? route('budget-officer.gl-payment-approvals.show', $request->input('batch_id'))
+                : route('budget-officer.gl-payment-approvals');
+
             return redirect()
-                ->route('budget-officer.gl-payment-approvals')
+                ->to($redirectRoute)
                 ->with('success', $validated['decision'] === 'approved'
                     ? 'Budget review submitted to the budget approver successfully.'
                     : 'Case returned to the approving officer for compliance.');
@@ -1317,6 +1389,35 @@ class ApprovingOfficerController extends Controller
                     $query->orWhere('budget_approved_by', auth()->id());
                 }
             });
+    }
+
+    protected function glBudgetReviewBatchQuery(bool $includeHandled = false)
+    {
+        return GlFinanceBatch::query()
+            ->with([
+                'serviceProvider',
+                'bankAccount.bank',
+                'applications.client',
+                'applications.serviceProvider',
+                'applications.assistanceType',
+                'applications.assistanceDetail',
+            ])
+            ->where(function ($query) use ($includeHandled) {
+                $query->where(function ($activeQuery) {
+                    $activeQuery->where('current_stage', 'budget_review')
+                        ->whereIn('status', ['for_processing_budget', 'for_compliance_budget_officer']);
+                });
+
+                if ($includeHandled) {
+                    $query->orWhereHas('applications', fn ($applicationQuery) => $applicationQuery->where('gl_budget_reviewed_by', auth()->id()));
+                }
+            });
+    }
+
+    protected function glBudgetReviewBatchFinishedQuery()
+    {
+        return $this->glBudgetReviewBatchQuery(true)
+            ->whereHas('applications', fn ($applicationQuery) => $applicationQuery->where('gl_budget_reviewed_by', auth()->id()));
     }
 
     protected function glBudgetApprovalBatchFinishedQuery()

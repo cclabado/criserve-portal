@@ -57,7 +57,7 @@
                 <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">GL Payment Processor</p>
                 <h1 class="mt-2 text-3xl font-black text-sky-950">{{ $application->reference_no }}</h1>
                 <p class="mt-2 text-sm text-slate-500">
-                    Review the service provider attachments, return the case for compliance when needed, or submit it to the approving officer with a selected fund source.
+                    Review the service provider attachments, return the case for compliance when needed, or mark it ready for finance batching with a selected fund source.
                 </p>
             </div>
 

@@ -13,6 +13,7 @@ use App\Models\Beneficiary;
 use App\Models\BeneficiaryProfile;
 use App\Models\FamilyMember;
 use App\Models\Document;
+use App\Models\Relationship;
 use Illuminate\Http\JsonResponse;
 use App\Models\ModeOfAssistance;
 use App\Models\ServiceProvider;
@@ -181,7 +182,9 @@ class ApplicationController extends Controller
             isset($validated['assistance_detail_id']) ? (int) $validated['assistance_detail_id'] : null
         );
 
-        if ((int) $request->relationship_id !== 1) {
+        $isSelfRelationship = $this->isSelfRelationshipId((int) $request->relationship_id);
+
+        if (! $isSelfRelationship) {
             $request->validate([
                 'bene_last_name' => ['required', 'string', 'max:255'],
                 'bene_first_name' => ['required', 'string', 'max:255'],
@@ -215,7 +218,7 @@ class ApplicationController extends Controller
 
         $beneficiaryProfile = null;
 
-        if ((int) $request->relationship_id !== 1) {
+        if (! $isSelfRelationship) {
             $beneficiaryProfile = $this->upsertBeneficiaryProfile($client, $request);
         }
 
@@ -272,7 +275,7 @@ class ApplicationController extends Controller
         $this->storeClientSignature($application, (string) $validated['client_signature_data']);
 
         // ================= BENEFICIARY =================
-        if ($request->relationship_id == 1) {
+        if ($isSelfRelationship) {
 
             // SELF
             Beneficiary::create([
@@ -328,6 +331,15 @@ class ApplicationController extends Controller
         return redirect('/client/dashboard')
             ->with('success', 'Application submitted successfully!')
             ->with('frequency_warning', $frequencyEvaluation['status'] === 'review_required' ? $frequencyEvaluation['message'] : null);
+    }
+
+    protected function isSelfRelationshipId(int $relationshipId): bool
+    {
+        $selfRelationshipId = Relationship::query()
+            ->whereRaw('LOWER(name) = ?', ['self'])
+            ->value('id');
+
+        return $selfRelationshipId !== null && $relationshipId === (int) $selfRelationshipId;
     }
 
     protected function storeClientSignature(Application $application, string $signatureData): void

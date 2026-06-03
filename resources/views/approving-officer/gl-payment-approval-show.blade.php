@@ -7,6 +7,8 @@
     $isBudgetOfficer = $role === 'budget_officer';
     $isBudgetApprover = $role === 'budget_approver';
     $readOnlyBatchRecord = $readOnlyBatchRecord ?? false;
+    $batchBackUrl = $batchBackUrl ?? null;
+    $batchBackText = $batchBackText ?? 'Back to Finance Batch';
     $glApprovalIndexRoute = $isBudgetOfficer
         ? 'budget-officer.gl-payment-approvals'
         : ($isBudgetApprover ? 'budget-approver.gl-payment-approvals' : 'approving.gl-payment-approvals');
@@ -34,7 +36,11 @@
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                @if($readOnlyBatchRecord)
+                @if($batchBackUrl)
+                    <a href="{{ $batchBackUrl }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; {{ $batchBackText }}
+                    </a>
+                @elseif($readOnlyBatchRecord)
                     <a href="{{ $readOnlyBatchBackUrl ?? route('approving.gl-payment-approvals.show', $batch->id) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
                         &larr; Back to Finance Batch
                     </a>
@@ -285,6 +291,9 @@
                 <form method="POST" action="{{ route($glApprovalUpdateRoute, $application->id) }}" class="mt-5 space-y-4">
                     @csrf
                     @method('PATCH')
+                    @if($batchBackUrl ?? false)
+                        <input type="hidden" name="batch_id" value="{{ $batch->id }}">
+                    @endif
                     @if($isBudgetOfficer)
                         <div>
                             <label class="label">Budget Review Decision</label>

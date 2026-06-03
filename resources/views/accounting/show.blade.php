@@ -7,6 +7,8 @@
     $isCashCertifier = $workspace === 'cash_certifier';
     $readOnlyBatchRecord = $readOnlyBatchRecord ?? false;
     $readOnlyBatchBackText = $readOnlyBatchBackText ?? 'Back to Accounting Approval Batch';
+    $batchBackUrl = $batchBackUrl ?? null;
+    $batchBackText = $batchBackText ?? 'Back to Accounting Review Batch';
     $indexRoute = $isOfficer
         ? 'accounting-officer.gl-payment-reviews'
         : ($isCashCertifier ? 'accounting-approver.cash-certifications' : 'accounting-approver.gl-payment-approvals');
@@ -32,7 +34,11 @@
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                @if($readOnlyBatchRecord)
+                @if($batchBackUrl)
+                    <a href="{{ $batchBackUrl }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; {{ $batchBackText }}
+                    </a>
+                @elseif($readOnlyBatchRecord)
                     <a href="{{ $readOnlyBatchBackUrl ?? route('accounting-approver.gl-payment-approvals.show', $batch->id) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
                         &larr; {{ $readOnlyBatchBackText }}
                     </a>
@@ -279,6 +285,9 @@
                     <form method="POST" action="{{ route($updateRoute, $application->id) }}" class="mt-5 space-y-4">
                         @csrf
                         @method('PATCH')
+                        @if($batchBackUrl ?? false)
+                            <input type="hidden" name="batch_id" value="{{ $batch->id }}">
+                        @endif
                         @if($isOfficer)
                             <div>
                                 <label class="label">Accounting Review Decision</label>

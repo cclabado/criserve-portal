@@ -449,6 +449,7 @@
                             <input type="number"
                                    step="0.01"
                                    name="income_sources[{{ $index }}][amount]"
+                                   data-income-amount
                                    class="input w-full"
                                    value="{{ $incomeRow['amount'] ?? '' }}"
                                    placeholder="Amount">
@@ -461,8 +462,10 @@
                     <input type="number"
                            step="0.01"
                            name="total_income_past_six_months"
+                           id="totalIncomePastSixMonths"
                            class="input w-full"
-                           value="{{ old('total_income_past_six_months', $application->total_income_past_six_months) }}">
+                           value="{{ old('total_income_past_six_months', $application->total_income_past_six_months) }}"
+                           readonly>
                 </div>
             </div>
 
@@ -810,6 +813,21 @@ const clientSectorOptions = document.querySelectorAll('[data-client-sector-optio
 const clientSubCategoryOptions = document.querySelectorAll('[data-client-sub-category-option]');
 const disabilityTypeField = document.getElementById('disabilityTypeField');
 const disabilityTypeOptions = document.querySelectorAll('[data-disability-type-option]');
+const incomeAmountFields = document.querySelectorAll('[data-income-amount]');
+const totalIncomeField = document.getElementById('totalIncomePastSixMonths');
+
+function updateTotalIncomePastSixMonths() {
+    if (!totalIncomeField) {
+        return;
+    }
+
+    const total = Array.from(incomeAmountFields).reduce((sum, field) => {
+        const amount = Number.parseFloat(field.value);
+        return sum + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
+
+    totalIncomeField.value = total > 0 ? total.toFixed(2) : '';
+}
 
 function syncDisabilityTypeField() {
     if (!disabilityTypeField) {
@@ -854,6 +872,12 @@ disabilityTypeOptions.forEach((option) => {
     });
 });
 syncDisabilityTypeField();
+
+incomeAmountFields.forEach((field) => {
+    field.addEventListener('input', updateTotalIncomePastSixMonths);
+    field.addEventListener('change', updateTotalIncomePastSixMonths);
+});
+updateTotalIncomePastSixMonths();
 
 function updateSteps() {
     for (let i = 1; i <= totalSteps; i++) {

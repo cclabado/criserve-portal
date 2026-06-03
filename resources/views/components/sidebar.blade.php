@@ -433,7 +433,7 @@
                 </span>
 
                 <span class="text-sm tracking-wide">
-                    GL Payment Approvals
+                    Program Approval Batches
                 </span>
             </a>
 
@@ -445,7 +445,7 @@
                 </span>
 
                 <span class="text-sm tracking-wide">
-                    Program Amount Approvals
+                    Program Amount Batches
                 </span>
             </a>
 
@@ -596,7 +596,7 @@
                 account_balance
             </span>
 
-            <span class="text-sm tracking-wide">For Review</span>
+            <span class="text-sm tracking-wide">Budget Review Batches</span>
         </a>
 
         @endif
@@ -620,7 +620,7 @@
                 task_alt
             </span>
 
-            <span class="text-sm tracking-wide">For Approval</span>
+            <span class="text-sm tracking-wide">Budget Approval Batches</span>
         </a>
 
         @endif
@@ -644,7 +644,7 @@
                 request_quote
             </span>
 
-            <span class="text-sm tracking-wide">For Review</span>
+            <span class="text-sm tracking-wide">Accounting Review Batches</span>
         </a>
 
         @endif
@@ -668,7 +668,7 @@
                 fact_check
             </span>
 
-            <span class="text-sm tracking-wide">For Approval</span>
+            <span class="text-sm tracking-wide">Accounting Approval Batches</span>
         </a>
 
         <a href="/accounting-approver/cash-certifications"
@@ -678,7 +678,7 @@
                 verified
             </span>
 
-            <span class="text-sm tracking-wide">Cash Certifications</span>
+            <span class="text-sm tracking-wide">Certification Batches</span>
         </a>
 
         @endif
@@ -702,7 +702,7 @@
                 point_of_sale
             </span>
 
-            <span class="text-sm tracking-wide">For Review</span>
+            <span class="text-sm tracking-wide">Cash Review Batches</span>
         </a>
 
         @endif
@@ -726,7 +726,7 @@
                 attach_money
             </span>
 
-            <span class="text-sm tracking-wide">For Approval</span>
+            <span class="text-sm tracking-wide">Cash Approval Batches</span>
         </a>
 
         @endif
@@ -750,7 +750,7 @@
                 verified_user
             </span>
 
-            <span class="text-sm tracking-wide">Final Approvals</span>
+            <span class="text-sm tracking-wide">Final Approval Batches</span>
         </a>
 
         @endif

@@ -6,8 +6,8 @@
     $isApprover = ($workspace ?? 'officer') === 'approver';
     $roleLabel = $isApprover ? 'Budget Approver' : 'Budget Officer';
     $listRoute = $isApprover ? 'budget-approver.gl-payment-approvals' : 'budget-officer.gl-payment-approvals';
-    $listLabel = $isApprover ? 'Open For Approval List' : 'Open For Review List';
-    $queueLabel = $isApprover ? 'For Approval' : 'For Review';
+    $listLabel = $isApprover ? 'Open Budget Approval Batches' : 'Open Budget Review Batches';
+    $queueLabel = $isApprover ? 'Approval Batches' : 'Review Batches';
 @endphp
 
 <main class="space-y-6">
@@ -77,12 +77,12 @@
                 </div>
                 <a href="{{ route($listRoute) }}"
                    class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                    Open List
+                    Open Batches
                 </a>
             </div>
 
             <div class="mt-6 space-y-4">
-                @forelse($recentEndorsements as $application)
+                @forelse($recentEndorsements as $batch)
                     <article class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
@@ -90,22 +90,22 @@
                                     <span class="inline-flex rounded-full border border-violet-200 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-violet-700">
                                         For Processing (Budget)
                                     </span>
-                                    <span class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{{ $application->reference_no }}</span>
+                                    <span class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{{ $batch->batch_no }}</span>
                                 </div>
-                                <h3 class="mt-3 text-xl font-black text-slate-950">{{ trim(($application->client?->first_name ?? '').' '.($application->client?->last_name ?? '')) ?: '-' }}</h3>
-                                <p class="mt-1 text-sm text-slate-500">{{ $application->serviceProvider?->name ?? 'No provider assigned' }}</p>
+                                <h3 class="mt-3 text-xl font-black text-slate-950">{{ $batch->serviceProvider?->name ?? 'No provider assigned' }}</h3>
+                                <p class="mt-1 text-sm text-slate-500">{{ $batch->application_count }} record{{ $batch->application_count === 1 ? '' : 's' }}</p>
                                 <div class="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-slate-500">
-                                    <span>Fund Source: {{ $application->gl_finance_fund_source ?? '-' }}</span>
-                                    <span>{{ $isApprover ? 'Reviewed' : 'Approved' }} {{ optional($isApprover ? $application->gl_budget_reviewed_at : $application->gl_program_approved_at)->format('M d, Y h:i A') ?? '-' }}</span>
+                                    <span>Fund Source: {{ $batch->finance_fund_source_name ?? '-' }}</span>
+                                    <span>Updated {{ optional($batch->updated_at)->format('M d, Y h:i A') ?? '-' }}</span>
                                 </div>
                             </div>
 
                             <div class="text-left lg:text-right">
                                 <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
-                                <p class="mt-1 text-xl font-black text-slate-950">PHP {{ number_format((float) ($application->final_amount ?? $application->recommended_amount ?? 0), 2) }}</p>
-                                <a href="{{ route($listRoute.'.show', $application->id) }}"
+                                <p class="mt-1 text-xl font-black text-slate-950">PHP {{ number_format((float) $batch->total_amount, 2) }}</p>
+                                <a href="{{ route($listRoute.'.show', $batch->id) }}"
                                    class="mt-4 inline-flex items-center rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800">
-                                    {{ $isApprover ? 'Approve Case' : 'Review Case' }}
+                                    {{ $isApprover ? 'Approve Batch' : 'Open Batch' }}
                                 </a>
                             </div>
                         </div>

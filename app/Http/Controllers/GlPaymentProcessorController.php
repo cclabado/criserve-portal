@@ -447,8 +447,8 @@ class GlPaymentProcessorController extends Controller
         ]);
 
         return redirect()
-            ->route('gl-payment-processor.show', $application->id)
-            ->with('success', 'Case submitted to the approving officer successfully.');
+            ->route('gl-payment-processor.finance-batches.ready')
+            ->with('success', 'Case reviewed successfully. It is now ready for finance batching and will appear in the approving officer queue once included in a batch.');
     }
 
     protected function baseQuery(bool $withDocuments = false)

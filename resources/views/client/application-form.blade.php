@@ -13,6 +13,7 @@
     $lookupUrl = $lookupUrl ?? route('client.beneficiary-profile.lookup');
     $relationships = \App\Models\Relationship::where('is_active', true)->where('name', '!=', 'Other')->get();
     $familyRelationships = $relationships->where('name', '!=', 'Self')->values();
+    $selfRelationshipId = (string) optional($relationships->first(fn ($relationship) => strcasecmp($relationship->name, 'Self') === 0))->id;
     $assistanceTypes = \App\Models\AssistanceType::with([
         'subtypes' => fn ($query) => $query->where('is_active', true)->with([
             'frequencyRule',
@@ -276,19 +277,19 @@ Continue &rarr;
 <div class="grid grid-cols-4 gap-4 mb-4">
 <div>
 <label class="text-xs text-gray-500">Last Name</label>
-<input x-ref="bene_last_name" name="bene_last_name" :value="relationship == '1' ? $refs.last_name.value : ''" :readonly="relationship == '1'" class="border p-2 rounded-lg w-full">
+<input x-ref="bene_last_name" name="bene_last_name" :value="isSelfRelationship() ? $refs.last_name.value : ''" :readonly="isSelfRelationship()" class="border p-2 rounded-lg w-full">
 </div>
 <div>
 <label class="text-xs text-gray-500">First Name</label>
-<input x-ref="bene_first_name" name="bene_first_name" :value="relationship == '1' ? $refs.first_name.value : ''" :readonly="relationship == '1'" class="border p-2 rounded-lg w-full">
+<input x-ref="bene_first_name" name="bene_first_name" :value="isSelfRelationship() ? $refs.first_name.value : ''" :readonly="isSelfRelationship()" class="border p-2 rounded-lg w-full">
 </div>
 <div>
 <label class="text-xs text-gray-500">Middle Name</label>
-<input x-ref="bene_middle_name" name="bene_middle_name" :value="relationship == '1' ? $refs.middle_name.value : ''" :readonly="relationship == '1'" class="border p-2 rounded-lg w-full">
+<input x-ref="bene_middle_name" name="bene_middle_name" :value="isSelfRelationship() ? $refs.middle_name.value : ''" :readonly="isSelfRelationship()" class="border p-2 rounded-lg w-full">
 </div>
 <div>
 <label class="text-xs text-gray-500">Extension</label>
-<input x-ref="bene_extension_name" name="bene_extension_name" :value="relationship == '1' ? $refs.extension_name.value : ''" :readonly="relationship == '1'" class="border p-2 rounded-lg w-full">
+<input x-ref="bene_extension_name" name="bene_extension_name" :value="isSelfRelationship() ? $refs.extension_name.value : ''" :readonly="isSelfRelationship()" class="border p-2 rounded-lg w-full">
 </div>
 </div>
 
@@ -296,7 +297,7 @@ Continue &rarr;
 <div>
 <label class="text-xs text-gray-500">Sex</label>
 <div class="select-shell">
-<select x-ref="bene_sex" name="bene_sex" x-bind:value="relationship == '1' ? $refs.sex.value : ''" :disabled="relationship == '1'" class="form-select">
+<select x-ref="bene_sex" name="bene_sex" x-bind:value="isSelfRelationship() ? $refs.sex.value : ''" :disabled="isSelfRelationship()" class="form-select">
 <option value="">Select</option>
 <option value="Male">Male</option>
 <option value="Female">Female</option>
@@ -305,17 +306,17 @@ Continue &rarr;
 </div>
 <div>
 <label class="text-xs text-gray-500">Birthdate</label>
-<input x-ref="bene_birthdate" type="date" name="bene_birthdate" :value="relationship == '1' ? $refs.birthdate.value : ''" :readonly="relationship == '1'" class="border p-2 rounded-lg w-full">
+<input x-ref="bene_birthdate" type="date" name="bene_birthdate" :value="isSelfRelationship() ? $refs.birthdate.value : ''" :readonly="isSelfRelationship()" class="border p-2 rounded-lg w-full">
 </div>
 <div>
 <label class="text-xs text-gray-500">Contact Number</label>
-<input x-ref="bene_contact_number" name="bene_contact_number" :value="relationship == '1' ? $refs.contact_number.value : ''" :readonly="relationship == '1'" class="border p-2 rounded-lg w-full">
+<input x-ref="bene_contact_number" name="bene_contact_number" :value="isSelfRelationship() ? $refs.contact_number.value : ''" :readonly="isSelfRelationship()" class="border p-2 rounded-lg w-full">
 </div>
 </div>
 
 <div>
 <label class="text-xs text-gray-500">Address</label>
-<input x-ref="bene_full_address" name="bene_full_address" :value="relationship == '1' ? $refs.full_address.value : ''" :readonly="relationship == '1'" class="border p-2 rounded-lg w-full">
+<input x-ref="bene_full_address" name="bene_full_address" :value="isSelfRelationship() ? $refs.full_address.value : ''" :readonly="isSelfRelationship()" class="border p-2 rounded-lg w-full">
 </div>
 
 <div class="flex justify-between mt-6">
@@ -338,7 +339,7 @@ Continue &rarr;
 </button>
 </div>
 
-<p class="text-sm text-gray-500 mb-2" x-text="relationship == '1'
+<p class="text-sm text-gray-500 mb-2" x-text="isSelfRelationship()
     ? 'This is the saved family composition for the client account. Updates here will carry into future self applications.'
     : 'This family composition belongs to the beneficiary profile. If this beneficiary was used before, their saved household is loaded here.'"></p>
 
@@ -399,7 +400,7 @@ Continue &rarr;
 </div>
 
 <div class="flex justify-between mt-6">
-<button type="button" @click="step = relationship == '1' ? 1 : 2" class="bg-gray-200 px-6 py-3 rounded-xl">&larr; Back</button>
+<button type="button" @click="step = isSelfRelationship() ? 1 : 2" class="bg-gray-200 px-6 py-3 rounded-xl">&larr; Back</button>
 <button type="button" @click="continueFromStep3()" class="bg-[#234E70] text-white px-6 py-3 rounded-xl">Continue &rarr;</button>
 </div>
 
@@ -745,6 +746,7 @@ function applicationForm() {
         selectedServiceProviderSearch: '',
         amountNeeded: @js((string) old('amount_needed', '')),
         serviceProviders: @js($serviceProviderDirectory),
+        selfRelationshipId: @js($selfRelationshipId),
         relationship: @js((string) old('relationship_id', '')),
         relationshipSearch: '',
         clientFamily: @js($clientFamily),
@@ -773,6 +775,10 @@ function applicationForm() {
             this.handleTypeChange(false);
             this.handleSubtypeChange(false);
             this.$nextTick(() => this.initSignaturePad());
+        },
+
+        isSelfRelationship() {
+            return String(this.relationship || '') === String(this.selfRelationshipId || '');
         },
 
         syncSearchLabels() {
@@ -1284,6 +1290,10 @@ function applicationForm() {
         },
 
         goToStep(targetStep) {
+            if (targetStep === 2 && this.isSelfRelationship()) {
+                targetStep = 3;
+            }
+
             if (targetStep <= this.step) {
                 this.step = targetStep;
                 return;
@@ -1303,7 +1313,7 @@ function applicationForm() {
                 return;
             }
 
-            if (this.relationship === '1') {
+            if (this.isSelfRelationship()) {
                 this.goToFamilyStep();
                 return;
             }
@@ -1315,7 +1325,7 @@ function applicationForm() {
             this.loadedProfileName = '';
             this.clearError('step1');
 
-            if (this.relationship === '1') {
+            if (this.isSelfRelationship()) {
                 this.familyRows = this.cloneRows(this.clientFamily);
             } else if (this.relationship !== '') {
                 this.familyRows = [this.emptyFamilyRow()];
@@ -1325,11 +1335,11 @@ function applicationForm() {
         },
 
         async goToFamilyStep() {
-            if (this.relationship !== '1' && !this.validateStep(2)) {
+            if (!this.isSelfRelationship() && !this.validateStep(2)) {
                 return;
             }
 
-            if (this.relationship === '1') {
+            if (this.isSelfRelationship()) {
                 this.familyRows = this.cloneRows(this.clientFamily);
                 this.loadedProfileName = '';
                 this.step = 3;
@@ -1452,7 +1462,7 @@ function applicationForm() {
             }
 
             if (stepNumber === 2) {
-                if (this.relationship === '1') {
+                if (this.isSelfRelationship()) {
                     this.errors.step2 = '';
                     return true;
                 }

@@ -5,6 +5,8 @@
 @php
     $isOfficer = $workspace === 'officer';
     $readOnlyBatchRecord = $readOnlyBatchRecord ?? false;
+    $batchBackUrl = $batchBackUrl ?? null;
+    $batchBackText = $batchBackText ?? 'Back to Cash Review Batch';
     $indexRoute = $isOfficer ? 'cash-officer.gl-payment-reviews' : 'cash-approver.gl-payment-approvals';
     $updateRoute = $indexRoute.'.update';
     $orsRoute = $indexRoute.'.ors';
@@ -21,7 +23,11 @@
     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                @if($readOnlyBatchRecord)
+                @if($batchBackUrl)
+                    <a href="{{ $batchBackUrl }}" class="text-sm text-slate-500 hover:text-[#234E70]">
+                        &larr; {{ $batchBackText }}
+                    </a>
+                @elseif($readOnlyBatchRecord)
                     <a href="{{ $readOnlyBatchBackUrl ?? route('cash-approver.gl-payment-approvals.show', $batch->id) }}" class="text-sm text-slate-500 hover:text-[#234E70]">
                         &larr; Back to Cash Approval Batch
                     </a>
@@ -266,6 +272,9 @@
                     <form method="POST" action="{{ route($updateRoute, $application->id) }}" class="mt-5 space-y-4">
                         @csrf
                         @method('PATCH')
+                        @if($batchBackUrl ?? false)
+                            <input type="hidden" name="batch_id" value="{{ $batch->id }}">
+                        @endif
                         @if($isOfficer)
                             <div class="grid gap-4 md:grid-cols-2">
                                 <div>
